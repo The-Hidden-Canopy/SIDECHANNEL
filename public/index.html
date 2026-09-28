@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="SIDECHANNEL makes incidental emissions visible in one spatial scene.">
+  <title>SIDECHANNEL · Invisible activity, visible space</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div>
+        <div class="eyebrow">LOCAL SENSING EXPLORER</div>
+        <h1>SIDECHANNEL</h1>
+      </div>
+    </div>
+    <div class="top-actions">
+      <span id="connectionBadge" class="status-pill"><span class="status-dot"></span>Connecting</span>
+      <button id="liveButton" class="button ghost" type="button">Live view</button>
+      <button id="recordButton" class="button accent" type="button">Start recording</button>
+      <button id="exportButton" class="button ghost" type="button" disabled>Export</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar left">
+      <section class="panel intro-panel">
+        <div class="eyebrow">CURRENT SCENE</div>
+        <h2 id="sceneName">Loading scene</h2>
+        <p class="muted">Measured and inferred activity share one local coordinate frame.</p>
+      </section>
+      <section class="panel">
+        <div class="panel-heading">
+          <h3>Layers</h3>
+          <span id="layerCount" class="count">0</span>
+        </div>
+        <div id="layerPanel" class="layer-list"></div>
+      </section>
+      <section class="panel">
+        <div class="panel-heading">
+          <h3>Sources</h3>
+          <span id="sourceCount" class="count">0</span>
+        </div>
+        <div id="sourceList" class="source-list"></div>
+      </section>
+      <section class="panel privacy-panel">
+        <div class="eyebrow">LOCAL BY DEFAULT</div>
+        <p>No raw audio, network payloads, or persistent device IDs are stored by this build.</p>
+      </section>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-toolbar">
+        <div>
+          <span id="modeLabel" class="mode-label">LIVE / SIMULATOR</span>
+          <span id="freshnessLabel" class="muted">Waiting for observations</span>
+        </div>
+        <div class="toolbar-actions">
+          <label class="select-wrap" for="sessionSelect">Replay</label>
+          <select id="sessionSelect" aria-label="Choose a recorded session">
+            <option value="">Choose session</option>
+          </select>
+          <button id="replayButton" class="button small ghost" type="button">Open</button>
+        </div>
+      </div>
+      <div class="canvas-frame">
+        <canvas id="sceneCanvas" aria-label="SIDECHANNEL spatial activity canvas"></canvas>
+        <div id="canvasEmpty" class="canvas-empty">
+          <div class="empty-orbit"></div>
+          <strong>Waiting for valid observations</strong>
+          <span>Start the simulator or connect a local source.</span>
+        </div>
+        <div class="scale-mark"><span></span><label>1 m</label></div>
+      </div>
+      <div class="timeline panel">
+        <div class="timeline-head">
+          <div>
+            <span class="eyebrow">SESSION</span>
+            <strong id="timelineTitle">Live stream</strong>
+          </div>
+          <span id="timelineReadout" class="muted">Now</span>
+        </div>
+        <input id="timelineSlider" type="range" min="0" max="100" value="100" disabled aria-label="Replay timeline">
+        <div class="timeline-ticks"><span>Earlier</span><span>Current</span></div>
+      </div>
+    </section>
+
+    <aside class="sidebar right">
+      <section class="panel inspector">
+        <div class="eyebrow">INSPECTOR</div>
+        <h2 id="inspectorTitle">Select an observation</h2>
+        <p id="inspectorHint" class="muted">Click a point in the scene to inspect its provenance.</p>
+        <div id="inspectorBody" class="inspector-body empty-inspector"></div>
+      </section>
+      <section class="panel diagnostics">
+        <div class="panel-heading">
+          <h3>Diagnostics</h3>
+          <span id="diagnosticCount" class="count">0</span>
+        </div>
+        <div id="diagnosticsList" class="diagnostics-list"><span class="muted">No rejected observations.</span></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    <span>Observation tool · No causal or identity inference</span>
+    <span id="footerServer">Loopback server</span>
+  </footer>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
+

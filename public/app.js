@@ -1,0 +1,402 @@
+const CHANNELS = [
+  ['rf', 'RF', '#6ce4db', 220],
+  ['magnetic', 'Magnetic field', '#79a7ff', 210],
+  ['heat', 'Heat', '#ffb47b', 28],
+  ['vibration', 'Vibration', '#cf9cff', 280],
+  ['sound', 'Sound features', '#ff8f97', 350],
+  ['network', 'Network rate', '#7de1ff', 170],
+  ['electrical', 'Electrical load', '#ffd166', 45],
+  ['bluetooth', 'Bluetooth aggregate', '#a9e88b', 125],
+  ['light_flicker', 'Light flicker', '#f49dff', 320]
+];
+const RANGES = {
+  rf: [-120, 0], magnetic: [0, 200], heat: [-20, 80], vibration: [0, 1],
+  sound: [0, 1], network: [0, 100000], electrical: [0, 5000], bluetooth: [0, 100], light_flicker: [0, 1]
+};
+
+const state = {
+  scene: null,
+  observations: [],
+  diagnostics: [],
+  recording: null,
+  sessions: [],
+  replay: null,
+  selected: null,
+  visible: Object.fromEntries(CHANNELS.map((item) => [item[0], true]))
+};
+
+const canvas = document.getElementById('sceneCanvas');
+const context = canvas.getContext('2d');
+const layerPanel = document.getElementById('layerPanel');
+const sourceList = document.getElementById('sourceList');
+const canvasEmpty = document.getElementById('canvasEmpty');
+
+function api(path, options) {
+  return fetch(path, options).then(async (response) => {
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || 'Request failed');
+    return payload;
+  });
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[char]));
+}
+
+function sourceById(id) {
+  return state.scene?.sources.find((source) => source.id === id);
+}
+
+function normalize(channel, value) {
+  const numeric = Array.isArray(value)
+    ? Math.sqrt(value.reduce((sum, item) => sum + item * item, 0))
+    : Number(value);
+  const range = RANGES[channel] || [0, 1];
+  return Math.max(0, Math.min(1, (numeric - range[0]) / (range[1] - range[0])));
+}
+
+function activeObservations() {
+  if (!state.replay) return state.observations;
+  const max = state.replayTime;
+  return state.replay.observations.filter((observation) => observation.timestampMs <= max);
+}
+
+function hydrate(payload) {
+  state.scene = payload.scene;
+  state.observations = payload.observations || [];
+  state.diagnostics = payload.diagnostics || [];
+  state.recording = payload.recording;
+  state.sessions = payload.sessions || [];
+  render();
+}
+
+function updateObservation(observation) {
+  const key = observation.sourceId + ':' + observation.channel;
+  const next = state.observations.filter((item) => item.sourceId + ':' + item.channel !== key);
+  next.push(observation);
+  state.observations = next;
+  render();
+}
+
+function renderLayers() {
+  layerPanel.innerHTML = '';
+  CHANNELS.forEach(([id, label, color]) => {
+    const row = document.createElement('label');
+    row.className = 'layer-row';
+    row.innerHTML = '<input type="checkbox" data-channel="' + id + '" ' +
+      (state.visible[id] ? 'checked' : '') + '><span class="layer-swatch" style="color:' +
+      color + ';background:' + color + '"></span><span>' + label + '</span>';
+    row.querySelector('input').addEventListener('change', (event) => {
+      state.visible[id] = event.target.checked;
+      render();
+    });
+    layerPanel.appendChild(row);
+  });
+  document.getElementById('layerCount').textContent = CHANNELS.filter((item) => state.visible[item[0]]).length;
+}
+
+function renderSources() {
+  sourceList.innerHTML = '';
+  (state.scene?.sources || []).forEach((source) => {
+    const observation = state.observations.find((item) => item.sourceId === source.id && item.channel === source.channels[0]);
+    const stale = observation?.status === 'stale';
+    const row = document.createElement('div');
+    row.className = 'source-row ' + (stale ? '' : 'live');
+    row.innerHTML = '<span class="layer-swatch" style="color:' + colorFor(source.channels[0]) +
+      ';background:' + colorFor(source.channels[0]) + '"></span><span>' +
+      escapeHtml(source.name) + '</span><span class="source-meta">' +
+      (stale ? 'stale' : observation ? 'live' : '—') + '</span>';
+    sourceList.appendChild(row);
+  });
+  document.getElementById('sourceCount').textContent = (state.scene?.sources || []).length;
+}
+
+function renderSessions() {
+  const select = document.getElementById('sessionSelect');
+  const current = select.value;
+  select.innerHTML = '<option value="">Choose session</option>';
+  state.sessions.forEach((session) => {
+    const option = document.createElement('option');
+    option.value = session.id;
+    option.textContent = new Date(session.startedAtMs).toLocaleString() + ' · ' + session.observationCount + ' obs';
+    select.appendChild(option);
+  });
+  select.value = current;
+}
+
+function renderDiagnostics() {
+  const list = document.getElementById('diagnosticsList');
+  document.getElementById('diagnosticCount').textContent = state.diagnostics.length;
+  if (!state.diagnostics.length) {
+    list.innerHTML = '<span class="muted">No rejected observations.</span>';
+    return;
+  }
+  list.innerHTML = state.diagnostics.slice(-5).reverse().map((diagnostic) =>
+    '<div class="diag-item"><strong>' + escapeHtml(diagnostic.id) + '</strong><br>' +
+    escapeHtml((diagnostic.reasons || []).map((reason) => reason.message || reason).join(', ')) + '</div>'
+  ).join('');
+}
+
+function renderInspector() {
+  const title = document.getElementById('inspectorTitle');
+  const hint = document.getElementById('inspectorHint');
+  const body = document.getElementById('inspectorBody');
+  if (!state.selected) {
+    title.textContent = 'Select an observation';
+    hint.textContent = 'Click a point in the scene to inspect its provenance.';
+    body.className = 'inspector-body empty-inspector';
+    body.innerHTML = '<span class="muted">Source, timestamp, unit, quality, position, and processing path will appear here.</span>';
+    return;
+  }
+  const observation = state.selected;
+  const source = sourceById(observation.sourceId);
+  title.textContent = source?.name || observation.sourceId;
+  hint.textContent = observation.feature || 'Normalized observation';
+  body.className = 'inspector-body';
+  body.innerHTML = '<div class="detail-grid">' +
+    detail('Channel', observation.channel) +
+    detail('Value', String(observation.value) + ' ' + observation.unit) +
+    detail('Status', '<span class="badge">' + observation.status + '</span>') +
+    detail('Quality', Math.round((observation.quality?.score || 0) * 100) + '% · ' + (observation.quality?.state || 'unknown')) +
+    detail('Timestamp', new Date(observation.timestampMs).toLocaleTimeString()) +
+    detail('Position', observation.position ? observation.position.x.toFixed(2) + ', ' + observation.position.y.toFixed(2) : 'source anchor') +
+    detail('Privacy', source?.privacyMode || 'not declared') +
+    detail('Processing', observation.status === 'measured' ? 'source → normalized observation' : 'source → derived feature → scene') +
+    '</div>';
+}
+
+function detail(label, value) {
+  return '<div class="detail-item"><span class="detail-label">' + label + '</span><span class="detail-value">' + value + '</span></div>';
+}
+
+function colorFor(channel) {
+  const item = CHANNELS.find((entry) => entry[0] === channel);
+  return item ? item[2] : '#6ce4db';
+}
+
+function sceneTransform() {
+  const rect = canvas.getBoundingClientRect();
+  const pad = 32;
+  return {
+    width: rect.width,
+    height: rect.height,
+    x: (value) => pad + value / state.scene.width * (rect.width - pad * 2),
+    y: (value) => pad + value / state.scene.height * (rect.height - pad * 2),
+    sx: (rect.width - pad * 2) / state.scene.width,
+    sy: (rect.height - pad * 2) / state.scene.height,
+    pad
+  };
+}
+
+function draw() {
+  if (!state.scene) return;
+  const rect = canvas.getBoundingClientRect();
+  const ratio = window.devicePixelRatio || 1;
+  canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+  canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.clearRect(0, 0, rect.width, rect.height);
+  const transform = sceneTransform();
+  const observations = activeObservations();
+  const valid = observations.filter((item) => item.status !== 'stale' && item.status !== 'rejected');
+  canvasEmpty.classList.toggle('hidden', valid.length > 0);
+
+  const gradient = context.createRadialGradient(rect.width * .5, rect.height * .45, 10, rect.width * .5, rect.height * .45, rect.width * .7);
+  gradient.addColorStop(0, '#152434');
+  gradient.addColorStop(1, '#0a1017');
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, rect.width, rect.height);
+
+  context.strokeStyle = 'rgba(154, 188, 208, .08)';
+  context.lineWidth = 1;
+  for (let x = 0; x <= state.scene.width; x += 0.5) {
+    context.beginPath(); context.moveTo(transform.x(x), transform.y(0)); context.lineTo(transform.x(x), transform.y(state.scene.height)); context.stroke();
+  }
+  for (let y = 0; y <= state.scene.height; y += 0.5) {
+    context.beginPath(); context.moveTo(transform.x(0), transform.y(y)); context.lineTo(transform.x(state.scene.width), transform.y(y)); context.stroke();
+  }
+
+  context.strokeStyle = 'rgba(210, 235, 242, .35)';
+  context.lineWidth = 1.5;
+  context.strokeRect(transform.x(0), transform.y(0), transform.sx * state.scene.width, transform.sy * state.scene.height);
+
+  CHANNELS.forEach(([channel, label, color]) => {
+    if (!state.visible[channel]) return;
+    const points = valid.filter((item) => item.channel === channel);
+    if (!points.length) return;
+    const cols = 22;
+    const rows = 18;
+    const range = RANGES[channel] || [0, 1];
+    for (let row = 0; row < rows; row += 1) {
+      for (let col = 0; col < cols; col += 1) {
+        const x = state.scene.width * (col + .5) / cols;
+        const y = state.scene.height * (row + .5) / rows;
+        let total = 0; let weightTotal = 0;
+        points.forEach((point) => {
+          const source = sourceById(point.sourceId);
+          const position = point.position || source?.position;
+          if (!position) return;
+          const distance = Math.hypot(x - position.x, y - position.y);
+          const weight = 1 / Math.max(distance, .08) ** 2;
+          total += normalize(channel, point.value) * (point.quality?.score || 0) * weight;
+          weightTotal += weight;
+        });
+        const intensity = weightTotal ? Math.max(0, Math.min(1, total / weightTotal)) : 0;
+        context.fillStyle = hexToRgba(color, .045 + intensity * .19);
+        context.fillRect(transform.x(x - state.scene.width / cols / 2), transform.y(y - state.scene.height / rows / 2),
+          transform.sx * state.scene.width / cols + 1, transform.sy * state.scene.height / rows + 1);
+      }
+    }
+  });
+
+  (state.scene.sources || []).forEach((source) => {
+    const point = source.position;
+    if (!point) return;
+    const x = transform.x(point.x); const y = transform.y(point.y);
+    const observation = valid.find((item) => item.sourceId === source.id);
+    const color = colorFor(source.channels[0]);
+    context.beginPath();
+    context.arc(x, y, 14, 0, Math.PI * 2);
+    context.strokeStyle = hexToRgba(color, .18);
+    context.stroke();
+    context.beginPath();
+    context.arc(x, y, 5, 0, Math.PI * 2);
+    context.fillStyle = color;
+    context.shadowColor = color; context.shadowBlur = 12; context.fill(); context.shadowBlur = 0;
+    context.fillStyle = 'rgba(236, 244, 248, .72)';
+    context.font = '10px system-ui';
+    context.fillText(source.name, x + 10, y - 9);
+    if (observation?.status === 'stale') {
+      context.strokeStyle = '#ffb47b'; context.setLineDash([2, 3]);
+      context.beginPath(); context.arc(x, y, 9, 0, Math.PI * 2); context.stroke(); context.setLineDash([]);
+    }
+  });
+}
+
+function hexToRgba(hex, alpha) {
+  const value = hex.replace('#', '');
+  const number = parseInt(value, 16);
+  return 'rgba(' + ((number >> 16) & 255) + ',' + ((number >> 8) & 255) + ',' + (number & 255) + ',' + alpha + ')';
+}
+
+function renderTimeline() {
+  const slider = document.getElementById('timelineSlider');
+  if (!state.replay) {
+    slider.disabled = true;
+    slider.value = 100;
+    document.getElementById('timelineTitle').textContent = state.recording ? 'Recording live session' : 'Live stream';
+    document.getElementById('timelineReadout').textContent = 'Now';
+    document.getElementById('modeLabel').textContent = 'LIVE / SIMULATOR';
+    return;
+  }
+  const observations = state.replay.observations || [];
+  const first = observations[0]?.timestampMs || 0;
+  const last = observations[observations.length - 1]?.timestampMs || first;
+  slider.disabled = false;
+  slider.min = String(first);
+  slider.max = String(last);
+  slider.value = String(state.replayTime);
+  document.getElementById('timelineTitle').textContent = 'Replay session';
+  document.getElementById('timelineReadout').textContent = new Date(state.replayTime).toLocaleTimeString();
+  document.getElementById('modeLabel').textContent = 'REPLAY / RECORDED';
+}
+
+function render() {
+  if (!state.scene) return;
+  document.getElementById('sceneName').textContent = state.scene.name;
+  document.getElementById('connectionBadge').className = 'status-pill connected';
+  document.getElementById('connectionBadge').innerHTML = '<span class="status-dot"></span>Local stream';
+  document.getElementById('recordButton').textContent = state.recording ? 'Stop recording' : 'Start recording';
+  document.getElementById('recordButton').classList.toggle('accent', !state.recording);
+  document.getElementById('recordButton').classList.toggle('ghost', Boolean(state.recording));
+  document.getElementById('exportButton').disabled = !state.recording && !state.replay;
+  document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
+  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderInspector(); renderTimeline(); draw();
+}
+
+document.getElementById('recordButton').addEventListener('click', async () => {
+  if (state.recording) {
+    await api('/api/sessions/' + state.recording.id + '/stop', { method: 'POST' });
+    const payload = await api('/api/state');
+    hydrate(payload);
+    return;
+  }
+  await api('/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sceneId: state.scene.id }) });
+  hydrate(await api('/api/state'));
+});
+
+document.getElementById('liveButton').addEventListener('click', () => {
+  state.replay = null; state.selected = null; render();
+});
+
+document.getElementById('exportButton').addEventListener('click', () => {
+  const id = state.recording?.id || state.replay?.id;
+  if (id) window.location.href = '/api/sessions/' + id + '/export';
+});
+
+document.getElementById('replayButton').addEventListener('click', async () => {
+  const id = document.getElementById('sessionSelect').value;
+  if (!id) return;
+  const payload = await api('/api/sessions/' + id);
+  state.replay = payload.session;
+  state.replayTime = state.replay.observations[state.replay.observations.length - 1]?.timestampMs || Date.now();
+  state.selected = null;
+  render();
+});
+
+document.getElementById('timelineSlider').addEventListener('input', (event) => {
+  if (!state.replay) return;
+  state.replayTime = Number(event.target.value);
+  render();
+});
+
+canvas.addEventListener('click', (event) => {
+  if (!state.scene) return;
+  const rect = canvas.getBoundingClientRect();
+  const transform = sceneTransform();
+  const x = (event.clientX - rect.left - transform.pad) / transform.sx;
+  const y = (event.clientY - rect.top - transform.pad) / transform.sy;
+  let nearest = null; let distance = Infinity;
+  activeObservations().forEach((observation) => {
+    const source = sourceById(observation.sourceId);
+    const position = observation.position || source?.position;
+    if (!position) return;
+    const current = Math.hypot(position.x - x, position.y - y);
+    if (current < distance) { distance = current; nearest = observation; }
+  });
+  state.selected = distance < .5 ? nearest : null;
+  renderInspector();
+});
+
+window.addEventListener('resize', draw);
+
+function connect() {
+  const socket = new WebSocket('ws://' + window.location.host + '/ws/live');
+  socket.onopen = () => {
+    document.getElementById('connectionBadge').className = 'status-pill connected';
+    document.getElementById('connectionBadge').innerHTML = '<span class="status-dot"></span>Local stream';
+  };
+  socket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    if (message.type === 'snapshot') hydrate(message.state);
+    if (message.type === 'observation.accepted') updateObservation(message.observation);
+    if (message.type === 'observation.rejected') {
+      state.diagnostics.push(message);
+      renderDiagnostics();
+    }
+    if (message.type === 'scene.updated') { state.scene = message.scene; render(); }
+    if (message.type === 'session.state') api('/api/state').then(hydrate);
+  };
+  socket.onclose = () => {
+    document.getElementById('connectionBadge').className = 'status-pill';
+    document.getElementById('connectionBadge').innerHTML = '<span class="status-dot"></span>Reconnecting';
+    setTimeout(connect, 1500);
+  };
+}
+
+api('/api/state').then(hydrate).then(connect).catch((error) => {
+  document.getElementById('freshnessLabel').textContent = error.message;
+});
+
