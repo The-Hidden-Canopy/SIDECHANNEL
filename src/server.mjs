@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { applyFreshness, validateObservation } from './validation.mjs';
 import { createDefaultScene, createSimulator } from './simulator.mjs';
 import { JsonStore } from './store.mjs';
+import { consumeTextFrames, encodeTextFrame } from './websocket.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -76,27 +77,8 @@ async function bodyJson(request) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
-function wsTextFrame(value) {
-  const payload = Buffer.from(JSON.stringify(value));
-  if (payload.length < 126) {
-    return Buffer.concat([Buffer.from([0x81, payload.length]), payload]);
-  }
-  if (payload.length < 65536) {
-    const header = Buffer.alloc(4);
-    header[0] = 0x81;
-    header[1] = 126;
-    header.writeUInt16BE(payload.length, 2);
-    return Buffer.concat([header, payload]);
-  }
-  const header = Buffer.alloc(10);
-  header[0] = 0x81;
-  header[1] = 127;
-  header.writeBigUInt64BE(BigInt(payload.length), 2);
-  return Buffer.concat([header, payload]);
-}
-
 function broadcast(event) {
-  const frame = wsTextFrame(event);
+  const frame = encodeTextFrame(event);
   for (const socket of clients) {
     try {
       socket.write(frame);
@@ -297,7 +279,7 @@ const server = createServer(async (request, response) => {
 
 server.on('upgrade', (request, socket) => {
   const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
-  if (pathname !== '/ws/live') {
+  if (pathname !== '/ws/live' && pathname !== '/ws/ingest') {
     socket.destroy();
     return;
   }
@@ -315,8 +297,42 @@ server.on('upgrade', (request, socket) => {
     'Connection: Upgrade\r\n' +
     'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
   );
+  if (pathname === '/ws/ingest') {
+    let incoming = Buffer.alloc(0);
+    socket.on('data', (chunk) => {
+      incoming = Buffer.concat([incoming, chunk]);
+      const parsed = consumeTextFrames(incoming);
+      incoming = parsed.remainder;
+      if (parsed.protocolError) {
+        socket.destroy();
+        return;
+      }
+      parsed.messages.forEach((message) => {
+        if (message === JSON.stringify({ type: 'ping' })) return;
+        try {
+          const raw = JSON.parse(message);
+          ingest(raw).then((result) => {
+            socket.write(encodeTextFrame({
+              type: 'ingest.result',
+              ok: result.ok,
+              id: result.observation?.id || result.diagnostic?.id,
+              reasons: result.diagnostic?.reasons || []
+            }));
+          });
+        } catch (error) {
+          socket.write(encodeTextFrame({
+            type: 'ingest.result',
+            ok: false,
+            reasons: [{ id: 'json', message: error.message }]
+          }));
+        }
+      });
+    });
+    socket.on('error', () => socket.destroy());
+    return;
+  }
   clients.add(socket);
-  socket.write(wsTextFrame({ type: 'snapshot', state: snapshot() }));
+  socket.write(encodeTextFrame({ type: 'snapshot', state: snapshot() }));
   socket.on('close', () => clients.delete(socket));
   socket.on('error', () => clients.delete(socket));
 });
@@ -343,4 +359,3 @@ process.on('SIGINT', () => {
 });
 
 export { server, simulator, snapshot, ingest };
-
