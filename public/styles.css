@@ -46,6 +46,7 @@ button { cursor: pointer; }
 .button:disabled { opacity: .38; cursor: not-allowed; }
 .button.ghost { background: transparent; color: var(--muted); }
 .button.accent { background: var(--cyan); border-color: var(--cyan); color: #091417; }
+.button.danger { background: transparent; border-color: rgba(255, 143, 151, .25); color: var(--danger); }
 .button.small { padding: 6px 10px; }
 
 .workspace { min-height: calc(100vh - 111px); display: grid; grid-template-columns: 260px minmax(480px, 1fr) 290px; gap: 1px; }
@@ -120,4 +121,3 @@ canvas { width: 100%; height: 100%; display: block; }
   .stage { min-height: 620px; }
   .stage-toolbar { align-items: flex-start; gap: 10px; flex-direction: column; }
 }
-

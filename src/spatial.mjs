@@ -73,3 +73,52 @@ export function composeActivity({ scene, observations, sources, weights = {} }) 
   }));
 }
 
+export function interpolateActivityField({
+  scene,
+  observations,
+  sources,
+  weights = {},
+  gridSize = 28,
+  power = 2
+}) {
+  const width = Math.max(2, gridSize);
+  const height = Math.max(2, Math.round(gridSize * scene.height / scene.width));
+  const points = observations
+    .filter((observation) => observation.status !== 'stale' && observation.status !== 'rejected')
+    .map((observation) => {
+      const source = sources.get(observation.sourceId);
+      const position = observation.position || source?.position;
+      if (!position) return null;
+      return {
+        x: position.x,
+        y: position.y,
+        intensity: normalizeIntensity(observation.channel, observation.value, source),
+        confidence: clamp(observation.quality?.score ?? 0),
+        weight: weights[observation.channel] ?? 1
+      };
+    })
+    .filter(Boolean);
+
+  const cells = [];
+  for (let row = 0; row < height; row += 1) {
+    const y = scene.height * (row + 0.5) / height;
+    for (let column = 0; column < width; column += 1) {
+      const x = scene.width * (column + 0.5) / width;
+      let weighted = 0;
+      let weightTotal = 0;
+      for (const point of points) {
+        const distance = Math.hypot(x - point.x, y - point.y);
+        const weight = 1 / Math.max(distance, 0.05) ** power;
+        const contribution = weight * point.weight * point.confidence;
+        weighted += contribution * point.intensity;
+        weightTotal += contribution;
+      }
+      cells.push({
+        x,
+        y,
+        intensity: weightTotal > 0 ? clamp(weighted / weightTotal) : null
+      });
+    }
+  }
+  return { width, height, cells, pointCount: points.length };
+}

@@ -9,6 +9,10 @@ const CHANNELS = [
   ['bluetooth', 'Bluetooth aggregate', '#a9e88b', 125],
   ['light_flicker', 'Light flicker', '#f49dff', 320]
 ];
+const DISPLAY_LAYERS = [
+  ['activity', 'Unified activity', '#d7fff7', 0],
+  ...CHANNELS
+];
 const RANGES = {
   rf: [-120, 0], magnetic: [0, 200], heat: [-20, 80], vibration: [0, 1],
   sound: [0, 1], network: [0, 100000], electrical: [0, 5000], bluetooth: [0, 100], light_flicker: [0, 1]
@@ -22,7 +26,7 @@ const state = {
   sessions: [],
   replay: null,
   selected: null,
-  visible: Object.fromEntries(CHANNELS.map((item) => [item[0], true]))
+  visible: Object.fromEntries(DISPLAY_LAYERS.map((item) => [item[0], true]))
 };
 
 const canvas = document.getElementById('sceneCanvas');
@@ -82,7 +86,7 @@ function updateObservation(observation) {
 
 function renderLayers() {
   layerPanel.innerHTML = '';
-  CHANNELS.forEach(([id, label, color]) => {
+  DISPLAY_LAYERS.forEach(([id, label, color]) => {
     const row = document.createElement('label');
     row.className = 'layer-row';
     row.innerHTML = '<input type="checkbox" data-channel="' + id + '" ' +
@@ -94,7 +98,7 @@ function renderLayers() {
     });
     layerPanel.appendChild(row);
   });
-  document.getElementById('layerCount').textContent = CHANNELS.filter((item) => state.visible[item[0]]).length;
+  document.getElementById('layerCount').textContent = DISPLAY_LAYERS.filter((item) => state.visible[item[0]]).length;
 }
 
 function renderSources() {
@@ -190,6 +194,40 @@ function sceneTransform() {
   };
 }
 
+function drawActivityField(valid, transform) {
+  if (!state.visible.activity || valid.length === 0) return;
+  const cols = 22;
+  const rows = 18;
+  const color = '#d7fff7';
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const x = state.scene.width * (col + .5) / cols;
+      const y = state.scene.height * (row + .5) / rows;
+      let total = 0;
+      let weightTotal = 0;
+      valid.forEach((point) => {
+        if (!state.visible[point.channel]) return;
+        const source = sourceById(point.sourceId);
+        const position = point.position || source?.position;
+        if (!position) return;
+        const distance = Math.hypot(x - position.x, y - position.y);
+        const weight = 1 / Math.max(distance, .08) ** 2;
+        const confidence = point.quality?.score || 0;
+        total += normalize(point.channel, point.value) * confidence * weight;
+        weightTotal += confidence * weight;
+      });
+      const intensity = weightTotal ? Math.max(0, Math.min(1, total / weightTotal)) : 0;
+      context.fillStyle = hexToRgba(color, .025 + intensity * .12);
+      context.fillRect(
+        transform.x(x - state.scene.width / cols / 2),
+        transform.y(y - state.scene.height / rows / 2),
+        transform.sx * state.scene.width / cols + 1,
+        transform.sy * state.scene.height / rows + 1
+      );
+    }
+  }
+}
+
 function draw() {
   if (!state.scene) return;
   const rect = canvas.getBoundingClientRect();
@@ -221,6 +259,8 @@ function draw() {
   context.strokeStyle = 'rgba(210, 235, 242, .35)';
   context.lineWidth = 1.5;
   context.strokeRect(transform.x(0), transform.y(0), transform.sx * state.scene.width, transform.sy * state.scene.height);
+
+  drawActivityField(valid, transform);
 
   CHANNELS.forEach(([channel, label, color]) => {
     if (!state.visible[channel]) return;
@@ -311,7 +351,9 @@ function render() {
   document.getElementById('recordButton').textContent = state.recording ? 'Stop recording' : 'Start recording';
   document.getElementById('recordButton').classList.toggle('accent', !state.recording);
   document.getElementById('recordButton').classList.toggle('ghost', Boolean(state.recording));
-  document.getElementById('exportButton').disabled = !state.recording && !state.replay;
+  const selectedSessionId = document.getElementById('sessionSelect').value;
+  document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
+  document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
   renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderInspector(); renderTimeline(); draw();
 }
@@ -332,8 +374,30 @@ document.getElementById('liveButton').addEventListener('click', () => {
 });
 
 document.getElementById('exportButton').addEventListener('click', () => {
-  const id = state.recording?.id || state.replay?.id;
+  const id = state.recording?.id || state.replay?.id || document.getElementById('sessionSelect').value;
   if (id) window.location.href = '/api/sessions/' + id + '/export';
+});
+
+document.getElementById('importButton').addEventListener('click', () => {
+  document.getElementById('importInput').click();
+});
+
+document.getElementById('importInput').addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  try {
+    const imported = JSON.parse(await file.text());
+    await api('/api/sessions/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(imported)
+    });
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Import failed: ' + error.message;
+  } finally {
+    event.target.value = '';
+  }
 });
 
 document.getElementById('replayButton').addEventListener('click', async () => {
@@ -344,6 +408,17 @@ document.getElementById('replayButton').addEventListener('click', async () => {
   state.replayTime = state.replay.observations[state.replay.observations.length - 1]?.timestampMs || Date.now();
   state.selected = null;
   render();
+});
+
+document.getElementById('sessionSelect').addEventListener('change', () => render());
+
+document.getElementById('deleteButton').addEventListener('click', async () => {
+  const id = state.replay?.id || document.getElementById('sessionSelect').value;
+  if (!id || !window.confirm('Delete this local session?')) return;
+  await api('/api/sessions/' + id, { method: 'DELETE' });
+  state.replay = null;
+  state.selected = null;
+  hydrate(await api('/api/state'));
 });
 
 document.getElementById('timelineSlider').addEventListener('input', (event) => {
@@ -399,4 +474,3 @@ function connect() {
 api('/api/state').then(hydrate).then(connect).catch((error) => {
   document.getElementById('freshnessLabel').textContent = error.message;
 });
-
