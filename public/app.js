@@ -124,13 +124,52 @@ function renderSources() {
   (state.scene?.sources || []).forEach((source) => {
     const observation = state.observations.find((item) => item.sourceId === source.id && item.channel === source.channels[0]);
     const stale = observation?.status === 'stale';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'source-entry';
     const row = document.createElement('div');
     row.className = 'source-row ' + (stale ? '' : 'live');
     row.innerHTML = '<span class="layer-swatch" style="color:' + colorFor(source.channels[0]) +
       ';background:' + colorFor(source.channels[0]) + '"></span><span>' +
       escapeHtml(source.name) + '</span><span class="source-meta">' +
       (stale ? 'stale' : observation ? 'live' : '—') + '</span>';
-    sourceList.appendChild(row);
+    wrapper.appendChild(row);
+    if (source.adapterType === 'manual') {
+      const control = document.createElement('form');
+      control.className = 'manual-control';
+      const range = source.range || RANGES[source.channels[0]] || [0, 1];
+      control.innerHTML = '<input type="number" step="any" aria-label="Value for ' + escapeHtml(source.name) +
+        '" placeholder="' + escapeHtml(String(range[0])) + '–' + escapeHtml(String(range[1])) + '">' +
+        '<button class="button small ghost" type="submit">Send</button>';
+      control.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const input = control.querySelector('input');
+        const value = Number(input.value);
+        if (!Number.isFinite(value)) return;
+        try {
+          await api('/api/observations', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              schemaVersion: '0.1',
+              id: 'manual_' + Date.now(),
+              sourceId: source.id,
+              channel: source.channels[0],
+              timestampMs: Date.now(),
+              value,
+              unit: source.unit || 'normalized',
+              status: 'measured',
+              quality: { score: 1, state: 'good', reasons: [] },
+              position: source.position
+            })
+          });
+          input.value = '';
+        } catch (error) {
+          document.getElementById('freshnessLabel').textContent = 'Manual observation rejected: ' + error.message;
+        }
+      });
+      wrapper.appendChild(control);
+    }
+    sourceList.appendChild(wrapper);
   });
   document.getElementById('sourceCount').textContent = (state.scene?.sources || []).length;
 }
@@ -485,6 +524,56 @@ document.getElementById('saveSceneButton').addEventListener('click', async () =>
   });
   state.scene = scene;
   render();
+});
+
+document.getElementById('addSourceButton').addEventListener('click', () => {
+  const form = document.getElementById('sourceForm');
+  form.hidden = !form.hidden;
+  if (!form.hidden) document.getElementById('sourceName').focus();
+});
+
+document.getElementById('sourceForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const channel = document.getElementById('sourceChannel').value;
+  const name = document.getElementById('sourceName').value.trim();
+  const unit = document.getElementById('sourceUnit').value.trim();
+  const freshnessWindowMs = Number(document.getElementById('sourceFreshness').value);
+  const min = Number(document.getElementById('sourceRangeMin').value);
+  const max = Number(document.getElementById('sourceRangeMax').value);
+  if (!name || !unit || !Number.isFinite(freshnessWindowMs) || freshnessWindowMs <= 0 ||
+      !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return;
+  try {
+    await api('/api/scenes/' + state.scene.id + '/sources', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        adapterType: 'manual',
+        channels: [channel],
+        capabilities: ['manual_observation'],
+        unit,
+        range: [min, max],
+        freshnessWindowMs,
+        privacyMode: 'local_numeric',
+        connected: false,
+        position: {
+          x: state.scene.width / 2,
+          y: state.scene.height / 2,
+          uncertaintyRadius: 0.5
+        },
+        calibrationState: 'uncalibrated'
+      })
+    });
+    document.getElementById('sourceForm').reset();
+    document.getElementById('sourceUnit').value = 'normalized';
+    document.getElementById('sourceFreshness').value = '2000';
+    document.getElementById('sourceRangeMin').value = '0';
+    document.getElementById('sourceRangeMax').value = '1';
+    document.getElementById('sourceForm').hidden = true;
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Could not add source: ' + error.message;
+  }
 });
 
 canvas.addEventListener('pointerdown', (event) => {

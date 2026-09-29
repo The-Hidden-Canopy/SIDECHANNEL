@@ -8,6 +8,7 @@ import { applyFreshness, validateObservation } from './validation.mjs';
 import { createDefaultScene, createSimulator } from './simulator.mjs';
 import { JsonStore } from './store.mjs';
 import { consumeTextFrames, encodeTextFrame } from './websocket.mjs';
+import { listAdapters } from './adapters/registry.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -140,6 +141,9 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/state') {
     return sendJson(response, 200, snapshot());
   }
+  if (request.method === 'GET' && pathname === '/api/adapters') {
+    return sendJson(response, 200, { adapters: listAdapters() });
+  }
   if (request.method === 'GET' && pathname === '/api/scenes') {
     return sendJson(response, 200, { scenes: store.listScenes() });
   }
@@ -181,6 +185,8 @@ async function handleApi(request, response, pathname) {
         freshnessWindowMs: body.freshnessWindowMs || 2000,
         privacyMode: body.privacyMode || 'local_numeric',
         connected: false,
+        position: body.position || { x: scene.width / 2, y: scene.height / 2, uncertaintyRadius: 0.5 },
+        calibrationState: body.calibrationState || 'uncalibrated',
         ...body
       };
       const updated = { ...scene, sources: [...scene.sources, source] };

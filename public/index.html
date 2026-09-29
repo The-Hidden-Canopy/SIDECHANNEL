@@ -56,8 +56,27 @@
       <section class="panel">
         <div class="panel-heading">
           <h3>Sources</h3>
-          <span id="sourceCount" class="count">0</span>
+          <div class="panel-heading-actions"><span id="sourceCount" class="count">0</span><button id="addSourceButton" class="icon-button" type="button" aria-label="Add source">+</button></div>
         </div>
+        <form id="sourceForm" class="source-form" hidden>
+          <label>Name <input id="sourceName" type="text" placeholder="Workshop meter" required></label>
+          <label>Channel
+            <select id="sourceChannel">
+              <option value="rf">RF</option><option value="magnetic">Magnetic field</option><option value="heat">Heat</option>
+              <option value="vibration">Vibration</option><option value="sound">Sound features</option><option value="network">Network rate</option>
+              <option value="electrical">Electrical load</option><option value="bluetooth">Bluetooth aggregate</option><option value="light_flicker">Light flicker</option>
+            </select>
+          </label>
+          <div class="field-grid">
+            <label>Unit <input id="sourceUnit" type="text" value="normalized" required></label>
+            <label>Freshness ms <input id="sourceFreshness" type="number" value="2000" min="250" step="250"></label>
+          </div>
+          <div class="field-grid">
+            <label>Range min <input id="sourceRangeMin" type="number" value="0" step="any"></label>
+            <label>Range max <input id="sourceRangeMax" type="number" value="1" step="any"></label>
+          </div>
+          <button class="button small accent" type="submit">Add manual source</button>
+        </form>
         <div id="sourceList" class="source-list"></div>
       </section>
       <section class="panel privacy-panel">
