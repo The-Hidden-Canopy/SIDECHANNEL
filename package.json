@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
+    "verify": "node scripts/verify.mjs",
     "start": "node src/server.mjs"
   }
 }

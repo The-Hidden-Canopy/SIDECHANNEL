@@ -5,9 +5,10 @@ SIDECHANNEL is a local-first spatial sensing explorer for making incidental emis
 ## Current repository contents
 
 - `outputs/SIDECHANNEL_BUILD_SPEC.md` — product plan, engineering specification, data contracts, architecture, milestones, and Codex execution brief.
-- `src/` — normalized contracts, validation/freshness gates, spatial interpolation, simulator, SQLite session store, and loopback server.
+- `src/` — normalized contracts, validation/freshness gates, spatial interpolation, simulator, SQLite session store, event detection, and loopback server.
 - `public/` — responsive 2D scene explorer with channel layers, source health, inspector, diagnostics, activity events, recording, replay, and export controls.
 - `test/` — deterministic simulator, validation, freshness, spatial field, and activity-fusion tests.
+- `docs/PACKAGING.md` — runtime, verification, portable packaging boundary, and data-directory runbook.
 - `package.json` — Node.js project manifest.
 
 ## Safety and privacy boundaries
@@ -20,6 +21,7 @@ Requirements: Node.js 22 or newer. No dependency installation is required for th
 
 ```text
 npm test
+npm run verify
 npm start
 ```
 
