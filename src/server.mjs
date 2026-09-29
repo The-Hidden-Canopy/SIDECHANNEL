@@ -6,15 +6,16 @@ import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyFreshness, validateObservation } from './validation.mjs';
 import { createDefaultScene, createSimulator } from './simulator.mjs';
-import { JsonStore } from './store.mjs';
+import { SqliteStore } from './sqlite-store.mjs';
 import { consumeTextFrames, encodeTextFrame } from './websocket.mjs';
 import { listAdapters } from './adapters/registry.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
-const dataFile = join(root, 'data', 'sidechannel.json');
+const dataFile = join(root, 'data', 'sidechannel.sqlite');
+const legacyDataFile = join(root, 'data', 'sidechannel.json');
 const port = Number(process.env.PORT || 4173);
-const store = new JsonStore(dataFile);
+const store = new SqliteStore(dataFile, { legacyJsonPath: legacyDataFile });
 const defaultScene = createDefaultScene();
 
 await store.init(defaultScene);
@@ -393,7 +394,10 @@ server.listen(port, '127.0.0.1', () => {
 
 process.on('SIGINT', () => {
   simulator.stop();
-  server.close(() => process.exit(0));
+  server.close(() => {
+    store.close();
+    process.exit(0);
+  });
 });
 
 export { server, simulator, snapshot, ingest };

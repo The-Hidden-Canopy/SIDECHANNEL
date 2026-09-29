@@ -1,0 +1,82 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { SqliteStore } from '../src/sqlite-store.mjs';
+
+const scene = {
+  id: 'scene_test',
+  name: 'Test room',
+  width: 3,
+  height: 2,
+  unit: 'm',
+  sources: [],
+  placements: []
+};
+
+function observation(id, timestampMs = 1000) {
+  return {
+    schemaVersion: '0.1',
+    id,
+    sourceId: 'source_test',
+    channel: 'heat',
+    timestampMs,
+    value: 22,
+    unit: 'C',
+    status: 'measured',
+    quality: { score: 1, state: 'good', reasons: [] }
+  };
+}
+
+test('SQLite store persists sessions, observations, events, and deletion', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sidechannel-sqlite-'));
+  const path = join(directory, 'sidechannel.sqlite');
+  const store = new SqliteStore(path);
+  try {
+    await store.init(scene);
+    const session = store.createSession(scene.id);
+    store.appendObservation(session.id, observation('observation_1'));
+    store.appendEvent(session.id, { id: 'event_1', type: 'activity.change', startMs: 1000, endMs: null });
+    const finished = store.finishSession(session.id);
+    assert.equal(finished.observations.length, 1);
+    assert.equal(finished.events.length, 1);
+    assert.equal(store.listSessions()[0].observationCount, 1);
+    store.close();
+
+    const reopened = new SqliteStore(path);
+    await reopened.init(scene);
+    assert.equal(reopened.getSession(session.id).observations[0].id, 'observation_1');
+    assert.equal(reopened.getSession(session.id).events[0].type, 'activity.change');
+    assert.equal(reopened.deleteSession(session.id), true);
+    assert.equal(reopened.getSession(session.id), undefined);
+    reopened.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('SQLite store migrates the existing JSON state format once', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sidechannel-migrate-'));
+  const dbPath = join(directory, 'sidechannel.sqlite');
+  const legacyPath = join(directory, 'sidechannel.json');
+  const legacySession = {
+    id: 'sess_legacy',
+    sceneId: scene.id,
+    startedAtMs: 10,
+    endedAtMs: 20,
+    observations: [observation('legacy_observation', 12)],
+    events: []
+  };
+  try {
+    await writeFile(legacyPath, JSON.stringify({ scenes: [scene], sessions: [legacySession] }));
+    const store = new SqliteStore(dbPath, { legacyJsonPath: legacyPath });
+    await store.init(scene);
+    assert.equal(store.getScene(scene.id).name, 'Test room');
+    assert.equal(store.getSession('sess_legacy').observations.length, 1);
+    store.close();
+    assert.equal(JSON.parse(await readFile(legacyPath, 'utf8')).sessions.length, 1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
