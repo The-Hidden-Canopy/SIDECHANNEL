@@ -26,6 +26,8 @@ const state = {
   sessions: [],
   replay: null,
   selected: null,
+  editMode: false,
+  draggedSourceId: null,
   visible: Object.fromEntries(DISPLAY_LAYERS.map((item) => [item[0], true]))
 };
 
@@ -74,6 +76,22 @@ function hydrate(payload) {
   state.recording = payload.recording;
   state.sessions = payload.sessions || [];
   render();
+}
+
+function renderSceneTools() {
+  if (!state.scene) return;
+  const width = document.getElementById('sceneWidth');
+  const height = document.getElementById('sceneHeight');
+  if (document.activeElement !== width) width.value = state.scene.width;
+  if (document.activeElement !== height) height.value = state.scene.height;
+  const calibration = (state.scene.sources || []).every((source) => source.calibrationState !== 'uncalibrated');
+  document.getElementById('calibrationState').textContent = calibration ? 'calibrated' : 'needs calibration';
+  document.getElementById('editSceneButton').textContent = state.editMode ? 'Exit editor' : 'Edit scene';
+  document.getElementById('editSceneButton').classList.toggle('edit-active', state.editMode);
+  document.getElementById('editHint').textContent = state.editMode
+    ? 'Drag a source marker, then release to save its calibrated position.'
+    : 'Turn on Edit scene, then drag source markers to calibrate placement.';
+  canvas.classList.toggle('canvas-editing', state.editMode);
 }
 
 function updateObservation(observation) {
@@ -192,6 +210,29 @@ function sceneTransform() {
     sy: (rect.height - pad * 2) / state.scene.height,
     pad
   };
+}
+
+function scenePointFromEvent(event) {
+  const rect = canvas.getBoundingClientRect();
+  const transform = sceneTransform();
+  return {
+    x: Math.max(0, Math.min(state.scene.width, (event.clientX - rect.left - transform.pad) / transform.sx)),
+    y: Math.max(0, Math.min(state.scene.height, (event.clientY - rect.top - transform.pad) / transform.sy))
+  };
+}
+
+function nearestSource(point) {
+  let nearest = null;
+  let distance = Infinity;
+  (state.scene.sources || []).forEach((source) => {
+    if (!source.position) return;
+    const current = Math.hypot(source.position.x - point.x, source.position.y - point.y);
+    if (current < distance) {
+      distance = current;
+      nearest = source;
+    }
+  });
+  return distance < .45 ? nearest : null;
 }
 
 function drawActivityField(valid, transform) {
@@ -346,6 +387,7 @@ function renderTimeline() {
 function render() {
   if (!state.scene) return;
   document.getElementById('sceneName').textContent = state.scene.name;
+  renderSceneTools();
   document.getElementById('connectionBadge').className = 'status-pill connected';
   document.getElementById('connectionBadge').innerHTML = '<span class="status-dot"></span>Local stream';
   document.getElementById('recordButton').textContent = state.recording ? 'Stop recording' : 'Start recording';
@@ -427,8 +469,70 @@ document.getElementById('timelineSlider').addEventListener('input', (event) => {
   render();
 });
 
+document.getElementById('editSceneButton').addEventListener('click', () => {
+  state.editMode = !state.editMode;
+  render();
+});
+
+document.getElementById('saveSceneButton').addEventListener('click', async () => {
+  const width = Number(document.getElementById('sceneWidth').value);
+  const height = Number(document.getElementById('sceneHeight').value);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+  const scene = await api('/api/scenes/' + state.scene.id, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ width, height })
+  });
+  state.scene = scene;
+  render();
+});
+
+canvas.addEventListener('pointerdown', (event) => {
+  if (!state.editMode || !state.scene) return;
+  const source = nearestSource(scenePointFromEvent(event));
+  if (!source) return;
+  state.draggedSourceId = source.id;
+  canvas.setPointerCapture(event.pointerId);
+});
+
+canvas.addEventListener('pointermove', (event) => {
+  if (!state.draggedSourceId) return;
+  const source = state.scene.sources.find((item) => item.id === state.draggedSourceId);
+  if (!source) return;
+  source.position = {
+    ...(source.position || {}),
+    ...scenePointFromEvent(event)
+  };
+  renderSources();
+  draw();
+});
+
+canvas.addEventListener('pointerup', async (event) => {
+  if (!state.draggedSourceId) return;
+  const source = state.scene.sources.find((item) => item.id === state.draggedSourceId);
+  state.draggedSourceId = null;
+  if (!source) return;
+  try {
+    await api('/api/scenes/' + state.scene.id + '/sources/' + source.id, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        position: source.position,
+        calibrationState: 'calibrated',
+        calibratedAtMs: Date.now()
+      })
+    });
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('editHint').textContent = 'Could not save placement: ' + error.message;
+    render();
+  }
+  if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+});
+
 canvas.addEventListener('click', (event) => {
   if (!state.scene) return;
+  if (state.editMode) return;
   const rect = canvas.getBoundingClientRect();
   const transform = sceneTransform();
   const x = (event.clientX - rect.left - transform.pad) / transform.sx;

@@ -29,7 +29,7 @@ The server is loopback-only by default. It starts a deterministic simulator with
 
 ## Implemented v0.1 slice
 
-The first engineering slice is runnable now: deterministic simulator, normalized observation contracts, loopback API/WebSocket live updates, inbound WebSocket and JSON-lines adapter modules, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, quality/freshness gates, diagnostics, session recording/replay data, JSON export/import controls, local session deletion, and automated tests.
+The first engineering slice is runnable now: deterministic simulator, normalized observation contracts, loopback API/WebSocket live updates, inbound WebSocket and JSON-lines adapter modules, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, quality/freshness gates, diagnostics, scene-frame editing, draggable source calibration, session recording/replay data, JSON export/import controls, local session deletion, and automated tests.
 
 Native hardware adapters, richer calibration, SQLite persistence, and desktop packaging remain follow-on work described in the build specification.
 

@@ -23,6 +23,7 @@
       <button id="exportButton" class="button ghost" type="button" disabled>Export</button>
       <button id="importButton" class="button ghost" type="button">Import</button>
       <input id="importInput" type="file" accept="application/json,.json" hidden>
+      <button id="editSceneButton" class="button ghost" type="button">Edit scene</button>
     </div>
   </header>
 
@@ -32,6 +33,18 @@
         <div class="eyebrow">CURRENT SCENE</div>
         <h2 id="sceneName">Loading scene</h2>
         <p class="muted">Measured and inferred activity share one local coordinate frame.</p>
+      </section>
+      <section class="panel scene-tools">
+        <div class="panel-heading">
+          <h3>Spatial frame</h3>
+          <span id="calibrationState" class="badge">calibrated</span>
+        </div>
+        <div class="field-grid">
+          <label>Width <input id="sceneWidth" type="number" min="1" step="0.1"></label>
+          <label>Height <input id="sceneHeight" type="number" min="1" step="0.1"></label>
+        </div>
+        <button id="saveSceneButton" class="button small ghost" type="button">Save frame</button>
+        <p id="editHint" class="muted">Turn on Edit scene, then drag source markers to calibrate placement.</p>
       </section>
       <section class="panel">
         <div class="panel-heading">

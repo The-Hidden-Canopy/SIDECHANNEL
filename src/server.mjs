@@ -189,6 +189,38 @@ async function handleApi(request, response, pathname) {
       broadcast({ type: 'scene.updated', scene: updated });
       return sendJson(response, 201, source);
     }
+    if (request.method === 'PATCH' && parts[3] === 'sources' && parts[4]) {
+      const sourceId = parts[4];
+      const existing = scene.sources.find((source) => source.id === sourceId);
+      if (!existing) return sendJson(response, 404, { error: 'source not found' });
+      const body = await bodyJson(request);
+      const source = {
+        ...existing,
+        ...body,
+        id: existing.id,
+        position: body.position ? {
+          x: Number(body.position.x),
+          y: Number(body.position.y),
+          ...(body.position.z === undefined ? {} : { z: Number(body.position.z) }),
+          ...(body.position.uncertaintyRadius === undefined
+            ? {}
+            : { uncertaintyRadius: Number(body.position.uncertaintyRadius) })
+        } : existing.position,
+        calibrationState: body.calibrationState || 'calibrated',
+        calibratedAtMs: body.calibratedAtMs || Date.now()
+      };
+      const updated = {
+        ...scene,
+        sources: scene.sources.map((item) => item.id === sourceId ? source : item),
+        placements: scene.placements.map((placement) => placement.sourceId === sourceId
+          ? { ...placement, position: source.position, calibrationState: source.calibrationState, calibratedAtMs: source.calibratedAtMs }
+          : placement)
+      };
+      await store.upsertScene(updated);
+      if (activeScene.id === updated.id) activeScene = updated;
+      broadcast({ type: 'scene.updated', scene: updated });
+      return sendJson(response, 200, source);
+    }
   }
   if (request.method === 'POST' && pathname === '/api/observations') {
     const body = await bodyJson(request);

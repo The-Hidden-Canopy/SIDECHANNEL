@@ -72,6 +72,13 @@ button { cursor: pointer; }
 .source-row.live { border-color: rgba(108, 228, 219, .15); background: rgba(108, 228, 219, .035); }
 .source-meta { margin-left: auto; color: var(--faint); font-size: 10px; }
 .privacy-panel { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.scene-tools .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 10px; }
+.scene-tools label { color: var(--muted); font-size: 10px; }
+.scene-tools input { width: 100%; margin-top: 5px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px; background: #0b1119; color: var(--text); font-size: 11px; }
+.scene-tools .button { width: 100%; }
+.scene-tools p { font-size: 10px; line-height: 1.45; margin: 9px 0 0; }
+.edit-active { border-color: rgba(108, 228, 219, .6) !important; color: var(--cyan) !important; background: rgba(108, 228, 219, .08) !important; }
+.canvas-editing { cursor: crosshair; }
 
 .stage-toolbar { display: flex; align-items: center; justify-content: space-between; min-height: 30px; }
 .mode-label { color: var(--cyan); letter-spacing: .12em; font-weight: 800; font-size: 10px; margin-right: 8px; }
