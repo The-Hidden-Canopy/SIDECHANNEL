@@ -9,6 +9,7 @@ import { createDefaultScene, createSimulator } from './simulator.mjs';
 import { SqliteStore } from './sqlite-store.mjs';
 import { consumeTextFrames, encodeTextFrame } from './websocket.mjs';
 import { listAdapters } from './adapters/registry.mjs';
+import { createEventDetector } from './events.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -24,7 +25,9 @@ let activeScene = store.getScene(defaultScene.id) || defaultScene;
 let recordingSessionId = null;
 const latest = new Map();
 const diagnostics = [];
+const recentEvents = [];
 const clients = new Set();
+const eventDetector = createEventDetector();
 
 function sourceMap() {
   return new Map(activeScene.sources.map((source) => [source.id, source]));
@@ -41,6 +44,7 @@ function snapshot() {
   return {
     scene: activeScene,
     observations: currentObservations(),
+    events: recentEvents.slice(-40),
     diagnostics: diagnostics.slice(-40),
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
@@ -108,6 +112,12 @@ async function ingest(raw) {
   latest.set(observation.sourceId + ':' + observation.channel, observation);
   if (recordingSessionId) await store.appendObservation(recordingSessionId, observation);
   broadcast({ type: 'observation.accepted', observation });
+  const event = eventDetector.observe(observation, sourceMap().get(observation.sourceId));
+  if (event) {
+    recentEvents.push(event);
+    if (recordingSessionId) await store.appendEvent(recordingSessionId, event);
+    broadcast({ type: 'event.detected', event });
+  }
   return { ok: true, observation };
 }
 

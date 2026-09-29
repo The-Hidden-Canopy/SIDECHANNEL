@@ -6,7 +6,7 @@ SIDECHANNEL is a local-first spatial sensing explorer for making incidental emis
 
 - `outputs/SIDECHANNEL_BUILD_SPEC.md` — product plan, engineering specification, data contracts, architecture, milestones, and Codex execution brief.
 - `src/` — normalized contracts, validation/freshness gates, spatial interpolation, simulator, SQLite session store, and loopback server.
-- `public/` — responsive 2D scene explorer with channel layers, source health, inspector, diagnostics, recording, replay, and export controls.
+- `public/` — responsive 2D scene explorer with channel layers, source health, inspector, diagnostics, activity events, recording, replay, and export controls.
 - `test/` — deterministic simulator, validation, freshness, spatial field, and activity-fusion tests.
 - `package.json` — Node.js project manifest.
 
@@ -29,7 +29,7 @@ The server is loopback-only by default. It starts a deterministic simulator with
 
 ## Implemented v0.1 slice
 
-The first engineering slice is runnable now: deterministic simulator, normalized observation contracts, loopback API/WebSocket live updates, inbound WebSocket and JSON-lines adapter modules, adapter discovery, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, quality/freshness gates, diagnostics, scene-frame editing, draggable source calibration, manual source creation and numeric observation injection, session recording/replay data, JSON export/import controls, local session deletion, and automated tests.
+The first engineering slice is runnable now: deterministic simulator, normalized observation contracts, loopback API/WebSocket live updates, inbound WebSocket and JSON-lines adapter modules, adapter discovery, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, bounded activity-change events, quality/freshness gates, diagnostics, scene-frame editing, draggable source calibration, manual source creation and numeric observation injection, session recording/replay data, JSON export/import controls, local session deletion, and automated tests.
 
 Native hardware adapters, richer calibration, optional encrypted export, and desktop packaging remain follow-on work described in the build specification. The SQLite store is local and dependency-free on supported Node.js releases; it migrates an existing `data/sidechannel.json` file on first startup.
 

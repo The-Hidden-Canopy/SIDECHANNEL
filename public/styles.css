@@ -67,6 +67,7 @@ button { cursor: pointer; }
 .icon-button:hover { border-color: var(--cyan); background: rgba(108, 228, 219, .08); }
 .count { min-width: 22px; padding: 3px 6px; border-radius: 20px; background: rgba(121, 167, 255, .12); color: var(--blue); font-size: 10px; text-align: center; }
 .layer-list, .source-list, .diagnostics-list { display: flex; flex-direction: column; gap: 7px; margin-top: 13px; }
+.events-list { display: flex; flex-direction: column; gap: 7px; margin-top: 13px; }
 .layer-row, .source-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .layer-row { color: var(--muted); font-size: 12px; }
 .layer-row input { accent-color: var(--cyan); }
@@ -82,6 +83,8 @@ button { cursor: pointer; }
 .manual-control { display: flex; gap: 4px; margin: 5px 0 0 15px; }
 .manual-control input { min-width: 0; width: 72px; border: 1px solid var(--line); border-radius: 5px; padding: 4px 5px; background: #0b1119; color: var(--text); font-size: 10px; }
 .manual-control button { border: 1px solid rgba(108, 228, 219, .25); border-radius: 5px; padding: 3px 5px; background: transparent; color: var(--cyan); font-size: 10px; }
+.event-item { padding: 7px 8px; border-left: 2px solid var(--cyan); border-radius: 5px; background: rgba(108, 228, 219, .04); color: var(--muted); font-size: 10px; line-height: 1.4; }
+.event-item strong { color: var(--text); font-weight: 600; }
 .privacy-panel { color: var(--muted); font-size: 11px; line-height: 1.5; }
 .scene-tools .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 10px; }
 .scene-tools label { color: var(--muted); font-size: 10px; }

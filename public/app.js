@@ -22,6 +22,7 @@ const state = {
   scene: null,
   observations: [],
   diagnostics: [],
+  events: [],
   recording: null,
   sessions: [],
   replay: null,
@@ -73,6 +74,7 @@ function hydrate(payload) {
   state.scene = payload.scene;
   state.observations = payload.observations || [];
   state.diagnostics = payload.diagnostics || [];
+  state.events = payload.events || [];
   state.recording = payload.recording;
   state.sessions = payload.sessions || [];
   render();
@@ -198,6 +200,25 @@ function renderDiagnostics() {
     '<div class="diag-item"><strong>' + escapeHtml(diagnostic.id) + '</strong><br>' +
     escapeHtml((diagnostic.reasons || []).map((reason) => reason.message || reason).join(', ')) + '</div>'
   ).join('');
+}
+
+function renderEvents() {
+  const list = document.getElementById('eventsList');
+  const sourceEvents = state.replay
+    ? (state.replay.events || []).filter((event) => event.startMs <= state.replayTime)
+    : state.events;
+  const events = sourceEvents.slice(-8).reverse();
+  document.getElementById('eventCount').textContent = events.length;
+  if (!events.length) {
+    list.innerHTML = '<span class="muted">No change events yet.</span>';
+    return;
+  }
+  list.innerHTML = events.map((event) => {
+    const source = sourceById(event.sourceId);
+    return '<div class="event-item"><strong>' + escapeHtml(source?.name || event.sourceId) + '</strong> · ' +
+      escapeHtml(event.channel) + '<br>' + new Date(event.startMs).toLocaleTimeString() +
+      ' · Δ ' + Number(event.magnitude || 0).toFixed(2) + '</div>';
+  }).join('');
 }
 
 function renderInspector() {
@@ -436,7 +457,7 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderInspector(); renderTimeline(); draw();
+  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderEvents(); renderInspector(); renderTimeline(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -451,7 +472,7 @@ document.getElementById('recordButton').addEventListener('click', async () => {
 });
 
 document.getElementById('liveButton').addEventListener('click', () => {
-  state.replay = null; state.selected = null; render();
+  state.replay = null; state.selected = null; api('/api/state').then(hydrate);
 });
 
 document.getElementById('exportButton').addEventListener('click', () => {
@@ -487,6 +508,7 @@ document.getElementById('replayButton').addEventListener('click', async () => {
   const payload = await api('/api/sessions/' + id);
   state.replay = payload.session;
   state.replayTime = state.replay.observations[state.replay.observations.length - 1]?.timestampMs || Date.now();
+  state.events = state.replay.events || [];
   state.selected = null;
   render();
 });
@@ -653,6 +675,10 @@ function connect() {
     if (message.type === 'observation.rejected') {
       state.diagnostics.push(message);
       renderDiagnostics();
+    }
+    if (message.type === 'event.detected') {
+      state.events = [...state.events, message.event].slice(-40);
+      renderEvents();
     }
     if (message.type === 'scene.updated') { state.scene = message.scene; render(); }
     if (message.type === 'session.state') api('/api/state').then(hydrate);
