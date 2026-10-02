@@ -358,6 +358,21 @@ export class SqliteStore {
   }
 
   importPackage(packageData) {
+    const originalSessionId = packageData.sessionId || null;
+    const importedObservations = (Array.isArray(packageData.observations) ? packageData.observations : [])
+      .map((observation) => ({
+        ...observation,
+        evidenceState: 'imported',
+        metadata: {
+          ...(observation.metadata || {}),
+          importedFromSessionId: originalSessionId,
+          importedAtMs: Date.now()
+        },
+        provenance: [
+          ...(Array.isArray(observation.provenance) ? observation.provenance : []),
+          ...(originalSessionId ? [{ parentId: originalSessionId, relation: 'imported_from' }] : [])
+        ]
+      }));
     const sceneSnapshot = packageData.sceneSnapshot || packageData.scene || null;
     const sourceRegistrySnapshot = packageData.sourceRegistrySnapshot || packageData.sources || sceneSnapshot?.sources || [];
     const calibrationRegistrySnapshot = packageData.calibrationRegistrySnapshot || sceneSnapshot?.calibrations || [];
@@ -380,7 +395,7 @@ export class SqliteStore {
       schemaSetDigest: packageData.schemaSetDigest || null,
       snapshotDigest: packageData.snapshotDigest || null,
       snapshotComplete: Boolean(sceneSnapshot),
-      observations: Array.isArray(packageData.observations) ? packageData.observations : [],
+      observations: importedObservations,
       events: Array.isArray(packageData.events) ? packageData.events : []
     };
     if (sceneSnapshot) this.upsertScene(sceneSnapshot);
@@ -408,7 +423,7 @@ export class SqliteStore {
     for (const observation of session.observations) this.insertObservation(session.id, observation);
     for (const event of session.events) this.insertEvent(session.id, event);
     this.appendJournal(session.id, 'ImportAccepted', {
-      originalSessionId: packageData.sessionId || null,
+      originalSessionId,
       sourcePackageDigest: packageData.snapshotDigest || null
     }, session.startedAtMs);
     return session;

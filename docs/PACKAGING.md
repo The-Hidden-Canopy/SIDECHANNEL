@@ -28,6 +28,8 @@ Session exports include an append-only journal with per-session sequence numbers
 
 Session import runs the same independent verification before writing SQLite state. A package with a broken snapshot digest, duplicate/out-of-order observations, prohibited privacy flag, or corrupted journal tail is rejected with its verification report.
 
+Accepted imports receive a new local session ID, and each imported observation is relabelled `imported` with the original session ID and an `imported_from` provenance edge. Imported evidence cannot masquerade as a live local measurement.
+
 ## Local run
 
 ```text

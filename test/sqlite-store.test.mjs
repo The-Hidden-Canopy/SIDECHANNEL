@@ -141,6 +141,37 @@ test('runtime adapter failures are retained in the authoritative journal', async
   }
 });
 
+test('imported observations are explicitly labelled and retain package provenance', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sidechannel-imported-evidence-'));
+  const path = join(directory, 'sidechannel.sqlite');
+  const store = new SqliteStore(path);
+  try {
+    await store.init(scene);
+    const imported = store.importPackage({
+      sessionId: 'sess_external',
+      sceneSnapshot: { ...scene, id: 'scene_external' },
+      sourceRegistrySnapshot: [],
+      observations: [{
+        id: 'external_observation',
+        sourceId: 'external_source',
+        channel: 'heat',
+        timestampMs: 1000,
+        value: 22,
+        evidenceState: 'measured',
+        metadata: { source: 'fixture' }
+      }],
+      events: []
+    });
+    const observation = store.getSession(imported.id).observations[0];
+    assert.equal(observation.evidenceState, 'imported');
+    assert.equal(observation.metadata.importedFromSessionId, 'sess_external');
+    assert.equal(observation.provenance.at(-1).relation, 'imported_from');
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('SQLite store migrates the existing JSON state format once', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'sidechannel-migrate-'));
   const dbPath = join(directory, 'sidechannel.sqlite');
