@@ -28,6 +28,8 @@ const state = {
   replay: null,
   replayArtifact: null,
   replayReport: null,
+  sessionVerification: null,
+  verificationBusy: false,
   replayMode: 'historical',
   capabilities: null,
   benchmarkReceipt: null,
@@ -620,6 +622,36 @@ function renderTimeline() {
   evidenceBadge.textContent = label[2];
 }
 
+function renderSessionVerification() {
+  const button = document.getElementById('verifyButton');
+  const result = document.getElementById('sessionVerification');
+  const sessionId = document.getElementById('sessionSelect').value;
+  if (!button || !result) return;
+  button.disabled = !sessionId || state.verificationBusy;
+  button.textContent = state.verificationBusy ? 'Checking…' : 'Verify';
+  result.className = 'session-verification muted';
+  if (!sessionId) {
+    result.textContent = 'Select a session to verify its evidence package.';
+    return;
+  }
+  if (state.sessionVerification?.sessionId !== sessionId) {
+    result.textContent = 'Not verified for this session.';
+    return;
+  }
+  const report = state.sessionVerification.report;
+  if (!report.ok) {
+    result.className = 'session-verification fail';
+    result.textContent = 'Verification failed · ' + report.reasons.slice(0, 2).join(' · ');
+    return;
+  }
+  result.className = 'session-verification ok';
+  const checks = report.checks;
+  result.textContent = 'Verified · ' + checks.observationCount + ' observations · ' +
+    checks.poseCount + ' retained poses · journal ' + (checks.journalVerified ? 'intact' : 'not checked') +
+    ' · refs ' + (checks.sourceReferencesVerified && checks.calibrationReferencesVerified &&
+      checks.provenanceReferencesVerified && checks.poseReferencesVerified ? 'valid' : 'incomplete');
+}
+
 function render() {
   if (!state.scene) return;
   document.getElementById('sceneName').textContent = state.scene.name;
@@ -633,7 +665,7 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); draw();
+  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -700,6 +732,24 @@ document.getElementById('replayButton').addEventListener('click', async () => {
 
 document.getElementById('sessionSelect').addEventListener('change', () => render());
 
+document.getElementById('verifyButton').addEventListener('click', async () => {
+  const id = document.getElementById('sessionSelect').value;
+  if (!id) return;
+  state.verificationBusy = true;
+  renderSessionVerification();
+  try {
+    state.sessionVerification = { sessionId: id, report: await api('/api/sessions/' + id + '/verify') };
+  } catch (error) {
+    state.sessionVerification = {
+      sessionId: id,
+      report: { ok: false, reasons: [error.message], checks: { observationCount: 0, poseCount: 0, journalVerified: false } }
+    };
+  } finally {
+    state.verificationBusy = false;
+    renderSessionVerification();
+  }
+});
+
 document.getElementById('benchmarkButton').addEventListener('click', async () => {
   state.benchmarkBusy = true;
   renderBenchmark();
@@ -743,6 +793,7 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
   state.replay = null;
   state.replayArtifact = null;
   state.replayReport = null;
+  state.sessionVerification = null;
   state.selected = null;
   hydrate(await api('/api/state'));
 });

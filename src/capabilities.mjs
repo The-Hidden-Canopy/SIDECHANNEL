@@ -84,6 +84,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Selected observations expose source/provider identity, calibration and transform bindings, pose resolution, support geometry, sequence, age, inputs, and provenance.'
   },
   {
+    id: 'session-verification-surface',
+    label: 'Session verification surface',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The UI can run the independent package verifier and expose snapshot, journal, reference, pose, and observation checks for a selected local session.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

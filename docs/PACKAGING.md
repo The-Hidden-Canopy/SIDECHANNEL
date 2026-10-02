@@ -70,6 +70,8 @@ Spatial evaluation preserves support geometry. `RegionSupport` is sampled across
 
 The live inspector is an evidence-explainability surface, not a decorative tooltip. Selecting an observation shows its source and provider identities, provider digest, value/unit, evidence and quality state, timestamp/age, position, support type, pose reference and resolution distance, calibration reference, source-profile digest, transform revision, sequence, input observation IDs, provenance edges, privacy class, and processing path. Runtime-provided values are escaped before rendering. This makes the software's lineage visible without implying physical sensing accuracy.
 
+The session toolbar exposes the same independent verifier used by import. Selecting a local session and choosing `Verify` reports package, snapshot, journal, source/calibration/provenance reference, pose, and observation checks in the UI; a green result is evidence of package integrity only, not hardware validation or production readiness.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

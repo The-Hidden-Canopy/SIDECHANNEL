@@ -109,6 +109,7 @@
             <option value="determinism">Verify</option>
           </select>
           <button id="replayButton" class="button small ghost" type="button">Open</button>
+          <button id="verifyButton" class="button small ghost" type="button" disabled>Verify</button>
           <button id="deleteButton" class="button small danger" type="button" disabled>Delete</button>
         </div>
       </div>
@@ -134,6 +135,7 @@
         </div>
         <input id="timelineSlider" type="range" min="0" max="100" value="100" disabled aria-label="Replay timeline">
         <div class="timeline-ticks"><span>Earlier</span><span>Current</span></div>
+        <div id="sessionVerification" class="session-verification muted">Select a session to verify its evidence package.</div>
       </div>
     </section>
 
