@@ -96,6 +96,11 @@
           <select id="sessionSelect" aria-label="Choose a recorded session">
             <option value="">Choose session</option>
           </select>
+          <select id="replayModeSelect" aria-label="Choose replay truth mode">
+            <option value="historical">Recorded</option>
+            <option value="recompute">Recompute</option>
+            <option value="determinism">Verify</option>
+          </select>
           <button id="replayButton" class="button small ghost" type="button">Open</button>
           <button id="deleteButton" class="button small danger" type="button" disabled>Delete</button>
         </div>
@@ -115,7 +120,10 @@
             <span class="eyebrow">SESSION</span>
             <strong id="timelineTitle">Live stream</strong>
           </div>
-          <span id="timelineReadout" class="muted">Now</span>
+          <div>
+            <span id="replayEvidenceBadge" class="badge">LIVE</span>
+            <span id="timelineReadout" class="muted">Now</span>
+          </div>
         </div>
         <input id="timelineSlider" type="range" min="0" max="100" value="100" disabled aria-label="Replay timeline">
         <div class="timeline-ticks"><span>Earlier</span><span>Current</span></div>

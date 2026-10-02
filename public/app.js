@@ -26,6 +26,9 @@ const state = {
   recording: null,
   sessions: [],
   replay: null,
+  replayArtifact: null,
+  replayReport: null,
+  replayMode: 'historical',
   selected: null,
   editMode: false,
   draggedSourceId: null,
@@ -183,7 +186,7 @@ function renderSessions() {
   state.sessions.forEach((session) => {
     const option = document.createElement('option');
     option.value = session.id;
-    option.textContent = new Date(session.startedAtMs).toLocaleString() + ' · ' + session.observationCount + ' obs';
+    option.textContent = new Date(session.startedAtMs).toLocaleString() + ' · ' + (session.state || 'recorded') + ' · ' + session.observationCount + ' obs';
     select.appendChild(option);
   });
   select.value = current;
@@ -299,10 +302,26 @@ function nearestSource(point) {
 }
 
 function drawActivityField(valid, transform) {
-  if (!state.visible.activity || valid.length === 0) return;
+  if (!state.visible.activity) return;
   const cols = 22;
   const rows = 18;
   const color = '#d7fff7';
+  const recomputed = state.replayArtifact?.mode === 'recompute' ? state.replayArtifact.field : null;
+  if (recomputed) {
+    recomputed.cells.forEach((cell) => {
+      if (cell.intensity === null) return;
+      const alpha = (.025 + cell.intensity * .12) * (.25 + cell.support * .75);
+      context.fillStyle = hexToRgba(color, alpha);
+      context.fillRect(
+        transform.x(cell.x - state.scene.width / recomputed.width / 2),
+        transform.y(cell.y - state.scene.height / recomputed.height / 2),
+        transform.sx * state.scene.width / recomputed.width + 1,
+        transform.sy * state.scene.height / recomputed.height + 1
+      );
+    });
+    return;
+  }
+  if (valid.length === 0) return;
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
       const x = state.scene.width * (col + .5) / cols;
@@ -432,12 +451,14 @@ function hexToRgba(hex, alpha) {
 
 function renderTimeline() {
   const slider = document.getElementById('timelineSlider');
+  const evidenceBadge = document.getElementById('replayEvidenceBadge');
   if (!state.replay) {
     slider.disabled = true;
     slider.value = 100;
     document.getElementById('timelineTitle').textContent = state.recording ? 'Recording live session' : 'Live stream';
     document.getElementById('timelineReadout').textContent = 'Now';
     document.getElementById('modeLabel').textContent = 'LIVE / SIMULATOR';
+    evidenceBadge.textContent = 'LIVE';
     return;
   }
   const observations = state.replay.observations || [];
@@ -447,9 +468,16 @@ function renderTimeline() {
   slider.min = String(first);
   slider.max = String(last);
   slider.value = String(state.replayTime);
-  document.getElementById('timelineTitle').textContent = 'Replay session';
+  const labels = {
+    historical: ['Replay session', 'REPLAY / RECORDED', 'RECORDED'],
+    recompute: ['Recomputed session', 'REPLAY / RECOMPUTED', 'DERIVED'],
+    determinism: ['Determinism check', state.replayReport?.ok ? 'VERIFY / STABLE' : 'VERIFY / DRIFT', state.replayReport?.ok ? 'STABLE' : 'DRIFT']
+  };
+  const label = labels[state.replayMode] || labels.historical;
+  document.getElementById('timelineTitle').textContent = label[0];
   document.getElementById('timelineReadout').textContent = new Date(state.replayTime).toLocaleTimeString();
-  document.getElementById('modeLabel').textContent = 'REPLAY / RECORDED';
+  document.getElementById('modeLabel').textContent = label[1];
+  evidenceBadge.textContent = label[2];
 }
 
 function render() {
@@ -480,7 +508,7 @@ document.getElementById('recordButton').addEventListener('click', async () => {
 });
 
 document.getElementById('liveButton').addEventListener('click', () => {
-  state.replay = null; state.selected = null; api('/api/state').then(hydrate);
+  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null; api('/api/state').then(hydrate);
 });
 
 document.getElementById('exportButton').addEventListener('click', () => {
@@ -513,8 +541,17 @@ document.getElementById('importInput').addEventListener('change', async (event) 
 document.getElementById('replayButton').addEventListener('click', async () => {
   const id = document.getElementById('sessionSelect').value;
   if (!id) return;
+  const mode = document.getElementById('replayModeSelect').value;
   const payload = await api('/api/sessions/' + id);
+  const replayPayload = await api('/api/sessions/' + id + '/replay?mode=' + encodeURIComponent(mode));
   state.replay = payload.session;
+  state.replayArtifact = replayPayload.replay || null;
+  state.replayReport = replayPayload.report || null;
+  if (mode === 'determinism') {
+    state.replayArtifact = await api('/api/sessions/' + id + '/replay?mode=recompute').then((result) => result.replay);
+  }
+  state.replayMode = mode;
+  state.scene = state.replay.sceneSnapshot || state.scene;
   state.replayTime = state.replay.observations[state.replay.observations.length - 1]?.timestampMs || Date.now();
   state.events = state.replay.events || [];
   state.selected = null;
@@ -528,6 +565,8 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
   if (!id || !window.confirm('Delete this local session?')) return;
   await api('/api/sessions/' + id, { method: 'DELETE' });
   state.replay = null;
+  state.replayArtifact = null;
+  state.replayReport = null;
   state.selected = null;
   hydrate(await api('/api/state'));
 });
