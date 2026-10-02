@@ -51,6 +51,7 @@ let activeScene = {
   sources: storedScene.sources.map((source) => withSourceProfileDigest(source))
 };
 let simulator = null;
+let simulatorDesiredState = true;
 let recordingSessionId = null;
 const latest = new Map();
 const diagnostics = [];
@@ -107,7 +108,7 @@ function activateScene(scene) {
       }));
     }
   });
-  simulator.start();
+  if (simulatorDesiredState) simulator.start();
   broadcast({ type: 'scene.updated', scene: activeScene });
   return activeScene;
 }
@@ -471,9 +472,13 @@ async function handleApi(request, response, pathname) {
       }
       else if (parts[3] === 'start') {
         adapter = adapterSupervisor.start(providerId);
+        if (providerId === 'builtin:simulator') simulatorDesiredState = true;
+        if (providerId === 'builtin:simulator' && simulator) simulator.start();
         appendRuntimeEvent('ProviderStarted', { providerId });
       }
       else if (parts[3] === 'stop') {
+        if (providerId === 'builtin:simulator') simulatorDesiredState = false;
+        if (providerId === 'builtin:simulator' && simulator) simulator.stop();
         adapter = adapterSupervisor.stop(providerId);
         appendRuntimeEvent('ProviderStopped', { providerId });
       }

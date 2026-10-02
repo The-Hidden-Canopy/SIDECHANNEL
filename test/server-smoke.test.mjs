@@ -27,29 +27,30 @@ async function requestJson(url, options = {}) {
   return { response, payload: text ? JSON.parse(text) : null };
 }
 
-function readSocketChunk(socket) {
-  return new Promise((resolve, reject) => {
-    const onData = (chunk) => cleanup(() => resolve(chunk));
-    const onError = (error) => cleanup(() => reject(error));
-    const onClose = () => cleanup(() => reject(new Error('websocket closed before a frame was received')));
-    const cleanup = (finish) => {
-      socket.off('data', onData);
-      socket.off('error', onError);
-      socket.off('close', onClose);
-      finish();
-    };
-    socket.once('data', onData);
-    socket.once('error', onError);
-    socket.once('close', onClose);
-  });
-}
-
-async function openLiveSocket(port) {
+async function openWebSocket(port, path) {
   const socket = createConnection({ host: '127.0.0.1', port });
   await once(socket, 'connect');
+  let buffer = Buffer.alloc(0);
+  let failure = null;
+  const waiters = [];
+  const rejectWaiters = (error) => {
+    failure = failure || error;
+    while (waiters.length) waiters.shift().reject(failure);
+  };
+  socket.on('data', (chunk) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    while (waiters.length) waiters.shift().resolve();
+  });
+  socket.on('error', rejectWaiters);
+  socket.on('close', () => rejectWaiters(new Error('websocket closed before a frame was received')));
+  const waitForData = () => {
+    if (buffer.length) return Promise.resolve();
+    if (failure) return Promise.reject(failure);
+    return new Promise((resolve, reject) => waiters.push({ resolve, reject }));
+  };
   const key = Buffer.from('sidechannel-smoke-key').toString('base64');
   socket.write(
-    'GET /ws/live HTTP/1.1\r\n' +
+    'GET ' + path + ' HTTP/1.1\r\n' +
     'Host: 127.0.0.1:' + port + '\r\n' +
     'Origin: http://127.0.0.1:' + port + '\r\n' +
     'Upgrade: websocket\r\n' +
@@ -57,8 +58,7 @@ async function openLiveSocket(port) {
     'Sec-WebSocket-Version: 13\r\n' +
     'Sec-WebSocket-Key: ' + key + '\r\n\r\n'
   );
-  let buffer = Buffer.alloc(0);
-  while (!buffer.includes(Buffer.from('\r\n\r\n'))) buffer = Buffer.concat([buffer, await readSocketChunk(socket)]);
+  while (!buffer.includes(Buffer.from('\r\n\r\n'))) await waitForData();
   const headerEnd = buffer.indexOf(Buffer.from('\r\n\r\n')) + 4;
   assert.match(buffer.subarray(0, headerEnd).toString('utf8'), /^HTTP\/1\.1 101 Switching Protocols/m);
   buffer = buffer.subarray(headerEnd);
@@ -67,7 +67,7 @@ async function openLiveSocket(port) {
     async nextFrame() {
       while (true) {
         if (buffer.length < 2) {
-          buffer = Buffer.concat([buffer, await readSocketChunk(socket)]);
+          await waitForData();
           continue;
         }
         const opcode = buffer[0] & 0x0f;
@@ -76,14 +76,14 @@ async function openLiveSocket(port) {
         let offset = 2;
         if (length === 126) {
           if (buffer.length < 4) {
-            buffer = Buffer.concat([buffer, await readSocketChunk(socket)]);
+            await waitForData();
             continue;
           }
           length = buffer.readUInt16BE(2);
           offset = 4;
         } else if (length === 127) {
           if (buffer.length < 10) {
-            buffer = Buffer.concat([buffer, await readSocketChunk(socket)]);
+            await waitForData();
             continue;
           }
           const extendedLength = buffer.readBigUInt64BE(2);
@@ -93,7 +93,7 @@ async function openLiveSocket(port) {
         }
         if (masked) throw new Error('server websocket frame was unexpectedly masked');
         if (buffer.length < offset + length) {
-          buffer = Buffer.concat([buffer, await readSocketChunk(socket)]);
+          await waitForData();
           continue;
         }
         const payload = buffer.subarray(offset, offset + length);
@@ -103,6 +103,33 @@ async function openLiveSocket(port) {
       }
     }
   };
+}
+
+async function openLiveSocket(port) {
+  return openWebSocket(port, '/ws/live');
+}
+
+async function openIngestSocket(port, launchToken) {
+  return openWebSocket(port, '/ws/ingest?token=' + encodeURIComponent(launchToken));
+}
+
+function maskedTextFrame(value) {
+  const payload = Buffer.from(JSON.stringify(value));
+  const mask = Buffer.from([0x53, 0x49, 0x44, 0x45]);
+  let header;
+  if (payload.length < 126) {
+    header = Buffer.from([0x81, 0x80 | payload.length]);
+  } else if (payload.length <= 0xffff) {
+    header = Buffer.alloc(4);
+    header[0] = 0x81;
+    header[1] = 0x80 | 126;
+    header.writeUInt16BE(payload.length, 2);
+  } else {
+    throw new Error('smoke websocket payload exceeds bounded test frame');
+  }
+  const masked = Buffer.alloc(payload.length);
+  for (let index = 0; index < payload.length; index += 1) masked[index] = payload[index] ^ mask[index % mask.length];
+  return Buffer.concat([header, mask, masked]);
 }
 
 async function withTimeout(promise, milliseconds, label) {
@@ -145,6 +172,7 @@ test('loopback server smoke covers live websocket reconnect, source admission, s
   const baseUrl = 'http://127.0.0.1:' + port;
   let liveSocket = null;
   let reconnectSocket = null;
+  let ingestSocket = null;
   try {
     const health = await waitForHealth(baseUrl, child, stderr);
     assert.equal(health.loopbackOnly, true);
@@ -164,11 +192,35 @@ test('loopback server smoke covers live websocket reconnect, source admission, s
     liveSocket.destroy();
     liveSocket = null;
 
-    const reconnect = await withTimeout(openLiveSocket(port), 3000, 'live websocket reconnect');
+    let reconnect = await withTimeout(openLiveSocket(port), 3000, 'live websocket reconnect');
     reconnectSocket = reconnect.socket;
     const reconnectSnapshot = await withTimeout(reconnect.nextFrame(), 3000, 'reconnect snapshot');
     assert.equal(reconnectSnapshot.type, 'snapshot');
     assert.equal(reconnectSnapshot.state.server.loopbackOnly, true);
+
+    const simulatorStopped = await requestJson(baseUrl + '/api/adapter-runtime/' + encodeURIComponent('builtin:simulator') + '/stop', {
+      method: 'POST',
+      headers: { 'x-sidechannel-launch-token': health.launchToken }
+    });
+    assert.equal(simulatorStopped.response.status, 200);
+    assert.equal(simulatorStopped.payload.adapter.state, 'STOPPED');
+    let ingressDrained = false;
+    for (let attempt = 0; attempt < 80; attempt += 1) {
+      const ingressState = await requestJson(baseUrl + '/api/ingress');
+      const receipt = ingressState.payload.receipt;
+      if (receipt.pending === 0 && receipt.busy === false) {
+        ingressDrained = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    assert.equal(ingressDrained, true, 'bounded ingress queue did not drain after simulator stop');
+    reconnectSocket.destroy();
+    reconnectSocket = null;
+    reconnect = await withTimeout(openLiveSocket(port), 3000, 'post-drain live websocket reconnect');
+    reconnectSocket = reconnect.socket;
+    const postDrainSnapshot = await withTimeout(reconnect.nextFrame(), 3000, 'post-drain snapshot');
+    assert.equal(postDrainSnapshot.type, 'snapshot');
 
     const renderBudgetAsset = await fetch(baseUrl + '/render-budget.mjs');
     assert.equal(renderBudgetAsset.status, 200);
@@ -209,6 +261,47 @@ test('loopback server smoke covers live websocket reconnect, source admission, s
     });
     assert.equal(sessionResult.response.status, 201);
     const sessionId = sessionResult.payload.session.id;
+    assert.equal(reconnectSocket.destroyed, false, 'live reconnect socket closed before adapter ingress');
+
+    const ingest = await withTimeout(openIngestSocket(port, health.launchToken), 3000, 'ingest websocket handshake');
+    ingestSocket = ingest.socket;
+    const websocketObservation = {
+      schema: 'sidechannel.observation/2',
+      id: 'smoke_ws_observation',
+      sourceId: 'smoke_source',
+      channel: 'heat',
+      timestampMs: Date.now(),
+      value: 23,
+      unit: 'C',
+      status: 'measured',
+      quality: { score: 1, state: 'good', reasons: [] },
+      position: { x: 2.2, y: 2.1 }
+    };
+    ingestSocket.write(maskedTextFrame(websocketObservation));
+    const ingestResult = await withTimeout(ingest.nextFrame(), 3000, 'ingest result');
+    assert.equal(ingestResult.type, 'ingest.result');
+    assert.equal(ingestResult.ok, true);
+    assert.equal(ingestResult.id, websocketObservation.id);
+    const stateAfterIngest = await requestJson(baseUrl + '/api/state?view=compact');
+    assert.ok(stateAfterIngest.payload.observations.some((observation) => observation.id === websocketObservation.id));
+    let liveIngest = null;
+    const liveEvents = [];
+    for (let attempt = 0; attempt < 12 && !liveIngest; attempt += 1) {
+      const event = await withTimeout(reconnect.nextFrame(), 1000, 'live websocket ingest event');
+      liveEvents.push(event.type + ':' + (event.observation?.id || ''));
+      if (event.type === 'observation.accepted' && event.observation?.id === websocketObservation.id) liveIngest = event;
+    }
+    assert.equal(liveIngest?.observation?.id, websocketObservation.id, liveEvents.join(', '));
+
+    const simulatorStarted = await requestJson(baseUrl + '/api/adapter-runtime/' + encodeURIComponent('builtin:simulator') + '/start', {
+      method: 'POST',
+      headers: { 'x-sidechannel-launch-token': health.launchToken }
+    });
+    assert.equal(simulatorStarted.response.status, 200);
+    assert.equal(simulatorStarted.payload.adapter.state, 'RUNNING');
+    const resumedEvent = await withTimeout(reconnect.nextFrame(), 3000, 'simulator restart event');
+    assert.equal(resumedEvent.type, 'observation.accepted');
+    assert.match(resumedEvent.observation?.sourceId || '', /^sim_/);
 
     const observationResult = await requestJson(baseUrl + '/api/observations', {
       method: 'POST',
@@ -249,6 +342,7 @@ test('loopback server smoke covers live websocket reconnect, source admission, s
   } finally {
     liveSocket?.destroy();
     reconnectSocket?.destroy();
+    ingestSocket?.destroy();
     if (child.exitCode === null) {
       child.kill('SIGINT');
       await Promise.race([
