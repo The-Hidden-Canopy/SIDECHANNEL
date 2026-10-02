@@ -55,6 +55,7 @@ const state = {
   events: [],
   recording: null,
   sessions: [],
+  transforms: { revision: 0, edges: [] },
   replay: null,
   replayArtifact: null,
   replayReport: null,
@@ -144,6 +145,7 @@ function hydrate(payload) {
   state.events = payload.events || [];
   state.recording = payload.recording;
   state.sessions = payload.sessions || [];
+  state.transforms = payload.transforms || state.transforms;
   state.capabilities = payload.capabilities || state.capabilities;
   launchToken = payload.server?.launchToken || launchToken;
   render();
@@ -225,6 +227,22 @@ function renderPortals() {
       }
     });
   });
+}
+
+function renderTransforms() {
+  const list = document.getElementById('transformList');
+  if (!list) return;
+  const edges = state.transforms?.edges || [];
+  if (!edges.length) {
+    list.innerHTML = '<span class="muted">No frame transforms published.</span>';
+    return;
+  }
+  list.innerHTML = edges.slice().reverse().map((edge) =>
+    '<div class="region-entry"><span><strong>r' + edge.revision + '</strong> · ' +
+    escapeHtml(edge.fromFrame) + ' → ' + escapeHtml(edge.toFrame) + ' · translate (' +
+    Number(edge.translation?.x || 0).toFixed(2) + ', ' + Number(edge.translation?.y || 0).toFixed(2) + ', ' +
+    Number(edge.translation?.z || 0).toFixed(2) + ') · scale ' + Number(edge.scale || 1).toFixed(3) + '</span></div>'
+  ).join('');
 }
 
 function updateObservation(observation) {
@@ -1089,7 +1107,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderRegions(); renderPortals(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1434,6 +1452,49 @@ document.getElementById('portalForm').addEventListener('submit', async (event) =
     hydrate(await api('/api/state'));
   } catch (error) {
     document.getElementById('freshnessLabel').textContent = 'Could not add portal: ' + error.message;
+  }
+});
+
+document.getElementById('addTransformButton').addEventListener('click', () => {
+  const form = document.getElementById('transformForm');
+  form.hidden = !form.hidden;
+  if (!form.hidden) document.getElementById('transformFromFrame').focus();
+});
+
+document.getElementById('transformForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const fromFrame = document.getElementById('transformFromFrame').value.trim();
+  const toFrame = document.getElementById('transformToFrame').value.trim();
+  const translation = {
+    x: Number(document.getElementById('transformX').value),
+    y: Number(document.getElementById('transformY').value),
+    z: Number(document.getElementById('transformZ').value)
+  };
+  const rotation = Number(document.getElementById('transformRotation').value);
+  const scale = Number(document.getElementById('transformScale').value);
+  if (!fromFrame || !toFrame || fromFrame === toFrame || Object.values(translation).some((value) => !Number.isFinite(value)) ||
+      !Number.isFinite(rotation) || !Number.isFinite(scale) || scale <= 0) {
+    document.getElementById('freshnessLabel').textContent = 'Transform frames must differ and all numeric values must be finite; scale must be positive.';
+    return;
+  }
+  try {
+    await api('/api/transforms', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ fromFrame, toFrame, translation, rotation, scale })
+    });
+    document.getElementById('transformForm').reset();
+    document.getElementById('transformFromFrame').value = 'device';
+    document.getElementById('transformToFrame').value = 'scene';
+    document.getElementById('transformX').value = '0';
+    document.getElementById('transformY').value = '0';
+    document.getElementById('transformZ').value = '0';
+    document.getElementById('transformRotation').value = '0';
+    document.getElementById('transformScale').value = '1';
+    document.getElementById('transformForm').hidden = true;
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Could not publish transform: ' + error.message;
   }
 });
 

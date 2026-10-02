@@ -87,6 +87,8 @@ The scene editor exposes the coordinate unit (`m`, `ft`, or `px`) and a one-shot
 
 Scenes also support bounded door/portal segments. The workspace validates endpoints inside the scene, preserves an open/closed state and optional room references in the scene snapshot, and renders doors as solid segments and portals as dashed segments. This is spatial authoring metadata, not a claim that a physical door or passage was detected.
 
+The spatial-frame panel also publishes explicit transform revisions through the loopback API. Each edge records its source and destination frames, translation, rotation, scale, and revision; direct frame cycles and invalid numeric values fail closed. The workspace lists the current graph so an operator can see which software frame relationship was used. These edges are versioned runtime metadata and do not establish physical calibration accuracy; hardware adapters, external calibration instruments, and invertibility beyond the bounded graph contract remain separate gates.
+
 Optional encrypted portability is available through the `Encrypted export` workspace action and the `POST /api/sessions/:id/export` route. The envelope uses bounded scrypt parameters and AES-256-GCM; the passphrase is not stored. Import decrypts only after authentication and sends the resulting package through the same independent session verifier as plaintext import. Encryption protects the exported file in transit/storage; it does not prove hardware accuracy, regulate deployment, or replace user-controlled passphrase retention.
 
 ## Portable packaging boundary

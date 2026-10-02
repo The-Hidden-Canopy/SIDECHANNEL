@@ -147,6 +147,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Bounded door/portal segments are validated, persisted in scene snapshots, rendered as an explicit layer, and removable through the loopback workspace.'
   },
   {
+    id: 'transform-authoring-surface',
+    label: 'Transform authoring surface',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The workspace publishes bounded revisioned frame edges and shows their translation and scale; this is software frame metadata, not physical calibration proof.'
+  },
+  {
     id: 'encrypted-session-portability',
     label: 'Encrypted session portability',
     status: 'implemented',

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const appSource = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+const htmlSource = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
 
 test('evidence inspector exposes the bounded observation lineage contract', () => {
   for (const field of [
@@ -38,6 +39,11 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /Doors \/ portals/);
   assert.match(appSource, /renderPortals/);
   assert.match(appSource, /\/portals/);
+  assert.match(appSource, /renderTransforms/);
+  assert.match(appSource, /transformForm/);
+  assert.match(appSource, /\/api\/transforms/);
+  assert.match(htmlSource, /id="transformForm"/);
+  assert.match(htmlSource, /Publish revision/);
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);
   assert.match(appSource, /sceneUnit/);

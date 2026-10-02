@@ -80,6 +80,7 @@ button { cursor: pointer; }
 .region-entry strong { color: var(--text); font-weight: 600; }
 .region-entry .button { flex: 0 0 auto; }
 .scene-tools > .button + .source-form { margin-top: 8px; }
+.transform-note { margin-bottom: 0 !important; }
 .source-form { display: grid; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid rgba(108, 228, 219, .18); border-radius: 8px; background: rgba(108, 228, 219, .035); }
 .source-form[hidden] { display: none !important; }
 .source-form label { color: var(--muted); font-size: 10px; }
