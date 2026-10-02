@@ -105,6 +105,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The native reference exposes a token-authenticated sidechannel.native-ipc/1 stdio boundary with bounded frames and ping/status/shutdown commands; it is not a network, OS permission, deployment, or hardware claim.'
   },
   {
+    id: 'native-ipc-session-control',
+    label: 'Native IPC session control',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The native IPC boundary can bind to a durable session file for bounded status, observation admission, verification, close, and restart/reopen control; it is not native SQLite authority, a desktop shell, deployment security, or hardware support.'
+  },
+  {
     id: 'native-c-api-control-surface',
     label: 'Opaque native C ABI control surface',
     status: 'implemented',

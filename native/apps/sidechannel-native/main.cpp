@@ -1,25 +1,91 @@
 #include "sidechannel/core.hpp"
 
+#include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <memory>
+#include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 
-void write_json_string(const std::string& value) {
-  std::cout << '"';
+std::string quote_json(const std::string& value) {
+  std::string quoted = "\"";
   for (const char character : value) {
-    if (character == '\\' || character == '"') std::cout << '\\' << character;
-    else if (character == '\n') std::cout << "\\n";
-    else if (character == '\r') std::cout << "\\r";
-    else if (character == '\t') std::cout << "\\t";
-    else std::cout << character;
+    if (character == '\\' || character == '"') quoted += '\\';
+    if (character == '\n') quoted += "\\n";
+    else if (character == '\r') quoted += "\\r";
+    else if (character == '\t') quoted += "\\t";
+    else quoted += character;
   }
-  std::cout << '"';
+  quoted += '"';
+  return quoted;
 }
 
-int run_ipc_stdio(const std::string& token) {
+void write_json_string(const std::string& value) {
+  std::cout << quote_json(value);
+}
+
+std::vector<std::string> split_pipe(const std::string& value) {
+  std::vector<std::string> fields;
+  std::size_t start = 0;
+  while (start <= value.size()) {
+    const auto end = value.find('|', start);
+    if (end == std::string::npos) {
+      fields.push_back(value.substr(start));
+      break;
+    }
+    fields.push_back(value.substr(start, end - start));
+    start = end + 1;
+  }
+  return fields;
+}
+
+bool parse_observation_payload(const std::string& payload, sidechannel::Observation& observation) {
+  const auto fields = split_pipe(payload);
+  if (fields.size() != 7 || fields[0].empty() || fields[1].empty() || fields[2].empty()) return false;
+  try {
+    std::size_t consumed = 0;
+    const auto timestamp_ms = std::stoll(fields[3], &consumed, 10);
+    if (consumed != fields[3].size()) return false;
+    consumed = 0;
+    const auto value = std::stod(fields[4], &consumed);
+    if (consumed != fields[4].size() || !std::isfinite(value)) return false;
+    consumed = 0;
+    const auto quality_score = std::stod(fields[5], &consumed);
+    if (consumed != fields[5].size() || !std::isfinite(quality_score) || quality_score < 0.0 || quality_score > 1.0) return false;
+    consumed = 0;
+    const auto evidence_value = std::stoul(fields[6], &consumed, 10);
+    if (consumed != fields[6].size() || evidence_value > 6) return false;
+    observation = sidechannel::Observation{
+      "sidechannel.observation/2",
+      fields[0], fields[1], fields[2], timestamp_ms, value, quality_score, 0,
+      static_cast<sidechannel::EvidenceState>(evidence_value)
+    };
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+std::int64_t now_ms() {
+  const auto now = std::chrono::system_clock::now().time_since_epoch();
+  return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+}
+
+int run_ipc_stdio(const std::string& token, const std::string& session_file) {
+  std::unique_ptr<sidechannel::NativeSessionStore> session;
+  if (!session_file.empty()) {
+    session = std::make_unique<sidechannel::NativeSessionStore>(session_file, "session_native_ipc");
+    if (!session->open()) {
+      std::cerr << "could not open native IPC session file\n";
+      return 1;
+    }
+  }
+
   std::string line;
   while (std::getline(std::cin, line)) {
     const auto decoded = sidechannel::LocalIpcCodec::decode(line, token);
@@ -37,7 +103,47 @@ int run_ipc_stdio(const std::string& token) {
       response.payload = "{\"protocol\":\"sidechannel.native-ipc/1\"}";
     } else if (decoded.frame.type == "status") {
       response.type = "status";
-      response.payload = "{\"authority\":\"native-reference\",\"state\":\"ready\",\"hardware\":\"excluded\"}";
+      response.payload = "{\"authority\":\"native-reference\",\"state\":\"ready\",\"hardware\":\"excluded\"";
+      if (session) response.payload += ",\"sessionState\":" + quote_json(session->state());
+      response.payload += '}';
+    } else if (decoded.frame.type == "session.status") {
+      if (!session) response.payload = "{\"error\":\"session file is required\"}";
+      else {
+        response.type = "session.status";
+        response.payload = "{\"state\":" + quote_json(session->state()) +
+          ",\"observations\":" + std::to_string(session->observations().size()) +
+          ",\"journalEvents\":" + std::to_string(session->journal().entries().size()) + '}';
+      }
+    } else if (decoded.frame.type == "session.observe") {
+      sidechannel::Observation observation;
+      if (!session) response.payload = "{\"error\":\"session file is required\"}";
+      else if (!parse_observation_payload(decoded.frame.payload, observation)) {
+        response.payload = "{\"error\":\"invalid observation payload\"}";
+      } else if (!session->append(std::move(observation))) {
+        response.payload = "{\"error\":\"session rejected observation\"}";
+      } else {
+        response.type = "observation.accepted";
+        response.payload = "{\"observations\":" + std::to_string(session->observations().size()) +
+          ",\"journalEvents\":" + std::to_string(session->journal().entries().size()) + '}';
+      }
+    } else if (decoded.frame.type == "session.verify") {
+      if (!session) response.payload = "{\"error\":\"session file is required\"}";
+      else {
+        const auto verification = session->verify();
+        if (!verification.ok) response.payload = "{\"error\":" + quote_json(verification.error) + '}';
+        else {
+          response.type = "session.verified";
+          response.payload = "{\"verified\":true,\"journalEvents\":" +
+            std::to_string(session->journal().entries().size()) + '}';
+        }
+      }
+    } else if (decoded.frame.type == "session.close") {
+      if (!session) response.payload = "{\"error\":\"session file is required\"}";
+      else if (!session->close(now_ms())) response.payload = "{\"error\":\"session close rejected\"}";
+      else {
+        response.type = "session.closed";
+        response.payload = "{\"state\":" + quote_json(session->state()) + '}';
+      }
     } else if (decoded.frame.type == "shutdown") {
       response.type = "stopped";
       response.payload = "{\"reason\":\"requested\"}";
@@ -76,20 +182,25 @@ int main(int argc, char** argv) {
     } else if (std::string(argv[index]) == "--ipc-stdio" && index + 1 < argc) {
       ipc_token = argv[++index];
     } else {
-      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH|--ipc-stdio TOKEN]\n";
+      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH|--ipc-stdio TOKEN [--session-file PATH]]\n";
       return 2;
     }
   }
-  if (static_cast<int>(csv) + static_cast<int>(json) + static_cast<int>(session_json) +
-      static_cast<int>(!session_file.empty()) + static_cast<int>(!ipc_token.empty()) > 1) {
-    std::cerr << "choose one output format\n";
-    return 2;
+  if (!ipc_token.empty()) {
+    if (csv || json || session_json) {
+      std::cerr << "ipc mode cannot be combined with a fixture output format\n";
+      return 2;
+    }
+  } else if (static_cast<int>(csv) + static_cast<int>(json) + static_cast<int>(session_json) +
+      static_cast<int>(!session_file.empty()) > 1) {
+      std::cerr << "choose one output format\n";
+      return 2;
   }
   if (ticks == 0 || ticks > 10000) {
     std::cerr << "ticks must be between 1 and 10000\n";
     return 2;
   }
-  if (!ipc_token.empty()) return run_ipc_stdio(ipc_token);
+  if (!ipc_token.empty()) return run_ipc_stdio(ipc_token, session_file);
 
   sidechannel::DeterministicSimulator simulator;
   sidechannel::AdmissionSequencer sequencer(512);
