@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { performance } from 'node:perf_hooks';
 import { promisify } from 'node:util';
@@ -15,6 +15,8 @@ import {
 const runProcess = promisify(execFile);
 const executable = process.argv[2];
 const ticks = Number(process.argv[3] || 8);
+const outputIndex = process.argv.indexOf('--output');
+const outputPath = outputIndex >= 0 ? process.argv[outputIndex + 1] : null;
 
 if (!executable) {
   console.error('usage: node scripts/benchmark-native.mjs path/to/sidechannel-native[.exe] [ticks]');
@@ -22,6 +24,10 @@ if (!executable) {
 }
 if (!Number.isInteger(ticks) || ticks < 1 || ticks > 10_000) {
   console.error('ticks must be between 1 and 10000');
+  process.exit(2);
+}
+if (outputIndex >= 0 && (!outputPath || outputPath.startsWith('--'))) {
+  console.error('--output requires a receipt path');
   process.exit(2);
 }
 
@@ -80,6 +86,7 @@ try {
   receipt.receiptDigest = computeNativeBenchmarkDigest(receipt);
   const verification = verifyNativeBenchmarkReceipt(receipt);
   if (!verification.ok) throw new Error(`native benchmark receipt failed self-verification: ${JSON.stringify(verification)}`);
+  if (outputPath) await writeFile(outputPath, JSON.stringify(receipt, null, 2) + '\n', 'utf8');
   console.log(JSON.stringify({ receipt, verification }, null, 2));
 } finally {
   await rm(root, { recursive: true, force: true });

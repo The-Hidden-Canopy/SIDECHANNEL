@@ -18,6 +18,7 @@
     "verify:native-ipc-scene-view": "node scripts/verify-native-ipc-scene-view.mjs",
     "verify:native-ipc-export": "node scripts/verify-native-ipc-export.mjs",
     "benchmark:native": "node scripts/benchmark-native.mjs",
+    "verify:native-benchmark": "node scripts/verify-native-benchmark.mjs",
     "package:audit": "node scripts/package-audit.mjs",
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:scene-view": "node scripts/benchmark-scene-view.mjs",
