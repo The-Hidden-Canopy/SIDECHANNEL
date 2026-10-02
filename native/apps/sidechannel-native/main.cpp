@@ -112,6 +112,10 @@ public:
     return sqlite_ ? sqlite_session_->observations().size() : file_session_->observations().size();
   }
 
+  const std::vector<sidechannel::Observation>& observations() const {
+    return sqlite_ ? sqlite_session_->observations() : file_session_->observations();
+  }
+
   std::size_t journal_event_count() const {
     return sqlite_ ? sqlite_session_->journal().size() : file_session_->journal().entries().size();
   }
@@ -180,6 +184,22 @@ bool parse_observation_payload(const std::string& payload, sidechannel::Observat
   }
 }
 
+bool parse_scene_view_limits(const std::string& payload, sidechannel::SceneViewLimits& limits) {
+  if (payload.empty()) return true;
+  const auto fields = split_pipe(payload);
+  if (fields.size() != 2) return false;
+  try {
+    std::size_t consumed = 0;
+    limits.max_sources = std::stoul(fields[0], &consumed, 10);
+    if (consumed != fields[0].size() || limits.max_sources == 0 || limits.max_sources > 256) return false;
+    consumed = 0;
+    limits.max_observations = std::stoul(fields[1], &consumed, 10);
+    return consumed == fields[1].size() && limits.max_observations > 0 && limits.max_observations <= 512;
+  } catch (...) {
+    return false;
+  }
+}
+
 std::int64_t now_ms() {
   const auto now = std::chrono::system_clock::now().time_since_epoch();
   return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
@@ -221,6 +241,17 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file, con
       response.payload = "{\"authority\":\"native-reference\",\"state\":\"ready\",\"hardware\":\"excluded\"";
       if (session) response.payload += ",\"sessionState\":" + quote_json(session->state());
       response.payload += '}';
+    } else if (decoded.frame.type == "scene.view") {
+      if (!session) response.payload = "{\"error\":\"session file is required\"}";
+      else {
+        sidechannel::SceneViewLimits limits;
+        if (!parse_scene_view_limits(decoded.frame.payload, limits)) {
+          response.payload = "{\"error\":\"invalid scene view limits\"}";
+        } else {
+          response.type = "scene.view";
+          response.payload = sidechannel::create_native_scene_view(session->observations(), now_ms(), limits).to_json();
+        }
+      }
     } else if (decoded.frame.type == "session.status") {
       if (!session) response.payload = "{\"error\":\"session file is required\"}";
       else {

@@ -144,7 +144,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Native bounded SceneView projection',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'The native reference serializes sidechannel.scene-view/1 with deterministic observation ordering, source-health projections, evidence status, and hard truncation limits; it is a presentation projection, not renderer, scene-authoring, or hardware authority.'
+    note: 'The native reference serializes sidechannel.scene-view/1 with deterministic observation ordering, source-health projections, evidence status, and hard truncation limits, and exposes that projection through bounded local IPC; it is a presentation projection, not renderer, scene-authoring, or hardware authority.'
   },
   {
     id: 'bounded-websocket-controls',
