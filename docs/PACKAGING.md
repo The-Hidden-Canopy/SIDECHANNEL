@@ -61,6 +61,8 @@ Open `http://127.0.0.1:4173/`. The application starts with deterministic simulat
 
 While a session is recording, adapter failures are emitted as bounded diagnostics and journaled as `AdapterFailure`; crossing the quarantine threshold adds `AdapterQuarantined`. The runtime does not synthesize a zero-valued observation for a failed provider.
 
+For the built-in simulator, entering `QUARANTINED` also stops the simulator emission loop and changes the source health projection to `quarantined`; clearing quarantine leaves the provider disabled until an explicit start. Adapter lifecycle changes are broadcast to the live workspace so source health does not depend on a stale observation snapshot.
+
 ## Runtime data
 
 The server creates `data/sidechannel.sqlite` plus SQLite WAL files. `data/` is ignored by Git. If a legacy `data/sidechannel.json` exists and the SQLite file does not, the first startup migrates scenes, sessions, observations, and events without deleting the legacy file. New sessions freeze their scene, source registry, calibration summary, and transform snapshot so later live edits do not rewrite historical export meaning. Observations are returned in admitted row order, not timestamp order. A session left open by a process restart is retained as `interrupted` with a `process_restart` reason; it is not eligible for new observations or normal completion.

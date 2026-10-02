@@ -180,6 +180,10 @@ function broadcast(event) {
   }
 }
 
+function broadcastAdapterRuntime(adapter) {
+  if (adapter) broadcast({ type: 'adapter.runtime', adapter });
+}
+
 function recordDiagnostic(diagnostic) {
   diagnostics.push(diagnostic);
   if (recordingSessionId && diagnostic?.type === 'observation.rejected') {
@@ -223,6 +227,10 @@ function sourceRevisionPayload(source) {
 
 function recordAdapterFailure(providerId, reason) {
   const adapter = adapterSupervisor.recordFailure(providerId, reason);
+  if (adapter.state === 'QUARANTINED' && providerId === 'builtin:simulator') {
+    simulatorDesiredState = false;
+    if (simulator) simulator.stop();
+  }
   const diagnostic = {
     type: 'adapter.failure',
     providerId,
@@ -247,7 +255,7 @@ function recordAdapterFailure(providerId, reason) {
       }, diagnostic.receivedAtMs);
     }
   }
-  broadcast({ type: 'adapter.runtime', adapter });
+  broadcastAdapterRuntime(adapter);
   return adapter;
 }
 
@@ -479,19 +487,22 @@ async function handleApi(request, response, pathname) {
         if (providerId === 'builtin:simulator') simulatorDesiredState = true;
         if (providerId === 'builtin:simulator' && simulator) simulator.start();
         appendRuntimeEvent('ProviderStarted', { providerId });
-        broadcast({ type: 'adapter.runtime', adapter });
+        broadcastAdapterRuntime(adapter);
       }
       else if (parts[3] === 'stop') {
         if (providerId === 'builtin:simulator') simulatorDesiredState = false;
         if (providerId === 'builtin:simulator' && simulator) simulator.stop();
         adapter = adapterSupervisor.stop(providerId);
         appendRuntimeEvent('ProviderStopped', { providerId });
-        broadcast({ type: 'adapter.runtime', adapter });
+        broadcastAdapterRuntime(adapter);
       }
       else if (parts[3] === 'success') adapter = adapterSupervisor.recordSuccess(providerId);
       else if (parts[3] === 'failure') adapter = recordAdapterFailure(providerId, body.reason || 'operator-reported failure');
       else if (parts[3] === 'clear-quarantine') adapter = adapterSupervisor.clearQuarantine(providerId);
       else return sendJson(response, 400, { error: 'unsupported adapter runtime action' });
+      if (parts[3] === 'grant' || parts[3] === 'revoke' || parts[3] === 'success' || parts[3] === 'clear-quarantine') {
+        broadcastAdapterRuntime(adapter);
+      }
       return sendJson(response, 200, { adapter, ...(cancellation ? { cancellation } : {}) });
     } catch (error) {
       return sendJson(response, error.message.startsWith('adapter not registered:') ? 404 : 422, { error: error.message });

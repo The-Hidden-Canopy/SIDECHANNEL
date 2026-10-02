@@ -469,7 +469,7 @@ function renderSources() {
     const adapter = providerId ? state.adapterRuntime.find((item) => item.manifest?.providerId === providerId) : null;
     const health = adapter?.state === 'QUARANTINED'
       ? 'quarantined'
-      : source.adapterType === 'simulator' && adapter && adapter.state !== 'RUNNING'
+      : adapter && adapter.state !== 'RUNNING'
         ? 'disconnected'
         : stale
           ? 'stale'
@@ -1550,7 +1550,7 @@ function render() {
   const disconnectedCount = (state.scene?.sources || []).filter((source) => {
     const providerId = source.providerManifest?.providerId || (source.adapterType === 'simulator' ? 'builtin:simulator' : null);
     const adapter = providerId ? state.adapterRuntime.find((item) => item.manifest?.providerId === providerId) : null;
-    return source.adapterType === 'simulator' && adapter && adapter.state !== 'RUNNING';
+    return adapter && adapter.state !== 'RUNNING';
   }).length;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels' +
     (disconnectedCount ? ' · ' + disconnectedCount + ' disconnected' : '');

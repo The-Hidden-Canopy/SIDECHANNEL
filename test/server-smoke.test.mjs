@@ -320,6 +320,26 @@ test('loopback server smoke covers live websocket reconnect, adapter ingress, se
     assert.equal(resumedEvent?.type, 'observation.accepted');
     assert.match(resumedEvent.observation?.sourceId || '', /^sim_/);
 
+    let quarantinedRuntime = null;
+    for (let failure = 0; failure < 3; failure += 1) {
+      const failureResult = await requestJson(baseUrl + '/api/adapter-runtime/' + encodeURIComponent('builtin:simulator') + '/failure', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ reason: 'smoke quarantine ' + (failure + 1) })
+      });
+      assert.equal(failureResult.response.status, 200);
+      if (failureResult.payload.adapter.state === 'QUARANTINED') quarantinedRuntime = failureResult.payload.adapter;
+    }
+    assert.equal(quarantinedRuntime?.state, 'QUARANTINED');
+    const quarantinedState = await requestJson(baseUrl + '/api/adapter-runtime');
+    assert.equal(quarantinedState.payload.adapters.find((adapter) => adapter.manifest.providerId === 'builtin:simulator').state, 'QUARANTINED');
+    let quarantinedEvent = null;
+    for (let attempt = 0; attempt < 18 && !quarantinedEvent; attempt += 1) {
+      const event = await withTimeout(reconnect.nextFrame(), 1000, 'adapter quarantine event');
+      if (event.type === 'adapter.runtime' && event.adapter?.state === 'QUARANTINED') quarantinedEvent = event;
+    }
+    assert.equal(quarantinedEvent?.adapter?.state, 'QUARANTINED');
+
     const observationResult = await requestJson(baseUrl + '/api/observations', {
       method: 'POST',
       headers,
