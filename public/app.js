@@ -436,6 +436,7 @@ function renderSources() {
   (state.scene?.sources || []).forEach((source) => {
     const observation = state.observations.find((item) => item.sourceId === source.id && item.channel === source.channels[0]);
     const stale = observation?.status === 'stale';
+    const privacyMode = source.privacyMode || source.privacyClass || 'not declared';
     const wrapper = document.createElement('div');
     wrapper.className = 'source-entry';
     const row = document.createElement('div');
@@ -443,7 +444,7 @@ function renderSources() {
     row.innerHTML = '<span class="layer-swatch" style="color:' + colorFor(source.channels[0]) +
       ';background:' + colorFor(source.channels[0]) + '"></span><span>' +
       escapeHtml(source.name) + '</span><span class="source-meta">' +
-      (stale ? 'stale' : observation ? 'live' : '—') + '</span>';
+      (stale ? 'stale' : observation ? 'live' : '—') + ' · ' + escapeHtml(privacyMode) + '</span>';
     wrapper.appendChild(row);
     if (source.adapterType === 'manual') {
       const control = document.createElement('form');
@@ -734,6 +735,13 @@ function renderInspector() {
     detail('Input observations', inputLabel) +
     detail('Provenance', provenanceLabel) +
     detail('Privacy', observation.privacyClass || source?.privacyClass || source?.privacyMode || 'not declared') +
+    detail('Source privacy mode', source?.privacyMode || 'not declared') +
+    detail('Source privacy class', source?.privacyClass || 'derived from mode') +
+    detail('Raw content policy', source?.providerManifest?.rawContentPolicy || 'none') +
+    detail('Source identity policy', source?.providerManifest?.sourceIdentityPolicy || 'scene_local') +
+    detail('Omitted sensitive fields', Array.isArray(observation.metadata?.privacyOmittedFields)
+      ? observation.metadata.privacyOmittedFields.join(' · ')
+      : 'none recorded') +
     detail('Processing', processingPath) +
     '</div>';
 }
@@ -2094,6 +2102,7 @@ document.getElementById('sourceForm').addEventListener('submit', async (event) =
   const freshnessWindowMs = Number(document.getElementById('sourceFreshness').value);
   const min = Number(document.getElementById('sourceRangeMin').value);
   const max = Number(document.getElementById('sourceRangeMax').value);
+  const privacyMode = document.getElementById('sourcePrivacyMode').value;
   if (!name || !unit || !Number.isFinite(freshnessWindowMs) || freshnessWindowMs <= 0 ||
       !Number.isFinite(min) || !Number.isFinite(max) || max <= min) return;
   try {
@@ -2108,7 +2117,7 @@ document.getElementById('sourceForm').addEventListener('submit', async (event) =
         unit,
         range: [min, max],
         freshnessWindowMs,
-        privacyMode: 'local_numeric',
+        privacyMode,
         connected: false,
         position: {
           x: state.scene.width / 2,
@@ -2123,6 +2132,7 @@ document.getElementById('sourceForm').addEventListener('submit', async (event) =
     document.getElementById('sourceFreshness').value = '2000';
     document.getElementById('sourceRangeMin').value = '0';
     document.getElementById('sourceRangeMax').value = '1';
+    document.getElementById('sourcePrivacyMode').value = 'local_numeric';
     document.getElementById('sourceForm').hidden = true;
     hydrate(await api('/api/state'));
   } catch (error) {

@@ -62,6 +62,13 @@ export const PRIVACY_CLASSES = Object.freeze([
   'prohibited'
 ]);
 
+export const PRIVACY_MODES = Object.freeze([
+  'summary_only',
+  'local_numeric',
+  'raw_disabled',
+  'provider_declared'
+]);
+
 export function privacyClassForSource(source) {
   if (source?.privacyClass && PRIVACY_CLASSES.includes(source.privacyClass)) return source.privacyClass;
   if (source?.privacyMode === 'summary_only') return 'summary_only';

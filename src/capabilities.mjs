@@ -46,7 +46,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Fail-closed privacy admission guards',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'Raw content and persistent device identity fields are rejected by default; explicit provider and privacy opt-in is required, sensitive values are omitted from normalized metadata, and imported packages reject retained sensitive fields.'
+    note: 'Source privacy modes and classes are validated; raw content and persistent device identity fields are rejected by default, explicit provider and privacy opt-in is required, sensitive values are omitted from normalized metadata, and imported packages reject retained sensitive fields.'
   },
   {
     id: 'permission-revocation-cancellation',

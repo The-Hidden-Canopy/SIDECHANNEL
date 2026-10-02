@@ -1,4 +1,4 @@
-import { PRIVACY_CLASSES, privacyClassForSource } from './contracts.mjs';
+import { PRIVACY_CLASSES, PRIVACY_MODES, privacyClassForSource } from './contracts.mjs';
 
 const RAW_CONTENT_KEYS = Object.freeze([
   'rawAudio',
@@ -33,6 +33,17 @@ function sensitiveFields(raw) {
 
 export function listSensitiveFields(raw) {
   return sensitiveFields(raw);
+}
+
+export function validateSourcePrivacyPolicy(raw = {}) {
+  const reasons = [];
+  if (raw.privacyMode !== undefined && !PRIVACY_MODES.includes(raw.privacyMode)) {
+    reasons.push({ id: 'privacy.mode', message: 'privacyMode is unsupported' });
+  }
+  if (raw.privacyClass !== undefined && !PRIVACY_CLASSES.includes(raw.privacyClass)) {
+    reasons.push({ id: 'privacy.class', message: 'privacyClass is unsupported' });
+  }
+  return { ok: reasons.length === 0, reasons };
 }
 
 export function validatePrivacyAdmission(raw, source) {

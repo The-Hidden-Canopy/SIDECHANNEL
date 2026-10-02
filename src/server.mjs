@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import { extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyFreshness, validateObservation } from './validation.mjs';
+import { validateSourcePrivacyPolicy } from './privacy.mjs';
 import { createDefaultScene, createSimulator } from './simulator.mjs';
 import { SqliteStore } from './sqlite-store.mjs';
 import { consumeTextFrames, encodeCloseFrame, encodeControlFrame, encodeTextFrame } from './websocket.mjs';
@@ -744,6 +745,8 @@ async function handleApi(request, response, pathname) {
     }
     if (request.method === 'POST' && parts[3] === 'sources') {
       const body = await bodyJson(request);
+      const privacyPolicy = validateSourcePrivacyPolicy(body);
+      if (!privacyPolicy.ok) return sendJson(response, 422, { error: 'invalid source privacy policy', reasons: privacyPolicy.reasons });
       const sourceId = body.id || 'source_' + randomUUID();
       const manifestResult = validateProviderManifest(body.providerManifest || {
         protocolVersion: 'sidechannel.adapter/1',
@@ -790,6 +793,8 @@ async function handleApi(request, response, pathname) {
       const existing = scene.sources.find((source) => source.id === sourceId);
       if (!existing) return sendJson(response, 404, { error: 'source not found' });
       const body = await bodyJson(request);
+      const privacyPolicy = validateSourcePrivacyPolicy(body);
+      if (!privacyPolicy.ok) return sendJson(response, 422, { error: 'invalid source privacy policy', reasons: privacyPolicy.reasons });
       const source = {
         ...existing,
         ...body,

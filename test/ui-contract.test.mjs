@@ -21,6 +21,11 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
     assert.ok(appSource.includes(field), 'missing inspector field: ' + field);
   }
   assert.match(appSource, /escapeHtml\(value\)/);
+  assert.match(appSource, /detail\('Source privacy mode'/);
+  assert.match(appSource, /detail\('Raw content policy'/);
+  assert.match(appSource, /detail\('Source identity policy'/);
+  assert.match(appSource, /privacyOmittedFields/);
+  assert.match(serverSource, /validateSourcePrivacyPolicy/);
   assert.match(appSource, /\/api\/sessions\/.*\/verify/);
   assert.match(appSource, /sessionVerification/);
   assert.match(appSource, /\/api\/sessions\/compare/);
@@ -75,6 +80,7 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /transformForm/);
   assert.match(appSource, /\/api\/transforms/);
   assert.match(htmlSource, /id="transformForm"/);
+  assert.match(htmlSource, /id="sourcePrivacyMode"/);
   assert.match(htmlSource, /Publish revision/);
   assert.match(appSource, /syncBackgroundImage/);
   assert.match(appSource, /drawBackground/);

@@ -213,6 +213,13 @@
             <label>Range min <input id="sourceRangeMin" type="number" value="0" step="any"></label>
             <label>Range max <input id="sourceRangeMax" type="number" value="1" step="any"></label>
           </div>
+          <label>Privacy mode
+            <select id="sourcePrivacyMode">
+              <option value="local_numeric">Local numeric</option>
+              <option value="summary_only">Summary only</option>
+              <option value="raw_disabled">Raw disabled</option>
+            </select>
+          </label>
           <button class="button small accent" type="submit">Add manual source</button>
         </form>
         <div id="sourceList" class="source-list"></div>
