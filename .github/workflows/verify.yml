@@ -58,6 +58,7 @@ jobs:
           npm run verify:native-ipc-sqlite -- "$native_exe"
           npm run verify:native-ipc-scene-view -- "$native_exe"
           npm run verify:native-ipc-export -- "$native_exe"
+          npm run benchmark:native -- "$native_exe" 8
 
   native-sanitizer:
     name: Native sanitizer
