@@ -35,6 +35,8 @@ The native CLI's `--ipc-stdio TOKEN` mode exposes a bounded `sidechannel.native-
 
 The native `sidechannel/c_api.h` surface provides opaque-handle session control and bounded IPC-frame encoding without exposing native pointers. Its tests cover open/append/close/reopen/verify, invalid quality rejection, and output-buffer bounds. This is an interoperability contract only; native SQLite authority, deployment permissions, and physical adapters remain separate gates.
 
+The native reference can also serialize a bounded `sidechannel.scene-view/1` projection from admitted observations. Source-health projections, observation evidence status, deterministic ordering, and truncation limits remain presentation metadata; the browser/native renderer, scene authoring, hardware adapters, and VANTA remain separate consumers or gates.
+
 Run `npm run benchmark -- 8 14` for a software-only E2 simulator receipt covering admitted/rejected counts, admission p50/p95/p99, field evaluation time, throughput, replay determinism, and explicit non-production limitations. The same check is available as `POST /api/benchmark` and through the UI's Runtime evidence panel. Use `npm run verify:benchmark -- path/to/benchmark-receipt.json` to independently verify a saved receipt and detect digest or count tampering.
 
 Run `npm run benchmark:scene-view -- 20 9` or call `POST /api/benchmark/scene-view` for a bounded E2 SceneView receipt covering update serialization latency and payload-size p50/p95/p99/max metrics. The Runtime evidence panel exposes the same check. These measurements are host-local simulator evidence; they do not establish production capacity, deployment readiness, or physical-source performance.

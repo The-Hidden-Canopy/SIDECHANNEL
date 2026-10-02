@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <string_view>
 #include <utility>
@@ -461,6 +462,97 @@ std::string SessionArchive::to_json() const {
   const std::string package_without_digest = output.str();
   return package_without_digest.substr(0, package_without_digest.size() - 1) +
     ",\"packageDigest\":\"" + sha256(package_without_digest) + "\"}";
+}
+
+NativeSceneView create_native_scene_view(
+  const std::vector<Observation>& observations,
+  std::int64_t now_ms,
+  SceneViewLimits limits
+) {
+  constexpr std::size_t max_source_cap = 256;
+  constexpr std::size_t max_observation_cap = 512;
+  limits.max_sources = std::clamp(limits.max_sources, std::size_t{1}, max_source_cap);
+  limits.max_observations = std::clamp(limits.max_observations, std::size_t{1}, max_observation_cap);
+
+  NativeSceneView view;
+  view.generated_at_ms = now_ms;
+  view.observation_count = observations.size();
+  view.limits = limits;
+
+  std::map<std::string, std::string> source_channels;
+  for (const auto& observation : observations) {
+    if (!observation.source_id.empty()) source_channels.try_emplace(observation.source_id, observation.channel);
+  }
+  view.source_count = source_channels.size();
+
+  view.observations = observations;
+  std::sort(view.observations.begin(), view.observations.end(), [](const Observation& left, const Observation& right) {
+    return left.timestamp_ms < right.timestamp_ms ||
+      (left.timestamp_ms == right.timestamp_ms && left.id < right.id);
+  });
+  if (view.observations.size() > limits.max_observations) {
+    view.observations.erase(view.observations.begin(), view.observations.end() - limits.max_observations);
+  }
+
+  std::map<std::string, Observation> latest_by_source;
+  for (const auto& observation : view.observations) latest_by_source[observation.source_id] = observation;
+  std::size_t source_index = 0;
+  for (const auto& [source_id, channel] : source_channels) {
+    if (source_index++ >= limits.max_sources) break;
+    NativeSourceProjection projection{source_id, channel, "", 0, "", "waiting"};
+    const auto latest = latest_by_source.find(source_id);
+    if (latest != latest_by_source.end()) {
+      projection.observation_id = latest->second.id;
+      projection.observation_timestamp_ms = latest->second.timestamp_ms;
+      projection.observation_status = to_string(latest->second.evidence_state);
+      const bool stale_by_age = now_ms >= latest->second.timestamp_ms &&
+        now_ms - latest->second.timestamp_ms > 5000;
+      projection.health = latest->second.evidence_state == EvidenceState::stale || stale_by_age ? "stale" : "live";
+    }
+    view.source_projections.push_back(std::move(projection));
+  }
+  return view;
+}
+
+std::string NativeSceneView::to_json() const {
+  std::ostringstream output;
+  output << "{\"format\":\"sidechannel.scene-view/1\",\"formatVersion\":1,\"generatedAtMs\":"
+    << generated_at_ms << ",\"scene\":null,\"sourceProjections\":[";
+  for (std::size_t index = 0; index < source_projections.size(); ++index) {
+    if (index > 0) output << ',';
+    const auto& projection = source_projections[index];
+    output << "{\"id\":" << quote_json(projection.id)
+      << ",\"name\":" << quote_json(projection.id)
+      << ",\"adapterType\":\"native-reference\",\"channels\":["
+      << quote_json(projection.channel) << "],\"providerId\":null,\"position\":null"
+      << ",\"health\":" << quote_json(projection.health) << ",\"observationId\":";
+    if (projection.observation_id.empty()) output << "null";
+    else output << quote_json(projection.observation_id);
+    output << ",\"observationTimestampMs\":";
+    if (projection.observation_id.empty()) output << "null";
+    else output << projection.observation_timestamp_ms;
+    output << ",\"observationStatus\":";
+    if (projection.observation_id.empty()) output << "null";
+    else output << quote_json(projection.observation_status);
+    output << '}';
+  }
+  output << "],\"observations\":[";
+  for (std::size_t index = 0; index < observations.size(); ++index) {
+    if (index > 0) output << ',';
+    output << observation_json(observations[index]);
+  }
+  output << "],\"events\":[],\"diagnostics\":[],\"adapterRuntime\":[],\"recording\":null"
+    << ",\"limits\":{\"maxSources\":" << limits.max_sources
+    << ",\"maxObservations\":" << limits.max_observations
+    << ",\"maxEvents\":" << limits.max_events
+    << ",\"maxDiagnostics\":" << limits.max_diagnostics
+    << ",\"maxAdapters\":" << limits.max_adapters << '}'
+    << ",\"summary\":{\"sourceCount\":" << source_count
+    << ",\"boundedSourceCount\":" << source_projections.size()
+    << ",\"observationCount\":" << observation_count
+    << ",\"boundedObservationCount\":" << observations.size()
+    << ",\"eventCount\":0,\"diagnosticCount\":0}}";
+  return output.str();
 }
 
 std::string LocalIpcCodec::encode(const IpcFrame& frame, const std::string& token) {

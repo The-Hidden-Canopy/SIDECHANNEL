@@ -106,6 +106,40 @@ struct IpcDecodeReceipt {
   std::string error;
 };
 
+struct SceneViewLimits {
+  std::size_t max_sources = 256;
+  std::size_t max_observations = 512;
+  std::size_t max_events = 0;
+  std::size_t max_diagnostics = 0;
+  std::size_t max_adapters = 0;
+};
+
+struct NativeSourceProjection {
+  std::string id;
+  std::string channel;
+  std::string observation_id;
+  std::int64_t observation_timestamp_ms = 0;
+  std::string observation_status;
+  std::string health;
+};
+
+struct NativeSceneView {
+  std::int64_t generated_at_ms = 0;
+  std::size_t source_count = 0;
+  std::size_t observation_count = 0;
+  std::vector<NativeSourceProjection> source_projections;
+  std::vector<Observation> observations;
+  SceneViewLimits limits;
+
+  [[nodiscard]] std::string to_json() const;
+};
+
+[[nodiscard]] NativeSceneView create_native_scene_view(
+  const std::vector<Observation>& observations,
+  std::int64_t now_ms,
+  SceneViewLimits limits = {}
+);
+
 class LocalIpcCodec {
 public:
   static constexpr std::size_t max_wire_bytes = 64 * 1024;

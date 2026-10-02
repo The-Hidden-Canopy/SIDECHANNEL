@@ -34,4 +34,6 @@ The CLI's `--ipc-stdio TOKEN` mode provides a bounded local process boundary usi
 
 `sidechannel/c_api.h` exposes the native control surface as an opaque-handle C ABI: open/append/close/verify/state for a native session and bounded IPC-frame encoding. The ABI copies caller data into the native store, validates finite values and bounded quality, and never exposes internal pointers. It is a software interoperability boundary, not a hardware driver API or a security/permission grant.
 
+The native core can build the bounded `sidechannel.scene-view/1` projection directly from admitted observations. It preserves separate observation records and source-health projections, applies hard source/observation limits, and serializes the same presentation-oriented contract used by the browser path. This native projection has no hardware adapter, scene authoring, or renderer authority of its own.
+
 This is not yet the native authority or a parity-complete export engine. SQLite persistence, local IPC, and native desktop shell integration remain explicit follow-on gates. No hardware adapter is included.

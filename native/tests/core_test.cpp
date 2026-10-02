@@ -52,6 +52,27 @@ int main() {
   const sidechannel::IpcFrame oversized{"request-2", "data", std::string(sidechannel::LocalIpcCodec::max_payload_bytes + 1, 'x')};
   assert(sidechannel::LocalIpcCodec::encode(oversized, "launch-token").empty());
 
+  const auto native_view = sidechannel::create_native_scene_view(
+    first_tick, 10000, sidechannel::SceneViewLimits{2, 9, 0, 0, 0}
+  );
+  assert(native_view.source_count == 9);
+  assert(native_view.observation_count == 9);
+  assert(native_view.source_projections.size() == 2);
+  assert(native_view.observations.size() == 9);
+  bool has_stale_projection = false;
+  for (const auto& projection : native_view.source_projections) {
+    if (projection.health == "stale") has_stale_projection = true;
+  }
+  assert(has_stale_projection);
+  const auto bounded_native_view = sidechannel::create_native_scene_view(
+    first_tick, 10000, sidechannel::SceneViewLimits{2, 2, 0, 0, 0}
+  );
+  assert(bounded_native_view.observations.size() == 2);
+  const auto native_view_json = bounded_native_view.to_json();
+  assert(native_view_json.find("\"format\":\"sidechannel.scene-view/1\"") != std::string::npos);
+  assert(native_view_json.find("\"maxSources\":2") != std::string::npos);
+  assert(native_view_json.find("\"boundedObservationCount\":2") != std::string::npos);
+
   sidechannel::SessionArchive archive("session_test");
   archive.append(first_tick[0]);
   archive.append(first_tick[1]);

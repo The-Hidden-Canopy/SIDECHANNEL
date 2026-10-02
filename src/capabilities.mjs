@@ -112,6 +112,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'sidechannel/c_api.h exposes bounded opaque-handle session control and IPC encoding with finite-value admission; it is an interoperability contract, not SQLite, deployment permission, or hardware authority.'
   },
   {
+    id: 'native-scene-view-projection',
+    label: 'Native bounded SceneView projection',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The native reference serializes sidechannel.scene-view/1 with deterministic observation ordering, source-health projections, evidence status, and hard truncation limits; it is a presentation projection, not renderer, scene-authoring, or hardware authority.'
+  },
+  {
     id: 'bounded-websocket-controls',
     label: 'Bounded WebSocket controls',
     status: 'implemented',
