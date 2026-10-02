@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { computeSnapshotDigest } from './sqlite-store.mjs';
 import { HashChainJournal } from './journal.mjs';
 import { validatePoseSample } from './spatial/pose-history.mjs';
+import { validateBackground } from './spatial/background.mjs';
 import { validateObservation } from './validation.mjs';
 
 export const SESSION_PACKAGE_LIMITS = Object.freeze({
@@ -68,6 +69,17 @@ export function verifySessionPackage(packageData) {
   let calibrationReferencesVerified = true;
   let provenanceReferencesVerified = true;
   let observationSchemaVerified = true;
+  let sceneBackgroundVerified = true;
+  if (packageData?.sceneSnapshot?.background !== undefined) {
+    const backgroundResult = validateBackground(packageData.sceneSnapshot.background, {
+      width: packageData.sceneSnapshot.width,
+      height: packageData.sceneSnapshot.height
+    });
+    if (!backgroundResult.ok) {
+      sceneBackgroundVerified = false;
+      reasons.push('invalid scene background: ' + backgroundResult.reasons.map((item) => item.id).join(', '));
+    }
+  }
   let previousSequence = null;
   for (const observation of observations || []) {
     if (!observation || typeof observation.id !== 'string') {
@@ -199,6 +211,7 @@ export function verifySessionPackage(packageData) {
       calibrationReferencesVerified,
       provenanceReferencesVerified,
       observationSchemaVerified,
+      sceneBackgroundVerified,
       uniqueObservationIds: ids.size === (observations?.length || 0),
       historicalSnapshotComplete: snapshotComplete,
       snapshotDigestVerified: packageData?.formatVersion === '0.2' && snapshotComplete && reasons.every((reason) => reason !== 'snapshot digest mismatch'),

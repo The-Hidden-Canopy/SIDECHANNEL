@@ -128,6 +128,29 @@ test('session verifier rejects malformed v0.2 observation payloads', () => {
   assert.ok(report.reasons.some((reason) => reason.includes('unit')));
 });
 
+test('session verifier applies the local-only background contract to scene snapshots', () => {
+  const packaged = packageData();
+  packaged.sceneSnapshot = {
+    ...packaged.sceneSnapshot,
+    width: 5,
+    height: 4,
+    background: {
+      dataUrl: 'https://example.com/floorplan.png',
+      mimeType: 'image/png',
+      x: 0,
+      y: 0,
+      width: 5,
+      height: 4,
+      rotationDeg: 0,
+      opacity: 0.5
+    }
+  };
+  const report = verifySessionPackage(packaged);
+  assert.equal(report.ok, false);
+  assert.equal(report.checks.sceneBackgroundVerified, false);
+  assert.ok(report.reasons.some((reason) => reason.includes('invalid scene background')));
+});
+
 test('session verifier resolves a source introduced by a retained source revision event', () => {
   const packaged = packageData();
   packaged.observations[0].sourceId = 'source_2';
