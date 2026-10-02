@@ -334,6 +334,12 @@ export class SqliteStore {
     }
   }
 
+  appendRuntimeEvent(sessionId, type, payload = {}, timestampMs = Date.now()) {
+    const session = this.db.prepare("SELECT id FROM sessions WHERE id = ? AND ended_at_ms IS NULL AND state = 'recording'").get(sessionId);
+    if (!session) return null;
+    return this.appendJournal(sessionId, type, payload, timestampMs);
+  }
+
   finishSession(sessionId) {
     const endedAtMs = Date.now();
     const result = this.db.prepare(`

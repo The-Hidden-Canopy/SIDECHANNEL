@@ -129,6 +129,36 @@ function recordDiagnostic(diagnostic) {
   return { ok: false, diagnostic };
 }
 
+function recordAdapterFailure(providerId, reason) {
+  const adapter = adapterSupervisor.recordFailure(providerId, reason);
+  const diagnostic = {
+    type: 'adapter.failure',
+    providerId,
+    state: adapter.state,
+    failureCount: adapter.failureCount,
+    reasons: [{ id: 'adapter.failure', message: reason }],
+    receivedAtMs: Date.now()
+  };
+  recordDiagnostic(diagnostic);
+  if (recordingSessionId) {
+    store.appendRuntimeEvent(recordingSessionId, 'AdapterFailure', {
+      providerId,
+      reason,
+      state: adapter.state,
+      failureCount: adapter.failureCount
+    }, diagnostic.receivedAtMs);
+    if (adapter.state === 'QUARANTINED') {
+      store.appendRuntimeEvent(recordingSessionId, 'AdapterQuarantined', {
+        providerId,
+        reason,
+        failureCount: adapter.failureCount
+      }, diagnostic.receivedAtMs);
+    }
+  }
+  broadcast({ type: 'adapter.runtime', adapter });
+  return adapter;
+}
+
 async function processObservation(raw) {
   const result = validateObservation(raw, { sources: sourceMap() });
   if (!result.ok) {
@@ -246,7 +276,7 @@ async function handleApi(request, response, pathname) {
       else if (parts[3] === 'start') adapter = adapterSupervisor.start(providerId);
       else if (parts[3] === 'stop') adapter = adapterSupervisor.stop(providerId);
       else if (parts[3] === 'success') adapter = adapterSupervisor.recordSuccess(providerId);
-      else if (parts[3] === 'failure') adapter = adapterSupervisor.recordFailure(providerId, body.reason || 'operator-reported failure');
+      else if (parts[3] === 'failure') adapter = recordAdapterFailure(providerId, body.reason || 'operator-reported failure');
       else if (parts[3] === 'clear-quarantine') adapter = adapterSupervisor.clearQuarantine(providerId);
       else return sendJson(response, 400, { error: 'unsupported adapter runtime action' });
       return sendJson(response, 200, { adapter });

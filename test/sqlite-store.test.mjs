@@ -121,6 +121,26 @@ test('open sessions become interrupted after a store restart', async () => {
   }
 });
 
+test('runtime adapter failures are retained in the authoritative journal', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sidechannel-runtime-event-'));
+  const path = join(directory, 'sidechannel.sqlite');
+  const store = new SqliteStore(path);
+  try {
+    await store.init(scene);
+    const session = store.createSession(scene.id);
+    const entry = store.appendRuntimeEvent(session.id, 'AdapterQuarantined', {
+      providerId: 'fixture.adapter',
+      reason: 'malformed frame',
+      failureCount: 3
+    }, 1234);
+    assert.equal(entry.type, 'AdapterQuarantined');
+    assert.equal(store.getSession(session.id).journal.at(-1).payload.failureCount, 3);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('SQLite store migrates the existing JSON state format once', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'sidechannel-migrate-'));
   const dbPath = join(directory, 'sidechannel.sqlite');
