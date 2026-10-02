@@ -35,12 +35,18 @@ test('SQLite store persists sessions, observations, events, and deletion', async
   const store = new SqliteStore(path);
   try {
     await store.init(scene);
-    const session = store.createSession(scene.id);
+    const session = store.createSession(scene.id, {
+      scene: { ...scene, name: 'Frozen test room', sources: [{ id: 'source_test', calibrationState: 'calibrated' }] },
+      sources: [{ id: 'source_test', calibrationState: 'calibrated' }],
+      transformGraph: { revision: 1, placements: [] }
+    });
     store.appendObservation(session.id, observation('observation_1'));
     store.appendEvent(session.id, { id: 'event_1', type: 'activity.change', startMs: 1000, endMs: null });
     const finished = store.finishSession(session.id);
     assert.equal(finished.observations.length, 1);
     assert.equal(finished.events.length, 1);
+    assert.equal(finished.snapshotComplete, true);
+    assert.equal(finished.sceneSnapshot.name, 'Frozen test room');
     assert.equal(store.listSessions()[0].observationCount, 1);
     store.close();
 
@@ -48,10 +54,29 @@ test('SQLite store persists sessions, observations, events, and deletion', async
     await reopened.init(scene);
     assert.equal(reopened.getSession(session.id).observations[0].id, 'observation_1');
     assert.equal(reopened.getSession(session.id).events[0].type, 'activity.change');
+    assert.equal(reopened.getSession(session.id).sceneSnapshot.name, 'Frozen test room');
     assert.equal(reopened.deleteSession(session.id), true);
     assert.equal(reopened.getSession(session.id), undefined);
     reopened.close();
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('session snapshots remain historical after the live scene changes', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sidechannel-snapshot-'));
+  const path = join(directory, 'sidechannel.sqlite');
+  const store = new SqliteStore(path);
+  try {
+    await store.init(scene);
+    store.upsertScene({ ...scene, name: 'Before move', sources: [{ id: 'source_test', position: { x: 1, y: 1 } }] });
+    const session = store.createSession(scene.id);
+    store.upsertScene({ ...scene, name: 'After move', sources: [{ id: 'source_test', position: { x: 2, y: 1 } }] });
+    const historical = store.getSession(session.id);
+    assert.equal(historical.sceneSnapshot.name, 'Before move');
+    assert.deepEqual(historical.sceneSnapshot.sources[0].position, { x: 1, y: 1 });
+  } finally {
+    store.close();
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 async function exists(path) {
   try {
@@ -22,6 +22,10 @@ function decode(value, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function digest(value) {
+  return createHash('sha256').update(encode(value)).digest('hex');
 }
 
 export class SqliteStore {
@@ -46,7 +50,14 @@ export class SqliteStore {
         id TEXT PRIMARY KEY,
         scene_id TEXT NOT NULL,
         started_at_ms INTEGER NOT NULL,
-        ended_at_ms INTEGER
+        ended_at_ms INTEGER,
+        scene_snapshot TEXT,
+        source_registry_snapshot TEXT,
+        calibration_registry_snapshot TEXT,
+        transform_graph_snapshot TEXT,
+        runtime_build_id TEXT,
+        schema_set_digest TEXT,
+        snapshot_digest TEXT
       );
       CREATE TABLE IF NOT EXISTS observations (
         session_id TEXT NOT NULL,
@@ -73,11 +84,31 @@ export class SqliteStore {
       CREATE INDEX IF NOT EXISTS events_by_session_start
         ON events(session_id, start_ms);
     `);
+    this.ensureSessionSnapshotColumns();
 
     if (!databaseExisted && this.legacyJsonPath && await exists(this.legacyJsonPath)) {
       await this.migrateJson(await readFile(this.legacyJsonPath, 'utf8'));
     }
     if (!this.getScene(defaultScene.id)) this.upsertScene(defaultScene);
+  }
+
+  ensureSessionSnapshotColumns() {
+    const columns = [
+      ['scene_snapshot', 'TEXT'],
+      ['source_registry_snapshot', 'TEXT'],
+      ['calibration_registry_snapshot', 'TEXT'],
+      ['transform_graph_snapshot', 'TEXT'],
+      ['runtime_build_id', 'TEXT'],
+      ['schema_set_digest', 'TEXT'],
+      ['snapshot_digest', 'TEXT']
+    ];
+    for (const [name, type] of columns) {
+      try {
+        this.db.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${type}`);
+      } catch (error) {
+        if (!String(error.message).toLowerCase().includes('duplicate column')) throw error;
+      }
+    }
   }
 
   close() {
@@ -123,7 +154,10 @@ export class SqliteStore {
 
   getSession(sessionId) {
     const row = this.db.prepare(`
-      SELECT id, scene_id, started_at_ms, ended_at_ms FROM sessions WHERE id = ?
+      SELECT id, scene_id, started_at_ms, ended_at_ms,
+        scene_snapshot, source_registry_snapshot, calibration_registry_snapshot,
+        transform_graph_snapshot, runtime_build_id, schema_set_digest, snapshot_digest
+      FROM sessions WHERE id = ?
     `).get(sessionId);
     if (!row) return undefined;
     return {
@@ -131,6 +165,16 @@ export class SqliteStore {
       sceneId: row.scene_id,
       startedAtMs: row.started_at_ms,
       endedAtMs: row.ended_at_ms,
+      sceneSnapshot: decode(row.scene_snapshot, null),
+      sourceRegistrySnapshot: decode(row.source_registry_snapshot, null),
+      calibrationRegistrySnapshot: decode(row.calibration_registry_snapshot, null),
+      transformGraphSnapshot: decode(row.transform_graph_snapshot, null),
+      runtimeBuildId: row.runtime_build_id || null,
+      schemaSetDigest: row.schema_set_digest || null,
+      snapshotDigest: row.snapshot_digest || null,
+      snapshotComplete: Boolean(
+        row.scene_snapshot && row.source_registry_snapshot && row.transform_graph_snapshot
+      ),
       observations: this.db.prepare(`
         SELECT payload FROM observations WHERE session_id = ? ORDER BY timestamp_ms, rowid
       `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean),
@@ -140,18 +184,64 @@ export class SqliteStore {
     };
   }
 
-  createSession(sceneId) {
+  createSession(sceneId, context = {}) {
+    const scene = context.scene || this.getScene(sceneId) || { id: sceneId, sources: [], placements: [] };
+    const sceneSnapshot = context.scene || scene;
+    const sourceRegistrySnapshot = context.sources || scene.sources || [];
+    const calibrationRegistrySnapshot = context.calibrations || scene.calibrations ||
+      sourceRegistrySnapshot.map((source) => ({
+        sourceId: source.id,
+        calibrationState: source.calibrationState || 'unknown',
+        calibratedAtMs: source.calibratedAtMs || null
+      }));
+    const transformGraphSnapshot = context.transformGraph || scene.transformGraph || {
+      schemaVersion: '0.1',
+      placements: scene.placements || []
+    };
+    const runtimeBuildId = context.runtimeBuildId || 'sidechannel-node-reference';
+    const schemaSetDigest = context.schemaSetDigest || digest({ observation: '0.1', event: '0.1' });
+    const snapshotDigest = digest({
+      sceneSnapshot,
+      sourceRegistrySnapshot,
+      calibrationRegistrySnapshot,
+      transformGraphSnapshot,
+      runtimeBuildId,
+      schemaSetDigest
+    });
     const session = {
       id: 'sess_' + randomUUID(),
       sceneId,
       startedAtMs: Date.now(),
       endedAtMs: null,
+      sceneSnapshot,
+      sourceRegistrySnapshot,
+      calibrationRegistrySnapshot,
+      transformGraphSnapshot,
+      runtimeBuildId,
+      schemaSetDigest,
+      snapshotDigest,
+      snapshotComplete: true,
       observations: [],
       events: []
     };
     this.db.prepare(`
-      INSERT INTO sessions (id, scene_id, started_at_ms, ended_at_ms) VALUES (?, ?, ?, NULL)
-    `).run(session.id, session.sceneId, session.startedAtMs);
+      INSERT INTO sessions (
+        id, scene_id, started_at_ms, ended_at_ms, scene_snapshot,
+        source_registry_snapshot, calibration_registry_snapshot, transform_graph_snapshot,
+        runtime_build_id, schema_set_digest, snapshot_digest
+      ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      session.id,
+      session.sceneId,
+      session.startedAtMs,
+      encode(sceneSnapshot),
+      encode(sourceRegistrySnapshot),
+      encode(calibrationRegistrySnapshot),
+      encode(transformGraphSnapshot),
+      runtimeBuildId,
+      schemaSetDigest,
+      snapshotDigest
+    );
     return session;
   }
 
@@ -181,18 +271,49 @@ export class SqliteStore {
   }
 
   importPackage(packageData) {
+    const sceneSnapshot = packageData.sceneSnapshot || packageData.scene || null;
+    const sourceRegistrySnapshot = packageData.sourceRegistrySnapshot || packageData.sources || sceneSnapshot?.sources || [];
+    const calibrationRegistrySnapshot = packageData.calibrationRegistrySnapshot || sceneSnapshot?.calibrations || [];
+    const transformGraphSnapshot = packageData.transformGraphSnapshot || sceneSnapshot?.transformGraph || {
+      schemaVersion: '0.1',
+      placements: sceneSnapshot?.placements || []
+    };
     const session = {
       id: 'sess_' + randomUUID(),
-      sceneId: packageData.scene?.id || 'scene_main',
+      sceneId: sceneSnapshot?.id || 'scene_main',
       startedAtMs: packageData.createdAtMs || Date.now(),
       endedAtMs: Date.now(),
+      sceneSnapshot,
+      sourceRegistrySnapshot,
+      calibrationRegistrySnapshot,
+      transformGraphSnapshot,
+      runtimeBuildId: packageData.runtimeBuildId || 'imported-package',
+      schemaSetDigest: packageData.schemaSetDigest || null,
+      snapshotDigest: packageData.snapshotDigest || null,
+      snapshotComplete: Boolean(sceneSnapshot),
       observations: Array.isArray(packageData.observations) ? packageData.observations : [],
       events: Array.isArray(packageData.events) ? packageData.events : []
     };
-    if (packageData.scene) this.upsertScene(packageData.scene);
+    if (sceneSnapshot) this.upsertScene(sceneSnapshot);
     this.db.prepare(`
-      INSERT INTO sessions (id, scene_id, started_at_ms, ended_at_ms) VALUES (?, ?, ?, ?)
-    `).run(session.id, session.sceneId, session.startedAtMs, session.endedAtMs);
+      INSERT INTO sessions (
+        id, scene_id, started_at_ms, ended_at_ms, scene_snapshot,
+        source_registry_snapshot, calibration_registry_snapshot, transform_graph_snapshot,
+        runtime_build_id, schema_set_digest, snapshot_digest
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      session.id,
+      session.sceneId,
+      session.startedAtMs,
+      session.endedAtMs,
+      encode(sceneSnapshot),
+      encode(sourceRegistrySnapshot),
+      encode(calibrationRegistrySnapshot),
+      encode(transformGraphSnapshot),
+      session.runtimeBuildId,
+      session.schemaSetDigest,
+      session.snapshotDigest
+    );
     for (const observation of session.observations) this.insertObservation(session.id, observation);
     for (const event of session.events) this.insertEvent(session.id, event);
     return session;
@@ -210,14 +331,30 @@ export class SqliteStore {
     }
     for (const session of Array.isArray(legacy.sessions) ? legacy.sessions : []) {
       if (!session?.id) continue;
+      const sceneSnapshot = legacy.scenes?.find((scene) => scene.id === session.sceneId) || null;
+      const sourceRegistrySnapshot = sceneSnapshot?.sources || [];
+      const transformGraphSnapshot = {
+        schemaVersion: '0.1',
+        placements: sceneSnapshot?.placements || []
+      };
       this.db.prepare(`
-        INSERT OR IGNORE INTO sessions (id, scene_id, started_at_ms, ended_at_ms)
-        VALUES (?, ?, ?, ?)
+        INSERT OR IGNORE INTO sessions (
+          id, scene_id, started_at_ms, ended_at_ms, scene_snapshot,
+          source_registry_snapshot, calibration_registry_snapshot, transform_graph_snapshot,
+          runtime_build_id, schema_set_digest, snapshot_digest
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         session.id,
         session.sceneId || 'scene_main',
         session.startedAtMs || Date.now(),
-        session.endedAtMs ?? null
+        session.endedAtMs ?? null,
+        encode(sceneSnapshot),
+        encode(sourceRegistrySnapshot),
+        encode([]),
+        encode(transformGraphSnapshot),
+        'legacy-json-migration',
+        null,
+        null
       );
       for (const observation of Array.isArray(session.observations) ? session.observations : []) {
         this.insertObservation(session.id, observation);

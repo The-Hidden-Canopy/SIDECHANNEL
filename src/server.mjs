@@ -122,11 +122,21 @@ async function ingest(raw) {
 }
 
 function sessionPackage(session) {
+  const scene = session.sceneSnapshot || activeScene;
+  const sources = session.sourceRegistrySnapshot || scene.sources || [];
   return {
     format: 'sidechannel-session',
-    formatVersion: '0.1',
-    scene: activeScene,
-    sources: activeScene.sources,
+    formatVersion: '0.2',
+    scene,
+    sources,
+    sceneSnapshot: session.sceneSnapshot,
+    sourceRegistrySnapshot: session.sourceRegistrySnapshot,
+    calibrationRegistrySnapshot: session.calibrationRegistrySnapshot,
+    transformGraphSnapshot: session.transformGraphSnapshot,
+    runtimeBuildId: session.runtimeBuildId,
+    schemaSetDigest: session.schemaSetDigest,
+    snapshotDigest: session.snapshotDigest,
+    historicalSnapshotComplete: session.snapshotComplete,
     observations: session.observations,
     events: session.events,
     createdAtMs: session.startedAtMs,
@@ -250,7 +260,12 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'POST' && pathname === '/api/sessions') {
     if (recordingSessionId) await store.finishSession(recordingSessionId);
     const body = await bodyJson(request);
-    const session = await store.createSession(body.sceneId || activeScene.id);
+    const scene = store.getScene(body.sceneId || activeScene.id) || activeScene;
+    const session = await store.createSession(scene.id, {
+      scene,
+      sources: scene.sources,
+      transformGraph: scene.transformGraph || { schemaVersion: '0.1', placements: scene.placements || [] }
+    });
     recordingSessionId = session.id;
     broadcast({ type: 'session.state', state: 'recording', id: session.id });
     return sendJson(response, 201, { session });

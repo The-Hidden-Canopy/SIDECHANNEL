@@ -31,7 +31,7 @@ The server is loopback-only by default. It starts a deterministic simulator with
 
 ## Implemented v0.1 slice
 
-The first engineering slice is runnable now: deterministic simulator, normalized observation contracts, loopback API/WebSocket live updates, inbound WebSocket and JSON-lines adapter modules, adapter discovery, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, bounded activity-change events, quality/freshness gates, diagnostics, scene-frame editing, draggable source calibration, manual source creation and numeric observation injection, session recording/replay data, JSON export/import controls, local session deletion, and automated tests.
+The current engineering tranche is runnable now: deterministic simulator, normalized observation contracts, loopback API/WebSocket live updates, inbound WebSocket and JSON-lines adapter modules, adapter discovery, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, bounded activity-change events, quality/freshness gates, diagnostics, scene-frame editing, draggable source calibration, manual source creation and numeric observation injection, immutable per-session scene/source/calibration/transform snapshots, historical session export, SQLite recording/replay data, JSON export/import controls, local session deletion, and automated tests.
 
 Native hardware adapters, richer calibration, optional encrypted export, and desktop packaging remain follow-on work described in the build specification. The SQLite store is local and dependency-free on supported Node.js releases; it migrates an existing `data/sidechannel.json` file on first startup.
 
