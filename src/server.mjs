@@ -19,7 +19,7 @@ import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from './sec
 import { AdapterSupervisor } from './adapters/supervisor.mjs';
 import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
 import { createReplayReceipt } from './verification/receipt.mjs';
-import { runSoftwareBenchmark } from './verification/benchmark.mjs';
+import { runSoftwareBenchmark, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -277,7 +277,7 @@ async function handleApi(request, response, pathname) {
         seed: body.seed === undefined ? 1337 : Number(body.seed),
         sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
       });
-      return sendJson(response, 200, { receipt });
+      return sendJson(response, 200, { receipt, verification: verifySoftwareBenchmarkReceipt(receipt) });
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
     }

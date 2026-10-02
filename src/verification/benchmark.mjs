@@ -1,15 +1,20 @@
+import { createHash } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { createDefaultScene, createSimulator, DEFAULT_SOURCES } from '../simulator.mjs';
 import { interpolateActivityField } from '../spatial.mjs';
 import { validateObservation } from '../validation.mjs';
 import { SCHEMA_SET_DIGEST } from '../schema.mjs';
-import { createReplayReceipt } from './receipt.mjs';
+import { createReplayReceipt, verifyReplayReceipt } from './receipt.mjs';
 
 function percentile(values, fraction) {
   if (!values.length) return 0;
   const sorted = values.slice().sort((left, right) => left - right);
   const index = Math.min(sorted.length - 1, Math.ceil((sorted.length - 1) * fraction));
   return Number(sorted[index].toFixed(3));
+}
+
+function digest(value) {
+  return createHash('sha256').update(JSON.stringify(value ?? null)).digest('hex');
 }
 
 export function runSoftwareBenchmark({
@@ -70,7 +75,7 @@ export function runSoftwareBenchmark({
     publishedArtifactCount: 1,
     estimatorOptions: { gridSize }
   });
-  return {
+  const receipt = {
     format: 'sidechannel-benchmark-receipt',
     formatVersion: '0.1',
     evidenceLevel: 'E2',
@@ -100,4 +105,44 @@ export function runSoftwareBenchmark({
       'Throughput and latency are host-local measurements, not production capacity claims.'
     ]
   };
+  receipt.receiptDigest = digest(receipt);
+  return receipt;
+}
+
+export function verifySoftwareBenchmarkReceipt(receipt) {
+  const reasons = [];
+  if (!receipt || receipt.format !== 'sidechannel-benchmark-receipt') reasons.push('invalid benchmark receipt format');
+  if (receipt?.formatVersion !== '0.1') reasons.push('unsupported benchmark receipt version');
+  if (receipt?.evidenceLevel !== 'E2') reasons.push('benchmark receipt must be E2');
+  if (receipt?.tier !== 'simulator-reference') reasons.push('benchmark receipt must be simulator-reference');
+  for (const field of ['runId', 'sourceCommit', 'runtimeBuildId', 'schemaDigest']) {
+    if (typeof receipt?.[field] !== 'string' || receipt[field].length === 0) reasons.push('missing benchmark field: ' + field);
+  }
+  for (const field of ['ticks', 'gridSize', 'admittedCount', 'rejectedCount', 'publishedArtifactCount', 'fieldCellCount']) {
+    if (!Number.isInteger(receipt?.[field]) || receipt[field] < 0) reasons.push('invalid benchmark count: ' + field);
+  }
+  if (!Number.isInteger(receipt?.ticks) || receipt.ticks < 1 || receipt.ticks > 10000) reasons.push('ticks outside benchmark bounds');
+  if (!Number.isInteger(receipt?.gridSize) || receipt.gridSize < 2 || receipt.gridSize > 256) reasons.push('gridSize outside benchmark bounds');
+  for (const field of ['durationMs', 'framesPerSecond', 'fieldEvaluationMs']) {
+    if (!Number.isFinite(receipt?.[field]) || receipt[field] < 0) reasons.push('invalid benchmark metric: ' + field);
+  }
+  const latency = receipt?.admissionLatencyUs;
+  if (!latency || !['p50', 'p95', 'p99'].every((field) => Number.isFinite(latency[field]) && latency[field] >= 0)) {
+    reasons.push('invalid admission latency metrics');
+  } else if (!(latency.p50 <= latency.p95 && latency.p95 <= latency.p99)) {
+    reasons.push('admission latency percentiles are not monotonic');
+  }
+  const replay = verifyReplayReceipt(receipt?.replay);
+  if (!replay.ok) reasons.push(...replay.reasons.map((reason) => 'replay: ' + reason));
+  if (receipt?.replay?.admittedCount !== receipt?.admittedCount) reasons.push('replay admitted count mismatch');
+  if (receipt?.replay?.rejectedCount !== receipt?.rejectedCount) reasons.push('replay rejected count mismatch');
+  if (receipt?.replay?.deterministic !== true) reasons.push('benchmark replay is not deterministic');
+  if (typeof receipt?.receiptDigest !== 'string' || receipt.receiptDigest.length !== 64) {
+    reasons.push('missing benchmark receipt digest');
+  } else {
+    const copy = { ...receipt };
+    delete copy.receiptDigest;
+    if (digest(copy) !== receipt.receiptDigest) reasons.push('benchmark receipt digest mismatch');
+  }
+  return { ok: reasons.length === 0, reasons, receiptDigest: receipt?.receiptDigest || null };
 }
