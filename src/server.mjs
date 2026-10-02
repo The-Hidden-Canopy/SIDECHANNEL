@@ -24,6 +24,7 @@ import { capabilitySnapshot } from './capabilities.mjs';
 import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/source-profile.mjs';
 import { PoseHistory } from './spatial/pose-history.mjs';
 import { SCENE_UNITS, validateRegion, validateRegions } from './spatial/regions.mjs';
+import { validatePortal, validatePortals } from './spatial/portals.mjs';
 import { decryptSessionPackage, encryptSessionPackage } from './session-crypto.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -566,6 +567,11 @@ async function handleApi(request, response, pathname) {
       height: sceneHeight
     });
     if (!regionResult.ok) return sendJson(response, 422, { error: 'invalid scene regions', reasons: regionResult.reasons });
+    const portalResult = validatePortals(Array.isArray(body.portals) ? body.portals : [], {
+      width: sceneWidth,
+      height: sceneHeight
+    });
+    if (!portalResult.ok) return sendJson(response, 422, { error: 'invalid scene portals', reasons: portalResult.reasons });
     const scene = {
       ...defaultScene,
       ...body,
@@ -574,6 +580,7 @@ async function handleApi(request, response, pathname) {
       height: sceneHeight,
       unit: sceneUnit,
       regions: regionResult.regions,
+      portals: portalResult.portals,
       sources: Array.isArray(body.sources) ? body.sources.map((source) => withSourceProfileDigest(source)) : [],
       placements: Array.isArray(body.placements) ? body.placements : []
     };
@@ -597,6 +604,11 @@ async function handleApi(request, response, pathname) {
         const regionResult = validateRegions(body.regions, { width: updated.width, height: updated.height });
         if (!regionResult.ok) return sendJson(response, 422, { error: 'invalid scene regions', reasons: regionResult.reasons });
         updated.regions = regionResult.regions;
+      }
+      if (Object.prototype.hasOwnProperty.call(body, 'portals')) {
+        const portalResult = validatePortals(body.portals, { width: updated.width, height: updated.height });
+        if (!portalResult.ok) return sendJson(response, 422, { error: 'invalid scene portals', reasons: portalResult.reasons });
+        updated.portals = portalResult.portals;
       }
       await store.upsertScene(updated);
       if (activeScene.id === updated.id) activeScene = updated;
@@ -644,6 +656,41 @@ async function handleApi(request, response, pathname) {
       });
       broadcast({ type: 'scene.updated', scene: updated });
       return sendJson(response, 200, { regionId, removed: true });
+    }
+    if (request.method === 'POST' && parts[3] === 'portals' && parts.length === 4) {
+      const body = await bodyJson(request);
+      const result = validatePortal(body, { width: scene.width, height: scene.height });
+      if (!result.ok) return sendJson(response, 422, { error: 'invalid scene portal', reasons: result.reasons });
+      const portal = { ...result.portal, id: 'portal_' + randomUUID(), createdAtMs: Date.now() };
+      const updated = { ...scene, portals: [...(scene.portals || []), portal] };
+      await store.upsertScene(updated);
+      if (activeScene.id === updated.id) activeScene = updated;
+      appendRuntimeEvent('SceneRevisionPublished', {
+        sceneId: updated.id,
+        fields: ['portals'],
+        portalId: portal.id,
+        portalKind: portal.kind,
+        portalCount: updated.portals.length
+      });
+      broadcast({ type: 'scene.updated', scene: updated });
+      return sendJson(response, 201, portal);
+    }
+    if (request.method === 'DELETE' && parts[3] === 'portals' && parts[4]) {
+      const portalId = parts[4];
+      if (!(scene.portals || []).some((portal) => portal.id === portalId)) {
+        return sendJson(response, 404, { error: 'portal not found' });
+      }
+      const updated = { ...scene, portals: scene.portals.filter((portal) => portal.id !== portalId) };
+      await store.upsertScene(updated);
+      if (activeScene.id === updated.id) activeScene = updated;
+      appendRuntimeEvent('SceneRevisionPublished', {
+        sceneId: updated.id,
+        fields: ['portals'],
+        removedPortalId: portalId,
+        portalCount: updated.portals.length
+      });
+      broadcast({ type: 'scene.updated', scene: updated });
+      return sendJson(response, 200, { portalId, removed: true });
     }
     if (request.method === 'POST' && parts[3] === 'sources') {
       const body = await bodyJson(request);

@@ -79,6 +79,7 @@ button { cursor: pointer; }
 .region-entry { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: rgba(154, 188, 208, .035); color: var(--muted); font-size: 10px; }
 .region-entry strong { color: var(--text); font-weight: 600; }
 .region-entry .button { flex: 0 0 auto; }
+.scene-tools > .button + .source-form { margin-top: 8px; }
 .source-form { display: grid; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid rgba(108, 228, 219, .18); border-radius: 8px; background: rgba(108, 228, 219, .035); }
 .source-form[hidden] { display: none !important; }
 .source-form label { color: var(--muted); font-size: 10px; }

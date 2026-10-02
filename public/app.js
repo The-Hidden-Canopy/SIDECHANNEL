@@ -16,7 +16,8 @@ const DISPLAY_LAYERS = [
   ['uncertainty', 'Uncertainty geometry', '#ffb47b', 0],
   ['trails', 'Temporal trails', '#79a7ff', 0],
   ['events', 'Activity event pulses', '#ff8f97', 0],
-  ['zones', 'Rooms / zones', '#a9e88b', 0]
+  ['zones', 'Rooms / zones', '#a9e88b', 0],
+  ['portals', 'Doors / portals', '#ffd166', 0]
 ];
 const JOURNAL_MARKER_TYPES = new Set([
   'SessionOpened', 'SessionClosed', 'CalibrationPublished', 'CalibrationInvalidated',
@@ -195,6 +196,32 @@ function renderRegions() {
         hydrate(await api('/api/state'));
       } catch (error) {
         document.getElementById('freshnessLabel').textContent = 'Region removal failed: ' + error.message;
+      }
+    });
+  });
+}
+
+function renderPortals() {
+  const list = document.getElementById('portalList');
+  if (!list) return;
+  const portals = state.scene?.portals || [];
+  if (!portals.length) {
+    list.innerHTML = '<span class="muted">No doors or portals defined.</span>';
+    return;
+  }
+  list.innerHTML = portals.map((portal) =>
+    '<div class="region-entry"><span><strong>' + escapeHtml(portal.name) + '</strong> · ' +
+    escapeHtml(portal.kind || 'portal') + (portal.open === false ? ' · closed' : ' · open') + '</span>' +
+    '<button class="button small ghost" type="button" data-delete-portal="' + escapeHtml(portal.id) + '">Remove</button></div>'
+  ).join('');
+  list.querySelectorAll('[data-delete-portal]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const portalId = button.dataset.deletePortal;
+      try {
+        await api('/api/scenes/' + state.scene.id + '/portals/' + encodeURIComponent(portalId), { method: 'DELETE' });
+        hydrate(await api('/api/state'));
+      } catch (error) {
+        document.getElementById('freshnessLabel').textContent = 'Portal removal failed: ' + error.message;
       }
     });
   });
@@ -819,6 +846,25 @@ function draw() {
       context.restore();
     });
   }
+  if (state.visible.portals) {
+    (state.scene.portals || []).forEach((portal) => {
+      if (!portal.from || !portal.to) return;
+      context.save();
+      const color = /^#[0-9a-f]{6}$/i.test(portal.color || '') ? portal.color : '#ffd166';
+      context.strokeStyle = hexToRgba(color, .9);
+      context.lineWidth = portal.open === false ? 4 : 2;
+      context.setLineDash(portal.kind === 'portal' ? [5, 3] : []);
+      context.beginPath();
+      context.moveTo(transform.x(portal.from.x), transform.y(portal.from.y));
+      context.lineTo(transform.x(portal.to.x), transform.y(portal.to.y));
+      context.stroke();
+      context.setLineDash([]);
+      context.fillStyle = hexToRgba(color, .95);
+      context.font = '10px system-ui';
+      context.fillText(portal.name, transform.x(portal.from.x) + 5, transform.y(portal.from.y) - 5);
+      context.restore();
+    });
+  }
 
   drawActivityField(valid, transform);
 
@@ -1043,7 +1089,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderRegions(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderSources(); renderRegions(); renderPortals(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1350,6 +1396,44 @@ document.getElementById('regionForm').addEventListener('submit', async (event) =
     hydrate(await api('/api/state'));
   } catch (error) {
     document.getElementById('freshnessLabel').textContent = 'Could not add region: ' + error.message;
+  }
+});
+
+document.getElementById('addPortalButton').addEventListener('click', () => {
+  const form = document.getElementById('portalForm');
+  form.hidden = !form.hidden;
+  if (!form.hidden) document.getElementById('portalName').focus();
+});
+
+document.getElementById('portalForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const name = document.getElementById('portalName').value.trim();
+  const kind = document.getElementById('portalKind').value;
+  const from = {
+    x: Number(document.getElementById('portalFromX').value),
+    y: Number(document.getElementById('portalFromY').value)
+  };
+  const to = {
+    x: Number(document.getElementById('portalToX').value),
+    y: Number(document.getElementById('portalToY').value)
+  };
+  if (!name || !Number.isFinite(from.x) || !Number.isFinite(from.y) || !Number.isFinite(to.x) || !Number.isFinite(to.y) ||
+      (from.x === to.x && from.y === to.y) || from.x < 0 || from.y < 0 || to.x < 0 || to.y < 0 ||
+      from.x > state.scene.width || to.x > state.scene.width || from.y > state.scene.height || to.y > state.scene.height) {
+    document.getElementById('freshnessLabel').textContent = 'Portal endpoints must be distinct and inside the scene frame.';
+    return;
+  }
+  try {
+    await api('/api/scenes/' + state.scene.id + '/portals', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, kind, from, to })
+    });
+    document.getElementById('portalForm').reset();
+    document.getElementById('portalForm').hidden = true;
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Could not add portal: ' + error.message;
   }
 });
 

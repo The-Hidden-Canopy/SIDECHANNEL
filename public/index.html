@@ -68,6 +68,23 @@
           <button class="button small accent" type="submit">Add polygon</button>
         </form>
         <div id="regionList" class="region-list"></div>
+        <button id="addPortalButton" class="button small ghost" type="button">Add door / portal</button>
+        <form id="portalForm" class="source-form" hidden>
+          <label>Name <input id="portalName" type="text" placeholder="Main door" required></label>
+          <label>Kind
+            <select id="portalKind"><option value="door">Door</option><option value="portal">Portal</option></select>
+          </label>
+          <div class="field-grid">
+            <label>From X <input id="portalFromX" type="number" min="0" step="0.1" value="1"></label>
+            <label>From Y <input id="portalFromY" type="number" min="0" step="0.1" value="0"></label>
+          </div>
+          <div class="field-grid">
+            <label>To X <input id="portalToX" type="number" min="0" step="0.1" value="2"></label>
+            <label>To Y <input id="portalToY" type="number" min="0" step="0.1" value="0"></label>
+          </div>
+          <button class="button small accent" type="submit">Add segment</button>
+        </form>
+        <div id="portalList" class="region-list"></div>
       </section>
       <section class="panel">
         <div class="panel-heading">

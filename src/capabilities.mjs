@@ -140,6 +140,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace reports bounded point-to-point distances in the scene unit without rewriting sensor observations or calibration records.'
   },
   {
+    id: 'scene-portals',
+    label: 'Scene doors and portals',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Bounded door/portal segments are validated, persisted in scene snapshots, rendered as an explicit layer, and removable through the loopback workspace.'
+  },
+  {
     id: 'encrypted-session-portability',
     label: 'Encrypted session portability',
     status: 'implemented',

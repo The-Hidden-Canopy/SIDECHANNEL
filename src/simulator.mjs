@@ -140,6 +140,7 @@ export function createDefaultScene() {
       points: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 4 }, { x: 0, y: 4 }],
       color: '#6ce4db'
     }],
+    portals: [],
     sources,
     placements: sources.map((source) => ({
       sourceId: source.id,

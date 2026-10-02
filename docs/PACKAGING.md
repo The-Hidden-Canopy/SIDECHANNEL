@@ -85,6 +85,8 @@ Scenes also support bounded room/zone polygons. The workspace creates rectangle-
 
 The scene editor exposes the coordinate unit (`m`, `ft`, or `px`) and a one-shot measurement ruler. A measured segment is rendered and reported in the selected scene unit; it is a view aid only and does not rewrite observation values, provider identity, calibration lineage, or historical session data.
 
+Scenes also support bounded door/portal segments. The workspace validates endpoints inside the scene, preserves an open/closed state and optional room references in the scene snapshot, and renders doors as solid segments and portals as dashed segments. This is spatial authoring metadata, not a claim that a physical door or passage was detected.
+
 Optional encrypted portability is available through the `Encrypted export` workspace action and the `POST /api/sessions/:id/export` route. The envelope uses bounded scrypt parameters and AES-256-GCM; the passphrase is not stored. Import decrypts only after authentication and sends the resulting package through the same independent session verifier as plaintext import. Encryption protects the exported file in transit/storage; it does not prove hardware accuracy, regulate deployment, or replace user-controlled passphrase retention.
 
 ## Portable packaging boundary
