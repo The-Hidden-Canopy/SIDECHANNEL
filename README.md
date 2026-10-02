@@ -6,6 +6,8 @@ SIDECHANNEL is a local-first spatial sensing explorer for making incidental emis
 
 - `outputs/SIDECHANNEL_BUILD_SPEC.md` — product plan, engineering specification, data contracts, architecture, milestones, and Codex execution brief.
 - `src/` — normalized contracts, validation/freshness gates, spatial interpolation, simulator, SQLite session store, event detection, and loopback server.
+- `native/` — C++23 reference-core slice with deterministic simulator and bounded admission sequencer.
+- `CMakeLists.txt` — native build and CTest entry point.
 - `public/` — responsive 2D scene explorer with channel layers, source health, inspector, diagnostics, activity events, recording, replay, and export controls.
 - `test/` — deterministic simulator, validation, freshness, spatial field, and activity-fusion tests.
 - `docs/PACKAGING.md` — runtime, verification, portable packaging boundary, and data-directory runbook.
@@ -38,5 +40,7 @@ The current engineering tranche is runnable now: deterministic simulator, normal
 Replay is explicit about truth: `/api/sessions/:id/replay?mode=historical` returns retained recorded artifacts from the frozen session snapshot, `mode=recompute` returns a derived activity field, and `mode=determinism` compares two recomputations. `POST /api/sessions/compare` produces a derived difference artifact between two self-contained sessions. `/api/sessions/:id/receipt` and `npm run receipt:session -- path/to/exported-session.json` produce a replay receipt with an evidence level, digests, counts, and explicit software-only limitations. Open sessions are marked `interrupted` after a process restart and are never resumed or silently completed.
 
 Native hardware adapters, richer calibration, optional encrypted export, and desktop packaging remain follow-on work described in the build specification. The SQLite store is local and dependency-free on supported Node.js releases; it migrates an existing `data/sidechannel.json` file on first startup.
+
+The native directory is an independently tested reference slice, not yet the authority for SQLite persistence, local IPC, or semantic export parity. Build it with the CMake instructions in `native/README.md`.
 
 See the build specification for the authoritative requirements.

@@ -4,5 +4,6 @@ data/
 .env.*
 coverage/
 dist/
+build/
 .DS_Store
 *.log
