@@ -102,3 +102,35 @@ test('path support contributes its bounded trajectory samples', () => {
   assert.equal(result.pointCount, 3);
   assert.deepEqual(result.supportResolution.types, ['PathSupport']);
 });
+
+test('directional and volumetric supports remain bounded geometry samples', () => {
+  const observations = [
+    {
+      sourceId: 'ray', channel: 'heat', value: 60, status: 'measured', quality: { score: 1 },
+      support: { type: 'RaySupport', origin: { x: 1, y: 1 }, direction: { x: 1, y: 0 }, length: 2 }
+    },
+    {
+      sourceId: 'cone', channel: 'heat', value: 60, status: 'measured', quality: { score: 1 },
+      support: { type: 'ConeSupport', origin: { x: 1, y: 2 }, direction: { x: 1, y: 0 }, length: 2, angleRad: .4 }
+    },
+    {
+      sourceId: 'frustum', channel: 'heat', value: 60, status: 'measured', quality: { score: 1 },
+      support: { type: 'FrustumSupport', origin: { x: 1, y: 3 }, direction: { x: 1, y: 0 }, near: 1, far: 3, nearWidth: .5, farWidth: 2 }
+    },
+    {
+      sourceId: 'volume', channel: 'heat', value: 60, status: 'measured', quality: { score: 1 },
+      support: { type: 'VolumeSupport', center: { x: 3, y: 2 }, radiusX: 1, radiusY: .5, radiusZ: 2 }
+    },
+    {
+      sourceId: 'unknown', channel: 'heat', value: 60, status: 'measured', quality: { score: 1 },
+      position: { x: 4, y: 3 }, support: { type: 'UnknownSupport' }
+    }
+  ];
+  const result = interpolateActivityField({
+    scene: { width: 5, height: 4 }, observations, sources: new Map(), gridSize: 8
+  });
+  assert.equal(result.observationCount, observations.length);
+  assert.equal(result.pointCount, 4 + 12 + 12 + 9);
+  assert.deepEqual(result.supportResolution.types, ['ConeSupport', 'FrustumSupport', 'RaySupport', 'VolumeSupport']);
+  assert.ok(result.cells.some((cell) => cell.intensity !== null));
+});

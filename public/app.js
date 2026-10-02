@@ -772,9 +772,12 @@ function nearestSource(point) {
 
 function supportPositions(observation, source) {
   const support = observation.support || source?.support;
+  if (support?.type === 'UnknownSupport') return [];
   const fallback = observation.position || source?.position;
   const center = support?.center || support?.position || fallback;
-  if (!center) return [];
+  const start = support?.origin || center;
+  const anchor = center || start;
+  if (!anchor) return [];
   if (support?.type === 'RegionSupport') {
     const radius = Number.isFinite(support.radius) ? support.radius : 0;
     return radius > 0
@@ -797,7 +800,50 @@ function supportPositions(observation, source) {
       return { x: center.x + radiusX * Math.cos(angle), y: center.y + radiusY * Math.sin(angle) };
     });
   }
-  return [center];
+  if (['RaySupport', 'ConeSupport', 'FrustumSupport'].includes(support?.type) && start &&
+      Number.isFinite(support.direction?.x) && Number.isFinite(support.direction?.y)) {
+    const directionLength = Math.hypot(support.direction.x, support.direction.y);
+    if (directionLength === 0) return [];
+    const direction = { x: support.direction.x / directionLength, y: support.direction.y / directionLength };
+    const perpendicular = { x: -direction.y, y: direction.x };
+    const rings = Number.isInteger(support.sampleCount) ? Math.min(32, Math.max(2, support.sampleCount)) : 4;
+    if (support.type === 'RaySupport' && Number.isFinite(support.length) && support.length > 0) {
+      return Array.from({ length: rings }, (_, index) => {
+        const distance = support.length * index / (rings - 1);
+        return { x: start.x + direction.x * distance, y: start.y + direction.y * distance };
+      });
+    }
+    if (support.type === 'ConeSupport' && Number.isFinite(support.length) && support.length > 0 && Number.isFinite(support.angleRad)) {
+      return Array.from({ length: rings }, (_, index) => {
+        const fraction = index / (rings - 1);
+        const distance = support.length * fraction;
+        const halfWidth = distance * Math.tan(support.angleRad);
+        const point = { x: start.x + direction.x * distance, y: start.y + direction.y * distance };
+        return [point,
+          { x: point.x + perpendicular.x * halfWidth, y: point.y + perpendicular.y * halfWidth },
+          { x: point.x - perpendicular.x * halfWidth, y: point.y - perpendicular.y * halfWidth }];
+      }).flat();
+    }
+    if (support.type === 'FrustumSupport' && Number.isFinite(support.near) && Number.isFinite(support.far) && support.far > support.near) {
+      return Array.from({ length: rings }, (_, index) => {
+        const fraction = index / (rings - 1);
+        const distance = support.near + (support.far - support.near) * fraction;
+        const width = support.nearWidth + (support.farWidth - support.nearWidth) * fraction;
+        const point = { x: start.x + direction.x * distance, y: start.y + direction.y * distance };
+        return [point,
+          { x: point.x + perpendicular.x * width / 2, y: point.y + perpendicular.y * width / 2 },
+          { x: point.x - perpendicular.x * width / 2, y: point.y - perpendicular.y * width / 2 }];
+      }).flat();
+    }
+  }
+  if (support?.type === 'VolumeSupport' && center && Number.isFinite(support.radiusX) && Number.isFinite(support.radiusY)) {
+    return Array.from({ length: 9 }, (_, index) => {
+      if (index === 0) return center;
+      const angle = (index - 1) * Math.PI / 4;
+      return { x: center.x + support.radiusX * Math.cos(angle), y: center.y + support.radiusY * Math.sin(angle) };
+    });
+  }
+  return [anchor];
 }
 
 function drawSupportGeometry(valid, transform) {
@@ -809,7 +855,7 @@ function drawSupportGeometry(valid, transform) {
     const source = sourceById(observation.sourceId);
     const support = observation.support || source?.support;
     if (!support || support.type === 'PointSupport' || support.type === 'UnknownSupport') return;
-    const center = support.center || support.position || observation.position || source?.position;
+    const center = support.center || support.position || support.origin || observation.position || source?.position;
     const color = colorFor(observation.channel);
     context.strokeStyle = hexToRgba(color, .58);
     context.beginPath();
@@ -820,6 +866,41 @@ function drawSupportGeometry(valid, transform) {
     } else if (support.type === 'PathSupport' && Array.isArray(support.points) && support.points.length > 1) {
       context.moveTo(transform.x(support.points[0].x), transform.y(support.points[0].y));
       support.points.slice(1).forEach((point) => context.lineTo(transform.x(point.x), transform.y(point.y)));
+    } else if (support.type === 'RaySupport' && center && Number.isFinite(support.length) && Number.isFinite(support.direction?.x) && Number.isFinite(support.direction?.y)) {
+      const magnitude = Math.hypot(support.direction.x, support.direction.y);
+      if (magnitude === 0) return;
+      context.moveTo(transform.x(center.x), transform.y(center.y));
+      context.lineTo(transform.x(center.x + support.direction.x / magnitude * support.length), transform.y(center.y + support.direction.y / magnitude * support.length));
+    } else if (support.type === 'ConeSupport' && center && Number.isFinite(support.length) && Number.isFinite(support.angleRad) && Number.isFinite(support.direction?.x) && Number.isFinite(support.direction?.y)) {
+      const magnitude = Math.hypot(support.direction.x, support.direction.y);
+      if (magnitude === 0) return;
+      const direction = { x: support.direction.x / magnitude, y: support.direction.y / magnitude };
+      const perpendicular = { x: -direction.y, y: direction.x };
+      const halfWidth = support.length * Math.tan(support.angleRad);
+      const far = { x: center.x + direction.x * support.length, y: center.y + direction.y * support.length };
+      context.moveTo(transform.x(center.x), transform.y(center.y));
+      context.lineTo(transform.x(far.x + perpendicular.x * halfWidth), transform.y(far.y + perpendicular.y * halfWidth));
+      context.moveTo(transform.x(center.x), transform.y(center.y));
+      context.lineTo(transform.x(far.x - perpendicular.x * halfWidth), transform.y(far.y - perpendicular.y * halfWidth));
+    } else if (support.type === 'FrustumSupport' && center && Number.isFinite(support.near) && Number.isFinite(support.far) &&
+      Number.isFinite(support.nearWidth) && Number.isFinite(support.farWidth) && Number.isFinite(support.direction?.x) && Number.isFinite(support.direction?.y)) {
+      const magnitude = Math.hypot(support.direction.x, support.direction.y);
+      if (magnitude === 0) return;
+      const direction = { x: support.direction.x / magnitude, y: support.direction.y / magnitude };
+      const perpendicular = { x: -direction.y, y: direction.x };
+      const near = { x: center.x + direction.x * support.near, y: center.y + direction.y * support.near };
+      const far = { x: center.x + direction.x * support.far, y: center.y + direction.y * support.far };
+      const points = [
+        { x: near.x + perpendicular.x * support.nearWidth / 2, y: near.y + perpendicular.y * support.nearWidth / 2 },
+        { x: far.x + perpendicular.x * support.farWidth / 2, y: far.y + perpendicular.y * support.farWidth / 2 },
+        { x: far.x - perpendicular.x * support.farWidth / 2, y: far.y - perpendicular.y * support.farWidth / 2 },
+        { x: near.x - perpendicular.x * support.nearWidth / 2, y: near.y - perpendicular.y * support.nearWidth / 2 }
+      ];
+      context.moveTo(transform.x(points[0].x), transform.y(points[0].y));
+      points.slice(1).forEach((point) => context.lineTo(transform.x(point.x), transform.y(point.y)));
+      context.closePath();
+    } else if (support.type === 'VolumeSupport' && center && Number.isFinite(support.radiusX) && Number.isFinite(support.radiusY)) {
+      context.ellipse(transform.x(center.x), transform.y(center.y), support.radiusX * transform.sx, support.radiusY * transform.sy, 0, 0, Math.PI * 2);
     } else {
       return;
     }

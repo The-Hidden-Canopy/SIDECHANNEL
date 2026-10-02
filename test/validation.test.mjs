@@ -143,6 +143,39 @@ test('validation rejects unbounded region and path geometry', () => {
   assert.ok(path.reasons.some((reason) => reason.id === 'support.path.points'));
 });
 
+test('validation admits bounded directional and volumetric supports', () => {
+  const supports = [
+    { type: 'RaySupport', origin: { x: 1, y: 2 }, direction: { x: 1, y: 0 }, length: 4 },
+    { type: 'ConeSupport', origin: { x: 1, y: 2 }, direction: { x: 1, y: 0 }, length: 4, angleRad: .4 },
+    { type: 'FrustumSupport', origin: { x: 1, y: 2 }, direction: { x: 1, y: 0 }, near: 1, far: 4, nearWidth: .5, farWidth: 2 },
+    { type: 'VolumeSupport', center: { x: 1, y: 2 }, radiusX: 1, radiusY: 2, radiusZ: 3 },
+    { type: 'UnknownSupport' }
+  ];
+  for (const [index, support] of supports.entries()) {
+    const result = validateObservation({
+      schemaVersion: '0.1', id: 'obs_geometry_' + index, sourceId: 'sensor_1', channel: 'heat',
+      timestampMs: 1000, value: 22, unit: 'C', status: 'measured', support
+    }, { sources, now: 1000 });
+    assert.equal(result.ok, true, support.type);
+  }
+});
+
+test('validation rejects malformed directional and volumetric supports', () => {
+  const invalid = [
+    { type: 'RaySupport', origin: { x: 1, y: 2 }, direction: { x: 0, y: 0 }, length: 4 },
+    { type: 'ConeSupport', origin: { x: 1, y: 2 }, direction: { x: 1, y: 0 }, length: 4, angleRad: Math.PI },
+    { type: 'FrustumSupport', origin: { x: 1, y: 2 }, direction: { x: 1, y: 0 }, near: 4, far: 1, nearWidth: 1, farWidth: 1 },
+    { type: 'VolumeSupport', center: { x: 1, y: 2 }, radiusX: 0, radiusY: 0, radiusZ: 0 }
+  ];
+  for (const [index, support] of invalid.entries()) {
+    const result = validateObservation({
+      schemaVersion: '0.1', id: 'obs_bad_geometry_' + index, sourceId: 'sensor_1', channel: 'heat',
+      timestampMs: 1000, value: 22, unit: 'C', status: 'measured', support
+    }, { sources, now: 1000 });
+    assert.equal(result.ok, false, support.type);
+  }
+});
+
 test('rejects malformed, unknown, and out-of-range observations', () => {
   const result = validateObservation({
     schemaVersion: '0.1',

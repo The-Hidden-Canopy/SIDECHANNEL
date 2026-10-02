@@ -81,7 +81,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Geometry-aware support evaluation',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'Region, path, and ellipse supports are validated and sampled with bounded geometry metadata instead of being reduced to point precision.'
+    note: 'Region, path, ellipse, ray, cone, frustum, and volume supports are validated and sampled with bounded geometry metadata; unknown support remains non-spatial instead of being reduced to point precision.'
   },
   {
     id: 'evidence-inspector-lineage',
