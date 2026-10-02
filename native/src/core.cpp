@@ -161,7 +161,7 @@ const char* unit_for(const char* channel) {
 
 std::string observation_json(const Observation& observation) {
   std::ostringstream output;
-  output << std::fixed << std::setprecision(4);
+  output << std::setprecision(15);
   output << "{\"schema\":\"sidechannel.observation/2\",\"id\":";
   write_json_string(output, observation.id);
   output << ",\"sourceId\":";
@@ -291,7 +291,9 @@ std::string SessionArchive::to_json() const {
   }
   output << "],\"events\":[],\"createdAtMs\":0,\"privacy\":{\"classes\":[\"local_numeric\"],"
     << "\"rawAudioIncluded\":false,\"networkPayloadsIncluded\":false,\"persistentDeviceIdsIncluded\":false}}";
-  return output.str();
+  const std::string package_without_digest = output.str();
+  return package_without_digest.substr(0, package_without_digest.size() - 1) +
+    ",\"packageDigest\":\"" + sha256(package_without_digest) + "\"}";
 }
 
 const char* to_string(EvidenceState state) noexcept {

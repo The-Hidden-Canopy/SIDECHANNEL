@@ -43,6 +43,7 @@ int main() {
   const auto package = archive.to_json();
   assert(package.find("\"format\":\"sidechannel-session\"") != std::string::npos);
   assert(package.find("\"snapshotDigest\":\"") != std::string::npos);
+  assert(package.find("\"packageDigest\":\"") != std::string::npos);
   assert(package.find("\"sequence\":1") != std::string::npos);
   return 0;
 }
