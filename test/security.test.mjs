@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from '../src/security.mjs';
+import { createRateLimiter, hasValidLaunchToken, isAllowedLoopbackHost, isAllowedOrigin } from '../src/security.mjs';
 
 test('local security accepts only configured loopback hosts and origins', () => {
   assert.equal(isAllowedLoopbackHost('127.0.0.1:4173', 4173), true);
@@ -20,4 +20,11 @@ test('rate limiter bounds a connection window and resets by clock', () => {
   assert.equal(limiter.allow(), false);
   now = 2000;
   assert.equal(limiter.allow(), true);
+});
+
+test('launch token accepts only the current process token', () => {
+  assert.equal(hasValidLaunchToken('token-1', 'token-1'), true);
+  assert.equal(hasValidLaunchToken('token-2', 'token-1'), false);
+  assert.equal(hasValidLaunchToken(undefined, 'token-1'), false);
+  assert.equal(hasValidLaunchToken('token-1', ''), false);
 });

@@ -19,6 +19,10 @@ export function isAllowedOrigin(origin, port) {
   }
 }
 
+export function hasValidLaunchToken(provided, expected) {
+  return typeof expected === 'string' && expected.length > 0 && provided === expected;
+}
+
 export function createRateLimiter({ limit = 1000, windowMs = 1000, clock = () => Date.now() } = {}) {
   let windowStart = clock();
   let count = 0;

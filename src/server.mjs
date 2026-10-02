@@ -15,7 +15,7 @@ import { createProviderManifest, validateProviderManifest } from './admission/ma
 import { CalibrationRegistry } from './calibration/registry.mjs';
 import { TransformGraph } from './spatial/transform-graph.mjs';
 import { verifySessionPackage } from './session-verifier.mjs';
-import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from './security.mjs';
+import { createRateLimiter, hasValidLaunchToken, isAllowedLoopbackHost, isAllowedOrigin } from './security.mjs';
 import { AdapterSupervisor } from './adapters/supervisor.mjs';
 import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
 import { createReplayReceipt } from './verification/receipt.mjs';
@@ -27,6 +27,7 @@ const publicDir = join(root, 'public');
 const dataFile = join(root, 'data', 'sidechannel.sqlite');
 const legacyDataFile = join(root, 'data', 'sidechannel.json');
 const port = Number(process.env.PORT || 4173);
+const launchToken = randomUUID();
 const store = new SqliteStore(dataFile, { legacyJsonPath: legacyDataFile });
 const defaultScene = createDefaultScene();
 
@@ -85,7 +86,8 @@ function snapshot() {
     server: {
       nowMs: Date.now(),
       loopbackOnly: true,
-      simulator: true
+      simulator: true,
+      launchToken
     }
   };
 }
@@ -255,7 +257,8 @@ async function handleApi(request, response, pathname) {
       service: 'sidechannel',
       loopbackOnly: true,
       simulator: true,
-      nowMs: Date.now()
+      nowMs: Date.now(),
+      launchToken
     });
   }
   if (request.method === 'GET' && pathname === '/api/capabilities') {
@@ -592,6 +595,10 @@ const server = createServer(async (request, response) => {
       return sendJson(response, 403, { error: 'invalid local Origin header' });
     }
     const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+    if (pathname.startsWith('/api/') && ['POST', 'PATCH', 'DELETE'].includes(request.method) &&
+        !hasValidLaunchToken(request.headers['x-sidechannel-launch-token'], launchToken)) {
+      return sendJson(response, 403, { error: 'missing or invalid local launch token' });
+    }
     if (pathname.startsWith('/api/')) {
       const handled = await handleApi(request, response, pathname);
       if (handled !== false) return;
@@ -603,12 +610,17 @@ const server = createServer(async (request, response) => {
 });
 
 server.on('upgrade', (request, socket) => {
-  const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+  const parsedUrl = new URL(request.url, 'http://127.0.0.1');
+  const pathname = parsedUrl.pathname;
   if (!isAllowedLoopbackHost(request.headers.host, port) || !isAllowedOrigin(request.headers.origin, port)) {
     socket.destroy();
     return;
   }
   if (pathname !== '/ws/live' && pathname !== '/ws/ingest') {
+    socket.destroy();
+    return;
+  }
+  if (pathname === '/ws/ingest' && !hasValidLaunchToken(parsedUrl.searchParams.get('token'), launchToken)) {
     socket.destroy();
     return;
   }

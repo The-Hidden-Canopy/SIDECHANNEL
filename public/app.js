@@ -40,6 +40,8 @@ const state = {
   visible: Object.fromEntries(DISPLAY_LAYERS.map((item) => [item[0], true]))
 };
 
+let launchToken = null;
+
 const canvas = document.getElementById('sceneCanvas');
 const context = canvas.getContext('2d');
 const layerPanel = document.getElementById('layerPanel');
@@ -47,7 +49,11 @@ const sourceList = document.getElementById('sourceList');
 const canvasEmpty = document.getElementById('canvasEmpty');
 
 function api(path, options) {
-  return fetch(path, options).then(async (response) => {
+  const request = { ...(options || {}) };
+  const method = String(request.method || 'GET').toUpperCase();
+  request.headers = { ...(request.headers || {}) };
+  if (method !== 'GET' && launchToken) request.headers['x-sidechannel-launch-token'] = launchToken;
+  return fetch(path, request).then(async (response) => {
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error || 'Request failed');
     return payload;
@@ -86,6 +92,7 @@ function hydrate(payload) {
   state.recording = payload.recording;
   state.sessions = payload.sessions || [];
   state.capabilities = payload.capabilities || state.capabilities;
+  launchToken = payload.server?.launchToken || launchToken;
   render();
 }
 
