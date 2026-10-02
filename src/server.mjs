@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { applyFreshness, validateObservation } from './validation.mjs';
 import { createDefaultScene, createSimulator } from './simulator.mjs';
 import { SqliteStore } from './sqlite-store.mjs';
-import { consumeTextFrames, encodeTextFrame } from './websocket.mjs';
+import { consumeTextFrames, encodeCloseFrame, encodeControlFrame, encodeTextFrame } from './websocket.mjs';
 import { listAdapters } from './adapters/registry.mjs';
 import { createEventDetector } from './events.mjs';
 import { createIngressSequencer } from './admission/sequencer.mjs';
@@ -809,6 +809,21 @@ async function serveStatic(request, response, pathname) {
   }
 }
 
+function handleWebSocketControls(socket, parsed) {
+  for (const frame of parsed.controlFrames || []) {
+    socket.write(encodeControlFrame(frame.opcode, frame.payload));
+  }
+  if (parsed.closeRequested) {
+    socket.end();
+    return true;
+  }
+  if (parsed.protocolError) {
+    socket.end(encodeCloseFrame(1002, parsed.protocolError));
+    return true;
+  }
+  return false;
+}
+
 const server = createServer(async (request, response) => {
   try {
     if (!isAllowedLoopbackHost(request.headers.host, port)) {
@@ -885,10 +900,7 @@ server.on('upgrade', (request, socket) => {
       }
       const parsed = consumeTextFrames(incoming);
       incoming = parsed.remainder;
-      if (parsed.protocolError) {
-        socket.destroy();
-        return;
-      }
+      if (handleWebSocketControls(socket, parsed)) return;
       parsed.messages.forEach((message) => {
         if (message === JSON.stringify({ type: 'ping' })) return;
         try {
@@ -919,6 +931,18 @@ server.on('upgrade', (request, socket) => {
   }
   clients.add(socket);
   socket.write(encodeTextFrame({ type: 'snapshot', state: snapshot() }));
+  let incoming = Buffer.alloc(0);
+  socket.on('data', (chunk) => {
+    incoming = Buffer.concat([incoming, chunk]);
+    if (incoming.length > MAX_WEBSOCKET_BUFFER_BYTES) {
+      socket.end(encodeCloseFrame(1009, 'frame buffer exceeds maximum size'));
+      return;
+    }
+    const parsed = consumeTextFrames(incoming);
+    incoming = parsed.remainder;
+    if (handleWebSocketControls(socket, parsed)) return;
+    if (parsed.messages.length > 0) socket.end(encodeCloseFrame(1003, 'live channel is server-push only'));
+  });
   socket.on('close', () => clients.delete(socket));
   socket.on('error', () => clients.delete(socket));
 });

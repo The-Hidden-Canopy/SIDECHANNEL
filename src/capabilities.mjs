@@ -49,6 +49,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Revoking an active subprocess permission cancels its run, records the reason, and leaves the provider disabled.'
   },
   {
+    id: 'bounded-websocket-controls',
+    label: 'Bounded WebSocket controls',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Loopback WebSockets answer bounded ping frames with pong, acknowledge close handshakes, and emit protocol-error closes for invalid control frames.'
+  },
+  {
     id: 'calibration-transform-binding',
     label: 'Calibration transform binding',
     status: 'implemented',
