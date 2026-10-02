@@ -60,6 +60,8 @@ Permission revocation is an active boundary: `POST /api/adapter-runtime/:provide
 
 While a session is recording, calibration publication/invalidation, transform publication, provider start/stop, and permission grant/revocation are appended as hash-chained runtime events. A live API mutation without an active recording session changes current state only; it is not retroactively inserted into a historical session.
 
+Pose history is bounded and explicit. `POST /api/poses` records a `sidechannel.pose/1` sample for a registered source; an observation from a `pose_required` source without a direct position resolves to the nearest sample within `poseMaxAgeMs`, records `poseRef`, `poseFrameId`, and `poseDistanceMs`, and adds a provenance edge. Missing or stale pose resolution rejects the observation instead of inventing a position. This is software spatial resolution, not hardware localization accuracy.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

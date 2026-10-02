@@ -22,6 +22,7 @@ import { createReplayReceipt } from './verification/receipt.mjs';
 import { runBurstBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
 import { capabilitySnapshot } from './capabilities.mjs';
 import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/source-profile.mjs';
+import { PoseHistory } from './spatial/pose-history.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -47,6 +48,7 @@ const clients = new Set();
 const eventDetector = createEventDetector();
 const calibrationRegistry = new CalibrationRegistry();
 const transformGraph = new TransformGraph();
+const poseHistory = new PoseHistory();
 const adapterSupervisor = new AdapterSupervisor();
 const ingestClients = new Set();
 const MAX_LIVE_CLIENTS = 32;
@@ -81,6 +83,7 @@ function snapshot() {
     diagnostics: diagnostics.slice(-40),
     calibrations: calibrationRegistry.list(),
     transforms: transformGraph.snapshot(),
+    poses: poseHistory.snapshot(),
     adapterRuntime: adapterSupervisor.list(),
     ingress: ingressSequencer.receipt(),
     capabilities: capabilitySnapshot(),
@@ -175,7 +178,36 @@ function recordAdapterFailure(providerId, reason) {
 }
 
 async function processObservation(raw) {
-  const result = validateObservation(raw, { sources: sourceMap() });
+  const sources = sourceMap();
+  const source = sources.get(raw?.sourceId);
+  let admissionRaw = raw;
+  if (raw?.position === undefined && typeof raw?.sourceId === 'string' && Number.isFinite(raw?.timestampMs)) {
+    const pose = poseHistory.resolve(raw.sourceId, raw.timestampMs, {
+      maxAgeMs: source?.poseMaxAgeMs ?? 2000,
+      frameId: source?.poseFrameId || null
+    });
+    if (pose.ok) {
+      admissionRaw = {
+        ...raw,
+        position: { ...pose.sample.position },
+        poseRef: pose.sample.sampleId,
+        poseFrameId: pose.sample.frameId,
+        poseDistanceMs: pose.distanceMs,
+        provenance: [
+          ...(Array.isArray(raw.provenance) ? raw.provenance : []),
+          { parentId: pose.sample.sampleId, relation: 'transformed_by' }
+        ]
+      };
+    } else if (source?.spatialPolicy === 'pose_required' || raw?.poseRequired === true) {
+      return recordDiagnostic({
+        type: 'observation.rejected',
+        id: raw?.id || 'unknown',
+        reasons: [pose.reason],
+        receivedAtMs: Date.now()
+      });
+    }
+  }
+  const result = validateObservation(admissionRaw, { sources });
   if (!result.ok) {
     return recordDiagnostic({
       type: 'observation.rejected',
@@ -186,7 +218,6 @@ async function processObservation(raw) {
   }
 
   if (typeof raw?.calibrationRef === 'string') {
-    const source = sourceMap().get(result.observation.sourceId);
     const compatibility = calibrationRegistry.assess(raw.calibrationRef, {
       providerDigest: result.observation.provider.digest,
       sourceProfileDigest: source ? computeSourceProfileDigest(source) : null,
@@ -214,7 +245,6 @@ async function processObservation(raw) {
 
   admittedIds.add(result.observation.id);
   if (admittedIds.size > 4096) admittedIds.delete(admittedIds.values().next().value);
-  const source = sourceMap().get(result.observation.sourceId);
   const observation = {
     ...result.observation,
     ...(source ? { sourceProfileDigest: computeSourceProfileDigest(source) } : {}),
@@ -224,7 +254,7 @@ async function processObservation(raw) {
   latest.set(observation.sourceId + ':' + observation.channel, observation);
   if (recordingSessionId) await store.appendObservation(recordingSessionId, observation);
   broadcast({ type: 'observation.accepted', observation });
-  const event = eventDetector.observe(observation, sourceMap().get(observation.sourceId));
+  const event = eventDetector.observe(observation, sources.get(observation.sourceId));
   if (event) {
     recentEvents.push(event);
     if (recordingSessionId) await store.appendEvent(recordingSessionId, event);
@@ -439,6 +469,25 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/transforms') {
     return sendJson(response, 200, transformGraph.snapshot());
   }
+  if (request.method === 'GET' && pathname === '/api/poses') {
+    return sendJson(response, 200, poseHistory.snapshot());
+  }
+  if (request.method === 'POST' && pathname === '/api/poses') {
+    const body = await bodyJson(request);
+    const sources = sourceMap();
+    if (sources.size > 0 && !sources.has(body.sourceId)) {
+      return sendJson(response, 422, { error: 'pose sourceId is not registered' });
+    }
+    const result = poseHistory.add(body);
+    if (!result.ok) return sendJson(response, 422, result);
+    appendRuntimeEvent('PoseSampleRecorded', {
+      sampleId: result.sample.sampleId,
+      sourceId: result.sample.sourceId,
+      timestampMs: result.sample.timestampMs,
+      frameId: result.sample.frameId
+    }, result.sample.timestampMs);
+    return sendJson(response, 201, result.sample);
+  }
   if (request.method === 'POST' && pathname === '/api/transforms') {
     const body = await bodyJson(request);
     try {
@@ -519,6 +568,9 @@ async function handleApi(request, response, pathname) {
         capabilities: body.capabilities || [],
         freshnessWindowMs: body.freshnessWindowMs || 2000,
         privacyMode: body.privacyMode || 'local_numeric',
+        spatialPolicy: body.spatialPolicy || 'scene_position',
+        ...(Number.isFinite(body.poseMaxAgeMs) ? { poseMaxAgeMs: body.poseMaxAgeMs } : {}),
+        ...(typeof body.poseFrameId === 'string' ? { poseFrameId: body.poseFrameId } : {}),
         connected: false,
         position: body.position || { x: scene.width / 2, y: scene.height / 2, uncertaintyRadius: 0.5 },
         calibrationState: body.calibrationState || 'uncalibrated',

@@ -63,6 +63,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Recorded sessions retain hash-chained calibration, transform, provider, and permission mutation events.'
   },
   {
+    id: 'bounded-pose-history',
+    label: 'Bounded pose history',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Pose-required observations resolve to a nearest bounded sample and retain pose provenance; stale resolution fails closed.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

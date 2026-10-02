@@ -162,6 +162,9 @@ export function validateObservation(raw, options = {}) {
       ...(typeof raw.sourceProfileDigest === 'string' ? { sourceProfileDigest: raw.sourceProfileDigest } : {}),
       ...(typeof raw.sourceProfileRevision === 'string' ? { sourceProfileRevision: raw.sourceProfileRevision } : {}),
       ...(Number.isInteger(raw.transformRevision) ? { transformRevision: raw.transformRevision } : {}),
+      ...(typeof raw.poseRef === 'string' ? { poseRef: raw.poseRef } : {}),
+      ...(typeof raw.poseFrameId === 'string' ? { poseFrameId: raw.poseFrameId } : {}),
+      ...(finite(raw.poseDistanceMs) ? { poseDistanceMs: raw.poseDistanceMs } : {}),
       ...(isPlainObject(raw.metadata) ? { metadata: { ...raw.metadata } } : {})
     }
   };
