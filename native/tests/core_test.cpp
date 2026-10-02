@@ -1,4 +1,5 @@
 #include "sidechannel/core.hpp"
+#include "sidechannel/sqlite_store.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -198,5 +199,52 @@ int main() {
   sidechannel::NativeSessionStore value_tampered(journal_path, "session_native_test");
   assert(!value_tampered.open());
   std::filesystem::remove(journal_path, cleanup_error);
+
+  const auto sqlite_path = std::filesystem::temp_directory_path() / "sidechannel-native-sqlite-test.db";
+  std::filesystem::remove(sqlite_path, cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-wal", cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-shm", cleanup_error);
+  {
+    sidechannel::NativeSqliteSessionStore store(sqlite_path, "session_native_sqlite_test");
+    assert(store.open());
+    assert(store.state() == "recording");
+    assert(store.record_event("ProviderRegistered", 100,
+      "{\"providerId\":\"fixture-provider\"}"));
+    assert(store.append(first_tick[0]));
+    assert(!store.append(first_tick[0]));
+    assert(store.observations().size() == 1);
+    assert(store.verify().ok);
+    assert(store.close(1250));
+    assert(store.state() == "completed");
+    assert(store.verify().ok);
+    assert(store.export_json().find("\"type\":\"ProviderRegistered\"") != std::string::npos);
+  }
+  {
+    sidechannel::NativeSqliteSessionStore reopened(sqlite_path, "session_native_sqlite_test");
+    assert(reopened.open());
+    assert(reopened.state() == "completed");
+    assert(reopened.observations().size() == 1);
+    assert(reopened.journal().size() == 4);
+    assert(reopened.verify().ok);
+  }
+  std::filesystem::remove(sqlite_path, cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-wal", cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-shm", cleanup_error);
+  {
+    sidechannel::NativeSqliteSessionStore interrupted(sqlite_path, "session_native_sqlite_test");
+    assert(interrupted.open());
+    assert(interrupted.append(first_tick[1]));
+  }
+  {
+    sidechannel::NativeSqliteSessionStore recovered(sqlite_path, "session_native_sqlite_test");
+    assert(recovered.open());
+    assert(recovered.state() == "interrupted");
+    assert(recovered.observations().size() == 1);
+    assert(recovered.verify().ok);
+    assert(!recovered.append(first_tick[2]));
+  }
+  std::filesystem::remove(sqlite_path, cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-wal", cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-shm", cleanup_error);
   return 0;
 }

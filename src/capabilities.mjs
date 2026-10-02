@@ -105,6 +105,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A completed native file-backed session can be materialized as a sidechannel-session/0.2 package and independently verified by the Node session verifier; interrupted sessions are refused and native SQLite authority remains separate.'
   },
   {
+    id: 'native-sqlite-session-authority',
+    label: 'Native SQLite session authority',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A vendored SQLite WAL backend transactionally stores native observations and journal events, recovers open sessions as interrupted, reopens completed sessions, and exports Node-verifiable packages; native desktop, deployment, and hardware claims remain separate.'
+  },
+  {
     id: 'native-adapter-supervisor',
     label: 'Native adapter lifecycle supervisor',
     status: 'implemented',
@@ -361,7 +368,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Native reference parity',
     status: 'reference-only',
     evidenceLevel: 'E2',
-    note: 'C++23 simulator and dependency-free session package fixtures are checked against Node contracts, including canonical observation-row semantic parity; native SQLite authority is not claimed.'
+    note: 'C++23 simulator, file-backed session packages, and the vendored SQLite session path are checked against Node contracts, including canonical observation-row semantic parity; native desktop and hardware authority are not claimed.'
   },
   {
     id: 'physical-adapters',

@@ -324,6 +324,21 @@ std::string observation_json(const Observation& observation) {
 
 } // namespace
 
+std::string compute_journal_digest(
+  std::string_view session_id,
+  std::size_t sequence,
+  std::int64_t timestamp_ms,
+  std::string_view type,
+  std::string_view payload,
+  std::string_view previous_digest
+) {
+  return journal_digest(session_id, sequence, timestamp_ms, type, payload, previous_digest);
+}
+
+std::string observation_admission_payload(const Observation& observation) {
+  return observation_payload(observation);
+}
+
 AdmissionSequencer::AdmissionSequencer(std::size_t max_queue)
   : max_queue_(std::max<std::size_t>(1, max_queue)) {}
 

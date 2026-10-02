@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace sidechannel {
@@ -196,6 +197,17 @@ public:
   [[nodiscard]] static std::string encode(const IpcFrame& frame, const std::string& token);
   [[nodiscard]] static IpcDecodeReceipt decode(const std::string& wire, const std::string& token);
 };
+
+[[nodiscard]] std::string compute_journal_digest(
+  std::string_view session_id,
+  std::size_t sequence,
+  std::int64_t timestamp_ms,
+  std::string_view type,
+  std::string_view payload,
+  std::string_view previous_digest
+);
+
+[[nodiscard]] std::string observation_admission_payload(const Observation& observation);
 
 class SessionJournal {
 public:

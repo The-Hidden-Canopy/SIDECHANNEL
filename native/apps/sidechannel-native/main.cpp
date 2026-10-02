@@ -1,4 +1,5 @@
 #include "sidechannel/core.hpp"
+#include "sidechannel/sqlite_store.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -343,6 +344,69 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
   return 0;
 }
 
+int run_sqlite_session(const std::string& session_file, const std::string& export_file, std::size_t ticks) {
+  sidechannel::NativeSqliteSessionStore store(session_file, "session_native_sqlite");
+  if (!store.open()) {
+    std::cerr << "could not open native SQLite session: " << store.last_error() << '\n';
+    return 1;
+  }
+  sidechannel::DeterministicSimulator simulator;
+  sidechannel::AdmissionSequencer sequencer(512);
+  for (std::size_t tick = 0; tick < ticks; ++tick) {
+    for (auto& observation : simulator.tick(tick, static_cast<std::int64_t>(tick) * 250)) {
+      sequencer.enqueue(std::move(observation));
+    }
+  }
+  const auto observations = sequencer.drain();
+  bool persisted = false;
+  if (store.state() == "recording") {
+    for (const auto& observation : observations) {
+      if (!store.append(observation)) {
+        std::cerr << "could not append native SQLite observation: " << store.last_error() << '\n';
+        return 1;
+      }
+    }
+    const auto ended_at_ms = observations.empty() ? std::int64_t{0} : observations.back().timestamp_ms;
+    if (!store.close(ended_at_ms)) {
+      std::cerr << "could not close native SQLite session: " << store.last_error() << '\n';
+      return 1;
+    }
+    persisted = true;
+  }
+  const auto verification = store.verify();
+  if (!verification.ok) {
+    std::cerr << "native SQLite session verification failed: " << verification.error << '\n';
+    return 1;
+  }
+  bool exported = false;
+  if (!export_file.empty()) {
+    if (store.state() != "completed") {
+      std::cerr << "native SQLite session export requires a completed session\n";
+      return 1;
+    }
+    std::ofstream export_output(export_file, std::ios::binary | std::ios::trunc);
+    if (!export_output) {
+      std::cerr << "could not open native SQLite export path\n";
+      return 1;
+    }
+    export_output << store.export_json() << '\n';
+    export_output.flush();
+    if (!export_output) {
+      std::cerr << "could not write native SQLite export\n";
+      return 1;
+    }
+    exported = true;
+  }
+  std::cout << "{\"format\":\"sidechannel-native-sqlite-session-receipt/1\",\"backend\":\"sqlite-wal\",\"state\":";
+  write_json_string(store.state());
+  std::cout << ",\"persisted\":" << (persisted ? "true" : "false")
+    << ",\"observations\":" << store.observations().size()
+    << ",\"journalEvents\":" << store.journal().size()
+    << ",\"exported\":" << (exported ? "true" : "false")
+    << ",\"verified\":true}\n";
+  return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -351,6 +415,7 @@ int main(int argc, char** argv) {
   bool json = false;
   bool session_json = false;
   std::string session_file;
+  std::string sqlite_session_file;
   std::string export_file;
   std::string ipc_token;
   for (int index = 1; index < argc; ++index) {
@@ -364,27 +429,30 @@ int main(int argc, char** argv) {
       session_json = true;
     } else if (std::string(argv[index]) == "--session-file" && index + 1 < argc) {
       session_file = argv[++index];
+    } else if (std::string(argv[index]) == "--sqlite-session-file" && index + 1 < argc) {
+      sqlite_session_file = argv[++index];
     } else if (std::string(argv[index]) == "--export-json" && index + 1 < argc) {
       export_file = argv[++index];
     } else if (std::string(argv[index]) == "--ipc-stdio" && index + 1 < argc) {
       ipc_token = argv[++index];
     } else {
-      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH [--export-json PATH]|--ipc-stdio TOKEN [--session-file PATH]]\n";
+      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH [--export-json PATH]|--sqlite-session-file PATH [--export-json PATH]|--ipc-stdio TOKEN [--session-file PATH]]\n";
       return 2;
     }
   }
   if (!ipc_token.empty()) {
-    if (csv || json || session_json || !export_file.empty()) {
+    if (csv || json || session_json || !export_file.empty() || !sqlite_session_file.empty()) {
       std::cerr << "ipc mode cannot be combined with a fixture output format\n";
       return 2;
     }
   } else if (!export_file.empty()) {
-    if (session_file.empty() || csv || json || session_json) {
-      std::cerr << "--export-json requires --session-file and cannot be combined with another output format\n";
+    if ((session_file.empty() && sqlite_session_file.empty()) || (!session_file.empty() && !sqlite_session_file.empty()) ||
+        csv || json || session_json) {
+      std::cerr << "--export-json requires exactly one session-file backend and cannot be combined with another output format\n";
       return 2;
     }
   } else if (static_cast<int>(csv) + static_cast<int>(json) + static_cast<int>(session_json) +
-      static_cast<int>(!session_file.empty()) > 1) {
+      static_cast<int>(!session_file.empty()) + static_cast<int>(!sqlite_session_file.empty()) > 1) {
       std::cerr << "choose one output format\n";
       return 2;
   }
@@ -393,6 +461,7 @@ int main(int argc, char** argv) {
     return 2;
   }
   if (!ipc_token.empty()) return run_ipc_stdio(ipc_token, session_file);
+  if (!sqlite_session_file.empty()) return run_sqlite_session(sqlite_session_file, export_file, ticks);
 
   sidechannel::DeterministicSimulator simulator;
   sidechannel::AdmissionSequencer sequencer(512);
