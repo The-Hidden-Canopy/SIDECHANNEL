@@ -42,6 +42,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'When a source has a provider manifest, frame provider id and digest claims must match that registered manifest.'
   },
   {
+    id: 'privacy-admission-guards',
+    label: 'Fail-closed privacy admission guards',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Raw content and persistent device identity fields are rejected by default; explicit provider and privacy opt-in is required, and sensitive values are omitted from normalized metadata.'
+  },
+  {
     id: 'permission-revocation-cancellation',
     label: 'Permission revocation cancellation',
     status: 'implemented',

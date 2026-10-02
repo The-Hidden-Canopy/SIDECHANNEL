@@ -25,3 +25,15 @@ test('provider manifest admission rejects unsupported protocol and oversized fra
   assert.ok(result.reasons.some((reason) => reason.id === 'manifest.protocolVersion'));
   assert.ok(result.reasons.some((reason) => reason.id === 'manifest.maximumFrameBytes'));
 });
+
+test('provider manifest admission rejects unsupported identity policy', () => {
+  const result = validateProviderManifest({
+    protocolVersion: 'sidechannel.adapter/1',
+    providerId: 'bad.identity',
+    providerVersion: '1',
+    capabilities: ['temperature'],
+    sourceIdentityPolicy: 'unbounded'
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.reasons.some((reason) => reason.id === 'manifest.sourceIdentityPolicy'));
+});

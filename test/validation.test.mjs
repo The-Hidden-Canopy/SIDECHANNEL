@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createProviderManifest } from '../src/admission/manifest.mjs';
 import { applyFreshness, validateObservation } from '../src/validation.mjs';
 
 const sources = new Map([[
@@ -69,6 +70,66 @@ test('validation preserves explicit evidence, privacy, provider, and lineage met
   assert.equal(result.observation.calibrationRef, 'cal_1');
   assert.equal(result.observation.provenance[0].relation, 'derived_from');
   assert.equal(result.observation.support.type, 'RegionSupport');
+});
+
+test('privacy admission rejects raw content and persistent device identity by default', () => {
+  const result = validateObservation({
+    schemaVersion: '0.1',
+    id: 'obs_sensitive_default',
+    sourceId: 'sensor_1',
+    channel: 'heat',
+    timestampMs: 1000,
+    value: 22,
+    unit: 'C',
+    status: 'measured',
+    metadata: {
+      scenario: 'privacy-test',
+      rawAudio: 'opaque-audio-payload',
+      deviceId: 'persistent-device-id'
+    }
+  }, { sources, now: 1000 });
+  assert.equal(result.ok, false);
+  assert.ok(result.reasons.some((reason) => reason.id === 'privacy.raw_content'));
+  assert.ok(result.reasons.some((reason) => reason.id === 'privacy.persistent_identity'));
+});
+
+test('privacy admission accepts explicit provider opt-in but strips sensitive values from retained metadata', () => {
+  const manifestSources = new Map([[
+    'sensor_explicit',
+    {
+      id: 'sensor_explicit',
+      range: [0, 100],
+      freshnessWindowMs: 1000,
+      providerManifest: createProviderManifest({
+        providerId: 'fixture.explicit',
+        rawContentPolicy: 'explicit',
+        sourceIdentityPolicy: 'explicit'
+      })
+    }
+  ]]);
+  const result = validateObservation({
+    schemaVersion: '0.1',
+    id: 'obs_sensitive_explicit',
+    sourceId: 'sensor_explicit',
+    channel: 'heat',
+    timestampMs: 1000,
+    value: 22,
+    unit: 'C',
+    status: 'measured',
+    privacyClass: 'raw_retained_explicit',
+    metadata: {
+      scenario: 'privacy-test',
+      rawAudio: 'opaque-audio-payload',
+      deviceId: 'persistent-device-id'
+    }
+  }, { sources: manifestSources, now: 1000 });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.observation.metadata, {
+    scenario: 'privacy-test',
+    privacyOmittedFields: ['metadata.rawAudio', 'metadata.deviceId']
+  });
+  assert.equal(Object.hasOwn(result.observation, 'rawAudio'), false);
+  assert.equal(Object.hasOwn(result.observation, 'deviceId'), false);
 });
 
 test('provider manifest identity is authoritative for admitted observations', () => {

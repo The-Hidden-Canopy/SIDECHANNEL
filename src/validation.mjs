@@ -11,6 +11,7 @@ import {
 import { normalizeProvenance } from './provenance/graph.mjs';
 import { validateSpatialSupport } from './spatial/support.mjs';
 import { OBSERVATION_SCHEMA } from './schema.mjs';
+import { sanitizeObservationMetadata, validatePrivacyAdmission } from './privacy.mjs';
 
 function finite(value) {
   return typeof value === 'number' && Number.isFinite(value);
@@ -57,6 +58,8 @@ export function validateObservation(raw, options = {}) {
     reasons.push(reason('sourceId.unknown', 'sourceId is not registered'));
   }
   const providerManifest = source?.providerManifest;
+  const privacy = validatePrivacyAdmission(raw, source);
+  if (!privacy.ok) reasons.push(...privacy.reasons);
   if (providerManifest) {
     if (raw.providerId !== undefined && raw.providerId !== providerManifest.providerId) {
       reasons.push(reason('provider.id.mismatch', 'providerId does not match the registered provider manifest'));
@@ -165,7 +168,7 @@ export function validateObservation(raw, options = {}) {
       ...(typeof raw.poseRef === 'string' ? { poseRef: raw.poseRef } : {}),
       ...(typeof raw.poseFrameId === 'string' ? { poseFrameId: raw.poseFrameId } : {}),
       ...(finite(raw.poseDistanceMs) ? { poseDistanceMs: raw.poseDistanceMs } : {}),
-      ...(isPlainObject(raw.metadata) ? { metadata: { ...raw.metadata } } : {})
+      ...(isPlainObject(raw.metadata) ? { metadata: sanitizeObservationMetadata(raw.metadata, privacy.omittedFields) } : {})
     }
   };
 }

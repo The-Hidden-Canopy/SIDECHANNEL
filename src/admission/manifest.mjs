@@ -52,6 +52,10 @@ export function validateProviderManifest(raw) {
       !['none', 'summary_only', 'explicit'].includes(raw.rawContentPolicy)) {
     reasons.push(reason('manifest.rawContentPolicy', 'rawContentPolicy is unsupported'));
   }
+  if (raw.sourceIdentityPolicy !== undefined &&
+      !['scene_local', 'ephemeral', 'explicit'].includes(raw.sourceIdentityPolicy)) {
+    reasons.push(reason('manifest.sourceIdentityPolicy', 'sourceIdentityPolicy is unsupported'));
+  }
   if (reasons.length) return { ok: false, reasons };
 
   const manifest = {
@@ -79,7 +83,8 @@ export function createProviderManifest({
   capabilities = ['normalized_observation'],
   requiredPermissions = [],
   supportedUnits = [],
-  rawContentPolicy = 'none'
+  rawContentPolicy = 'none',
+  sourceIdentityPolicy = 'scene_local'
 } = {}) {
   const result = validateProviderManifest({
     protocolVersion: ADAPTER_PROTOCOL_VERSION,
@@ -88,7 +93,8 @@ export function createProviderManifest({
     capabilities,
     requiredPermissions,
     supportedUnits,
-    rawContentPolicy
+    rawContentPolicy,
+    sourceIdentityPolicy
   });
   if (!result.ok) throw new Error(result.reasons.map((item) => item.message).join('; '));
   return result.manifest;
