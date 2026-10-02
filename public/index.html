@@ -169,6 +169,14 @@
         <div id="timelineMarkerSummary" class="timeline-marker-summary muted">Replay markers appear when a recorded session is open.</div>
         <div id="sessionVerification" class="session-verification muted">Select a session to verify its evidence package.</div>
         <div id="comparisonResult" class="comparison-result muted">Choose two sessions to compare derived fields.</div>
+        <div class="temporal-compare">
+          <button id="pinATimeButton" class="button small ghost" type="button" disabled>Pin A</button>
+          <span id="pinATime" class="muted">A · not pinned</span>
+          <button id="pinBTimeButton" class="button small ghost" type="button" disabled>Pin B</button>
+          <span id="pinBTime" class="muted">B · not pinned</span>
+          <button id="compareTimeButton" class="button small ghost" type="button" disabled>Compare A/B</button>
+        </div>
+        <div id="temporalComparisonResult" class="comparison-result muted">Pin two replay times to compare within one session.</div>
       </div>
     </section>
 

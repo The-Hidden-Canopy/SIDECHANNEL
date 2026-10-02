@@ -23,6 +23,9 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /sessionVerification/);
   assert.match(appSource, /\/api\/sessions\/compare/);
   assert.match(appSource, /comparisonResult/);
+  assert.match(appSource, /compare-time/);
+  assert.match(appSource, /pinATimeButton/);
+  assert.match(appSource, /temporalComparisonResult/);
   assert.match(appSource, /timelineMarkers/);
   assert.match(appSource, /replay\.journal/);
   assert.match(appSource, /drawSupportGeometry/);

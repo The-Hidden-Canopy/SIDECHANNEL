@@ -148,6 +148,8 @@ canvas { width: 100%; height: 100%; display: block; }
 .comparison-result { margin-top: 8px; font-size: 10px; line-height: 1.4; }
 .comparison-result.ok { color: var(--blue); }
 .comparison-result.fail { color: var(--danger); }
+.temporal-compare { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin-top: 9px; font-size: 10px; }
+.temporal-compare .button { flex: 0 0 auto; }
 
 .inspector { min-height: 270px; padding: 16px; }
 .inspector h2 { margin-top: 8px; font-size: 17px; }

@@ -75,7 +75,7 @@ The live inspector is an evidence-explainability surface, not a decorative toolt
 
 The session toolbar exposes the same independent verifier used by import. Selecting a local session and choosing `Verify` reports package, snapshot, journal, source/calibration/provenance reference, pose, and observation checks in the UI; a green result is evidence of package integrity only, not hardware validation or production readiness.
 
-The workspace also exposes a two-session `Compare` action. It calls the bounded recompute comparison path and labels the result `DERIVED difference`, including changed-cell and maximum intensity/support deltas; comparison output retains both source session IDs and estimator provenance and is never presented as a new measurement.
+The workspace exposes two derived comparison paths. The two-session `Compare` action calls the bounded recompute comparison path and labels the result `DERIVED difference`, including changed-cell and maximum intensity/support deltas. During replay, `Pin A`, `Pin B`, and `Compare A/B` call `/api/sessions/compare-time` to compare two retained times from one session. Both artifacts retain source session IDs, estimator configuration, and temporal bounds; neither is presented as a new measurement.
 
 Replay also exposes bounded temporal evidence markers. Activity-change events use the activity marker style; retained runtime-journal mutations such as calibration, transform, provider, permission, rejection, and session-boundary entries use the journal marker style. Selecting a marker moves the replay cursor to that retained timestamp. This is historical navigation over the session package, not a new measurement or proof that a physical mutation occurred outside the recorded runtime.
 

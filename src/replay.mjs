@@ -27,11 +27,11 @@ function requireSelfContainedSession(session) {
   }
 }
 
-function inputDigest(session) {
+function inputDigest(session, observations = session.observations) {
   return digest({
     sessionId: session.id,
     snapshotDigest: session.snapshotDigest || null,
-    observations: session.observations.map((observation) => ({
+    observations: observations.map((observation) => ({
       id: observation.id,
       sequence: observation.sequence ?? null,
       timestampMs: observation.timestampMs ?? null
@@ -71,11 +71,15 @@ export function recomputeSession(session, {
   estimatorVersion = 'activity-field/1',
   gridSize = 28,
   power = 2,
-  weights = {}
+  weights = {},
+  atTimeMs = null
 } = {}) {
   requireSelfContainedSession(session);
   const scene = clone(session.sceneSnapshot);
   const sources = new Map(session.sourceRegistrySnapshot.map((source) => [source.id, source]));
+  const observations = Number.isFinite(atTimeMs)
+    ? session.observations.filter((observation) => observation.timestampMs <= atTimeMs)
+    : session.observations;
   const estimator = {
     id: 'activity-field',
     version: estimatorVersion,
@@ -85,7 +89,7 @@ export function recomputeSession(session, {
   };
   const field = interpolateActivityField({
     scene,
-    observations: session.observations,
+    observations,
     sources,
     weights,
     gridSize,
@@ -99,10 +103,14 @@ export function recomputeSession(session, {
     truthMode: 'derived',
     sourceSessionId: session.id,
     sourceSnapshotDigest: session.snapshotDigest || null,
-    inputDigest: inputDigest(session),
+    inputDigest: inputDigest(session, observations),
     estimator,
     scene,
     field,
+    temporal: {
+      atTimeMs: Number.isFinite(atTimeMs) ? atTimeMs : null,
+      observationCount: observations.length
+    },
     provenance: {
       relation: 'derived_from',
       sourceSessionId: session.id,
@@ -130,7 +138,7 @@ export function verifyDeterminism(session, options = {}) {
   return report;
 }
 
-export function compareRecomputedArtifacts(left, right) {
+export function compareRecomputedArtifacts(left, right, { comparisonKind = 'session' } = {}) {
   if (left?.mode !== REPLAY_MODES.RECOMPUTE || right?.mode !== REPLAY_MODES.RECOMPUTE) {
     throw new Error('comparison requires recomputed replay artifacts');
   }
@@ -159,7 +167,9 @@ export function compareRecomputedArtifacts(left, right) {
     formatVersion: '0.1',
     artifactState: 'derived',
     truthMode: 'difference',
+    comparisonKind,
     sourceSessionIds: [left.sourceSessionId, right.sourceSessionId],
+    sourceTimesMs: [left.temporal?.atTimeMs ?? null, right.temporal?.atTimeMs ?? null],
     estimators: [left.estimator, right.estimator],
     differenceEvidenceState: 'derived',
     metrics: {

@@ -63,6 +63,24 @@ test('comparison preserves source sessions and reports derived differences', () 
   assert.equal(typeof comparison.outputDigest, 'string');
 });
 
+test('temporal comparison keeps one session and explicit pinned times', () => {
+  const source = session('temporal');
+  source.observations.push({
+    ...source.observations[0],
+    id: 'observation_temporal_2',
+    sequence: 2,
+    timestampMs: 2000,
+    value: 90
+  });
+  const first = recomputeSession(source, { gridSize: 4, atTimeMs: 1000 });
+  const second = recomputeSession(source, { gridSize: 4, atTimeMs: 2000 });
+  const comparison = compareRecomputedArtifacts(first, second, { comparisonKind: 'within-session-temporal' });
+  assert.equal(comparison.comparisonKind, 'within-session-temporal');
+  assert.deepEqual(comparison.sourceSessionIds, ['sess_temporal', 'sess_temporal']);
+  assert.deepEqual(comparison.sourceTimesMs, [1000, 2000]);
+  assert.ok(comparison.metrics.changedCellCount > 0);
+});
+
 test('replay refuses a session without historical snapshots', () => {
   assert.throws(
     () => createHistoricalReplay({ id: 'sess_incomplete', observations: [], events: [] }),

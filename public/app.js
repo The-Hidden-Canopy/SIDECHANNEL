@@ -61,6 +61,9 @@ const state = {
   verificationBusy: false,
   comparison: null,
   comparisonBusy: false,
+  temporalPins: { a: null, b: null },
+  temporalComparison: null,
+  temporalComparisonBusy: false,
   replayMode: 'historical',
   capabilities: null,
   benchmarkReceipt: null,
@@ -989,6 +992,43 @@ function renderComparison() {
     ' · max support Δ ' + comparison.metrics.maxAbsoluteSupportDelta.toFixed(3);
 }
 
+function renderTemporalComparison() {
+  const pinA = document.getElementById('pinATimeButton');
+  const pinB = document.getElementById('pinBTimeButton');
+  const compare = document.getElementById('compareTimeButton');
+  const timeA = document.getElementById('pinATime');
+  const timeB = document.getElementById('pinBTime');
+  const result = document.getElementById('temporalComparisonResult');
+  if (!pinA || !pinB || !compare || !timeA || !timeB || !result) return;
+  const hasReplay = Boolean(state.replay);
+  pinA.disabled = !hasReplay;
+  pinB.disabled = !hasReplay;
+  compare.disabled = !hasReplay || !Number.isFinite(state.temporalPins.a) || !Number.isFinite(state.temporalPins.b) || state.temporalComparisonBusy;
+  compare.textContent = state.temporalComparisonBusy ? 'Comparing…' : 'Compare A/B';
+  timeA.textContent = Number.isFinite(state.temporalPins.a) ? 'A · ' + new Date(state.temporalPins.a).toLocaleTimeString() : 'A · not pinned';
+  timeB.textContent = Number.isFinite(state.temporalPins.b) ? 'B · ' + new Date(state.temporalPins.b).toLocaleTimeString() : 'B · not pinned';
+  result.className = 'comparison-result muted';
+  if (!hasReplay || !Number.isFinite(state.temporalPins.a) || !Number.isFinite(state.temporalPins.b)) {
+    result.textContent = 'Pin two replay times to compare within one session.';
+    return;
+  }
+  if (state.temporalComparison?.sessionId !== state.replay.id ||
+      state.temporalComparison.leftTimeMs !== state.temporalPins.a || state.temporalComparison.rightTimeMs !== state.temporalPins.b) {
+    result.textContent = 'Temporal comparison not run for these pins.';
+    return;
+  }
+  if (state.temporalComparison.error) {
+    result.className = 'comparison-result fail';
+    result.textContent = 'Temporal comparison failed · ' + state.temporalComparison.error;
+    return;
+  }
+  const metrics = state.temporalComparison.artifact.metrics;
+  result.className = 'comparison-result ok';
+  result.textContent = 'DERIVED temporal difference · ' + metrics.changedCellCount + ' changed of ' + metrics.cellCount +
+    ' cells · max intensity Δ ' + metrics.maxAbsoluteIntensityDelta.toFixed(3) +
+    ' · max support Δ ' + metrics.maxAbsoluteSupportDelta.toFixed(3);
+}
+
 function render() {
   if (!state.scene) return;
   document.getElementById('sceneName').textContent = state.scene.name;
@@ -1003,7 +1043,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderRegions(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); draw();
+  renderLayers(); renderSources(); renderRegions(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1018,7 +1058,8 @@ document.getElementById('recordButton').addEventListener('click', async () => {
 });
 
 document.getElementById('liveButton').addEventListener('click', () => {
-  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null; api('/api/state').then(hydrate);
+  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null;
+  state.temporalPins = { a: null, b: null }; state.temporalComparison = null; api('/api/state').then(hydrate);
 });
 
 document.getElementById('exportButton').addEventListener('click', () => {
@@ -1090,6 +1131,8 @@ document.getElementById('replayButton').addEventListener('click', async () => {
     state.replayArtifact = await api('/api/sessions/' + id + '/replay?mode=recompute').then((result) => result.replay);
   }
   state.replayMode = mode;
+  state.temporalPins = { a: null, b: null };
+  state.temporalComparison = null;
   state.scene = state.replay.sceneSnapshot || state.scene;
   state.replayTime = state.replay.observations[state.replay.observations.length - 1]?.timestampMs || Date.now();
   state.events = state.replay.events || [];
@@ -1097,7 +1140,11 @@ document.getElementById('replayButton').addEventListener('click', async () => {
   render();
 });
 
-document.getElementById('sessionSelect').addEventListener('change', () => render());
+document.getElementById('sessionSelect').addEventListener('change', () => {
+  state.temporalPins = { a: null, b: null };
+  state.temporalComparison = null;
+  render();
+});
 
 document.getElementById('verifyButton').addEventListener('click', async () => {
   const id = document.getElementById('sessionSelect').value;
@@ -1137,6 +1184,42 @@ document.getElementById('compareButton').addEventListener('click', async () => {
   } finally {
     state.comparisonBusy = false;
     renderComparison();
+  }
+});
+
+document.getElementById('pinATimeButton').addEventListener('click', () => {
+  if (!state.replay) return;
+  state.temporalPins.a = state.replayTime;
+  state.temporalComparison = null;
+  render();
+});
+
+document.getElementById('pinBTimeButton').addEventListener('click', () => {
+  if (!state.replay) return;
+  state.temporalPins.b = state.replayTime;
+  state.temporalComparison = null;
+  render();
+});
+
+document.getElementById('compareTimeButton').addEventListener('click', async () => {
+  if (!state.replay || !Number.isFinite(state.temporalPins.a) || !Number.isFinite(state.temporalPins.b)) return;
+  const sessionId = state.replay.id;
+  const leftTimeMs = state.temporalPins.a;
+  const rightTimeMs = state.temporalPins.b;
+  state.temporalComparisonBusy = true;
+  renderTemporalComparison();
+  try {
+    const payload = await api('/api/sessions/compare-time', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionId, leftTimeMs, rightTimeMs })
+    });
+    state.temporalComparison = { sessionId, leftTimeMs, rightTimeMs, artifact: payload.comparison };
+  } catch (error) {
+    state.temporalComparison = { sessionId, leftTimeMs, rightTimeMs, error: error.message };
+  } finally {
+    state.temporalComparisonBusy = false;
+    renderTemporalComparison();
   }
 });
 
@@ -1185,6 +1268,8 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
   state.replayReport = null;
   state.sessionVerification = null;
   state.comparison = null;
+  state.temporalPins = { a: null, b: null };
+  state.temporalComparison = null;
   state.selected = null;
   hydrate(await api('/api/state'));
 });

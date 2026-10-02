@@ -771,6 +771,32 @@ async function handleApi(request, response, pathname) {
       return sendJson(response, error.code === 'INCOMPLETE_SNAPSHOT' ? 409 : 422, { error: error.message });
     }
   }
+  if (request.method === 'POST' && pathname === '/api/sessions/compare-time') {
+    const body = await bodyJson(request);
+    const session = store.getSession(body.sessionId);
+    const leftTimeMs = Number(body.leftTimeMs);
+    const rightTimeMs = Number(body.rightTimeMs);
+    if (!session) return sendJson(response, 404, { error: 'temporal comparison session not found' });
+    if (!Number.isFinite(leftTimeMs) || !Number.isFinite(rightTimeMs)) {
+      return sendJson(response, 422, { error: 'temporal comparison requires two finite timestamps' });
+    }
+    try {
+      const options = {
+        estimatorVersion: body.estimatorVersion || 'activity-field/1',
+        gridSize: Number(body.gridSize || 28),
+        power: Number(body.power || 2),
+        weights: body.weights || {}
+      };
+      const comparison = compareRecomputedArtifacts(
+        recomputeSession(session, { ...options, atTimeMs: leftTimeMs }),
+        recomputeSession(session, { ...options, atTimeMs: rightTimeMs }),
+        { comparisonKind: 'within-session-temporal' }
+      );
+      return sendJson(response, 200, { comparison });
+    } catch (error) {
+      return sendJson(response, error.code === 'INCOMPLETE_SNAPSHOT' ? 409 : 422, { error: error.message });
+    }
+  }
   if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'sessions' && parts[3] === 'stop') {
     const session = await store.finishSession(parts[2]);
     if (recordingSessionId === parts[2]) recordingSessionId = null;

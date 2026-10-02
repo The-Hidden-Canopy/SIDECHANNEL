@@ -105,6 +105,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace can compare two self-contained sessions and labels cell differences as derived evidence with source-session provenance.'
   },
   {
+    id: 'temporal-comparison-surface',
+    label: 'Within-session temporal comparison',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Replay can pin two retained times and compare bounded recomputations from the same session, preserving both timestamps as derived provenance.'
+  },
+  {
     id: 'temporal-evidence-navigation',
     label: 'Temporal evidence navigation',
     status: 'implemented',
