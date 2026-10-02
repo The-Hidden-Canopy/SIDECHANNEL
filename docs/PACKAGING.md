@@ -39,6 +39,7 @@ The server creates `data/sidechannel.sqlite` plus SQLite WAL files. `data/` is i
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:
 
 - keep the HTTP server loopback-only unless a deliberate security review changes the contract;
+- keep Host/Origin validation, WebSocket client limits, frame-size limits, and per-connection rate limits enabled;
 - keep raw audio, network payloads, and persistent device identities disabled by default;
 - keep physical sensor adapters outside the simulator acceptance path;
 - run `npm run verify` before shipping a bundle;

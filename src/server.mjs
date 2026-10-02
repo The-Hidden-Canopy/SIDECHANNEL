@@ -15,6 +15,7 @@ import { createProviderManifest, validateProviderManifest } from './admission/ma
 import { CalibrationRegistry } from './calibration/registry.mjs';
 import { TransformGraph } from './spatial/transform-graph.mjs';
 import { verifySessionPackage } from './session-verifier.mjs';
+import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from './security.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -35,6 +36,10 @@ const clients = new Set();
 const eventDetector = createEventDetector();
 const calibrationRegistry = new CalibrationRegistry();
 const transformGraph = new TransformGraph();
+const ingestClients = new Set();
+const MAX_LIVE_CLIENTS = 32;
+const MAX_INGEST_CLIENTS = 16;
+const MAX_WEBSOCKET_BUFFER_BYTES = 2_000_000;
 let admissionSequence = 0;
 const admittedIds = new Set();
 
@@ -420,6 +425,12 @@ async function serveStatic(request, response, pathname) {
 
 const server = createServer(async (request, response) => {
   try {
+    if (!isAllowedLoopbackHost(request.headers.host, port)) {
+      return sendJson(response, 400, { error: 'invalid local Host header' });
+    }
+    if (!isAllowedOrigin(request.headers.origin, port)) {
+      return sendJson(response, 403, { error: 'invalid local Origin header' });
+    }
     const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
     if (pathname.startsWith('/api/')) {
       const handled = await handleApi(request, response, pathname);
@@ -433,12 +444,24 @@ const server = createServer(async (request, response) => {
 
 server.on('upgrade', (request, socket) => {
   const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+  if (!isAllowedLoopbackHost(request.headers.host, port) || !isAllowedOrigin(request.headers.origin, port)) {
+    socket.destroy();
+    return;
+  }
   if (pathname !== '/ws/live' && pathname !== '/ws/ingest') {
     socket.destroy();
     return;
   }
   const key = request.headers['sec-websocket-key'];
   if (!key) {
+    socket.destroy();
+    return;
+  }
+  if (pathname === '/ws/live' && clients.size >= MAX_LIVE_CLIENTS) {
+    socket.destroy();
+    return;
+  }
+  if (pathname === '/ws/ingest' && ingestClients.size >= MAX_INGEST_CLIENTS) {
     socket.destroy();
     return;
   }
@@ -452,9 +475,19 @@ server.on('upgrade', (request, socket) => {
     'Sec-WebSocket-Accept: ' + accept + '\r\n\r\n'
   );
   if (pathname === '/ws/ingest') {
+    ingestClients.add(socket);
     let incoming = Buffer.alloc(0);
+    const rateLimiter = createRateLimiter({ limit: 1000, windowMs: 1000 });
     socket.on('data', (chunk) => {
+      if (!rateLimiter.allow()) {
+        socket.destroy();
+        return;
+      }
       incoming = Buffer.concat([incoming, chunk]);
+      if (incoming.length > MAX_WEBSOCKET_BUFFER_BYTES) {
+        socket.destroy();
+        return;
+      }
       const parsed = consumeTextFrames(incoming);
       incoming = parsed.remainder;
       if (parsed.protocolError) {
@@ -482,7 +515,11 @@ server.on('upgrade', (request, socket) => {
         }
       });
     });
-    socket.on('error', () => socket.destroy());
+    socket.on('close', () => ingestClients.delete(socket));
+    socket.on('error', () => {
+      ingestClients.delete(socket);
+      socket.destroy();
+    });
     return;
   }
   clients.add(socket);
