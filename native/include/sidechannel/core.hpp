@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -76,6 +77,63 @@ public:
 private:
   std::string session_id_;
   std::vector<Observation> observations_;
+};
+
+struct JournalEntry {
+  std::uint64_t sequence = 0;
+  std::int64_t timestamp_ms = 0;
+  std::string type;
+  std::string payload;
+  std::string previous_digest;
+  std::string event_digest;
+};
+
+struct JournalVerification {
+  bool ok = false;
+  std::size_t event_count = 0;
+  std::string error;
+};
+
+class SessionJournal {
+public:
+  SessionJournal(std::filesystem::path file_path, std::string session_id);
+
+  bool open();
+  [[nodiscard]] bool was_created() const noexcept;
+  [[nodiscard]] const std::vector<JournalEntry>& entries() const noexcept;
+  JournalEntry append(std::string type, std::int64_t timestamp_ms, std::string payload);
+  [[nodiscard]] JournalVerification verify() const;
+
+private:
+  std::filesystem::path file_path_;
+  std::string session_id_;
+  std::vector<JournalEntry> entries_;
+  bool opened_ = false;
+  bool was_created_ = false;
+};
+
+class NativeSessionStore {
+public:
+  NativeSessionStore(std::filesystem::path file_path, std::string session_id);
+
+  bool open();
+  bool append(Observation observation);
+  bool close(std::int64_t ended_at_ms);
+  [[nodiscard]] const std::string& state() const noexcept;
+  [[nodiscard]] const std::vector<Observation>& observations() const noexcept;
+  [[nodiscard]] const SessionJournal& journal() const noexcept;
+  [[nodiscard]] JournalVerification verify() const;
+  [[nodiscard]] std::string export_json() const;
+
+private:
+  bool load_observations();
+  bool append_observation_record(const Observation& observation);
+
+  std::filesystem::path file_path_;
+  std::string session_id_;
+  SessionJournal journal_;
+  std::vector<Observation> observations_;
+  std::string state_ = "closed";
 };
 
 const char* to_string(EvidenceState state) noexcept;

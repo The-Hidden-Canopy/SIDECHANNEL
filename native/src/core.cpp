@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <fstream>
+#include <filesystem>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -138,6 +140,123 @@ std::string quote_json(std::string_view value) {
   std::ostringstream output;
   write_json_string(output, value);
   return output.str();
+}
+
+std::string hex_encode(std::string_view value) {
+  static constexpr char digits[] = "0123456789abcdef";
+  std::string encoded;
+  encoded.reserve(value.size() * 2);
+  for (const auto character : value) {
+    const auto byte = static_cast<unsigned char>(character);
+    encoded.push_back(digits[byte >> 4u]);
+    encoded.push_back(digits[byte & 0x0fu]);
+  }
+  return encoded;
+}
+
+int hex_value(char character) {
+  if (character >= '0' && character <= '9') return character - '0';
+  if (character >= 'a' && character <= 'f') return character - 'a' + 10;
+  if (character >= 'A' && character <= 'F') return character - 'A' + 10;
+  return -1;
+}
+
+bool hex_decode(std::string_view value, std::string& decoded) {
+  if (value.size() % 2 != 0) return false;
+  decoded.clear();
+  decoded.reserve(value.size() / 2);
+  for (std::size_t index = 0; index < value.size(); index += 2) {
+    const auto high = hex_value(value[index]);
+    const auto low = hex_value(value[index + 1]);
+    if (high < 0 || low < 0) return false;
+    decoded.push_back(static_cast<char>((high << 4) | low));
+  }
+  return true;
+}
+
+std::vector<std::string> split_tab(std::string_view line) {
+  std::vector<std::string> fields;
+  std::size_t start = 0;
+  while (start <= line.size()) {
+    const auto end = line.find('\t', start);
+    if (end == std::string_view::npos) {
+      fields.emplace_back(line.substr(start));
+      break;
+    }
+    fields.emplace_back(line.substr(start, end - start));
+    start = end + 1;
+  }
+  return fields;
+}
+
+bool parse_u64(std::string_view value, std::uint64_t& parsed) {
+  try {
+    std::size_t consumed = 0;
+    const auto text = std::string(value);
+    parsed = std::stoull(text, &consumed, 10);
+    return consumed == text.size();
+  } catch (...) {
+    return false;
+  }
+}
+
+bool parse_i64(std::string_view value, std::int64_t& parsed) {
+  try {
+    std::size_t consumed = 0;
+    const auto text = std::string(value);
+    parsed = std::stoll(text, &consumed, 10);
+    return consumed == text.size();
+  } catch (...) {
+    return false;
+  }
+}
+
+bool parse_double(std::string_view value, double& parsed) {
+  try {
+    std::size_t consumed = 0;
+    const auto text = std::string(value);
+    parsed = std::stod(text, &consumed);
+    return consumed == text.size() && std::isfinite(parsed);
+  } catch (...) {
+    return false;
+  }
+}
+
+int evidence_value(EvidenceState state) {
+  switch (state) {
+    case EvidenceState::measured: return 0;
+    case EvidenceState::simulated: return 1;
+    case EvidenceState::derived: return 2;
+    case EvidenceState::imported: return 3;
+    case EvidenceState::stale: return 4;
+    case EvidenceState::rejected: return 5;
+    case EvidenceState::unknown: return 6;
+  }
+  return 6;
+}
+
+bool evidence_from_value(std::string_view value, EvidenceState& state) {
+  std::uint64_t parsed = 0;
+  if (!parse_u64(value, parsed) || parsed > 6) return false;
+  state = static_cast<EvidenceState>(parsed);
+  return true;
+}
+
+std::string observation_payload(const Observation& observation) {
+  std::ostringstream canonical;
+  canonical << std::setprecision(17)
+    << "{\"schema\":" << quote_json(observation.schema)
+    << ",\"id\":" << quote_json(observation.id)
+    << ",\"sourceId\":" << quote_json(observation.source_id)
+    << ",\"channel\":" << quote_json(observation.channel)
+    << ",\"timestampMs\":" << observation.timestamp_ms
+    << ",\"value\":" << observation.value
+    << ",\"qualityScore\":" << observation.quality_score
+    << ",\"sequence\":" << observation.sequence
+    << ",\"evidenceState\":" << evidence_value(observation.evidence_state) << '}';
+  return "{\"observationId\":" + quote_json(observation.id) +
+    ",\"sequence\":" + std::to_string(observation.sequence) +
+    ",\"recordDigest\":\"" + sha256(canonical.str()) + "\"}";
 }
 
 std::string journal_digest(
@@ -342,6 +461,250 @@ std::string SessionArchive::to_json() const {
   const std::string package_without_digest = output.str();
   return package_without_digest.substr(0, package_without_digest.size() - 1) +
     ",\"packageDigest\":\"" + sha256(package_without_digest) + "\"}";
+}
+
+SessionJournal::SessionJournal(std::filesystem::path file_path, std::string session_id)
+  : file_path_(std::move(file_path)), session_id_(std::move(session_id)) {}
+
+bool SessionJournal::open() {
+  if (opened_) return true;
+  entries_.clear();
+  std::error_code error;
+  const bool exists = std::filesystem::exists(file_path_, error);
+  if (error) return false;
+  if (!exists) {
+    if (!file_path_.parent_path().empty()) {
+      std::filesystem::create_directories(file_path_.parent_path(), error);
+      if (error) return false;
+    }
+    std::ofstream output(file_path_, std::ios::binary | std::ios::trunc);
+    if (!output) return false;
+    output << "SIDECHANNEL_NATIVE_SESSION/1\t" << hex_encode(session_id_) << '\n';
+    output.flush();
+    if (!output) return false;
+    opened_ = true;
+    was_created_ = true;
+    return true;
+  }
+
+  std::ifstream input(file_path_, std::ios::binary);
+  if (!input) return false;
+  std::string line;
+  if (!std::getline(input, line)) return false;
+  const auto header = split_tab(line);
+  std::string header_session_id;
+  if (header.size() != 2 || header[0] != "SIDECHANNEL_NATIVE_SESSION/1" ||
+      !hex_decode(header[1], header_session_id) || header_session_id != session_id_) {
+    return false;
+  }
+  while (std::getline(input, line)) {
+    if (line.empty()) continue;
+    const auto fields = split_tab(line);
+    if (fields.empty()) return false;
+    if (fields[0] == "O") continue;
+    if (fields[0] != "E" || fields.size() != 7) return false;
+    JournalEntry entry;
+    if (!parse_u64(fields[1], entry.sequence) || !parse_i64(fields[2], entry.timestamp_ms) ||
+        !hex_decode(fields[3], entry.type) || !hex_decode(fields[4], entry.payload)) {
+      return false;
+    }
+    if (fields[5] == "-") entry.previous_digest.clear();
+    else if (!hex_decode(fields[5], entry.previous_digest)) return false;
+    entry.event_digest = fields[6];
+    if (entry.event_digest.size() != 64) return false;
+    entries_.push_back(std::move(entry));
+  }
+  if (!input.eof()) return false;
+  opened_ = true;
+  was_created_ = false;
+  return true;
+}
+
+bool SessionJournal::was_created() const noexcept {
+  return was_created_;
+}
+
+const std::vector<JournalEntry>& SessionJournal::entries() const noexcept {
+  return entries_;
+}
+
+JournalEntry SessionJournal::append(std::string type, std::int64_t timestamp_ms, std::string payload) {
+  if (!opened_) return {};
+  JournalEntry entry;
+  entry.sequence = entries_.size() + 1;
+  entry.timestamp_ms = timestamp_ms;
+  entry.type = std::move(type);
+  entry.payload = std::move(payload);
+  entry.previous_digest = entries_.empty() ? std::string{} : entries_.back().event_digest;
+  entry.event_digest = journal_digest(session_id_, entry.sequence, entry.timestamp_ms, entry.type,
+    entry.payload, entry.previous_digest);
+  std::ofstream output(file_path_, std::ios::binary | std::ios::app);
+  if (!output) return {};
+  output << "E\t" << entry.sequence << '\t' << entry.timestamp_ms << '\t'
+    << hex_encode(entry.type) << '\t' << hex_encode(entry.payload) << '\t'
+    << (entry.previous_digest.empty() ? "-" : hex_encode(entry.previous_digest)) << '\t'
+    << entry.event_digest << '\n';
+  output.flush();
+  if (!output) return {};
+  entries_.push_back(entry);
+  return entry;
+}
+
+JournalVerification SessionJournal::verify() const {
+  JournalVerification result;
+  result.event_count = entries_.size();
+  if (!opened_) {
+    result.error = "journal is not open";
+    return result;
+  }
+  std::uint64_t expected_sequence = 1;
+  std::string previous_digest;
+  for (const auto& entry : entries_) {
+    if (entry.sequence != expected_sequence) {
+      result.error = "journal sequence is not contiguous";
+      return result;
+    }
+    if (entry.previous_digest != previous_digest) {
+      result.error = "journal previous digest mismatch";
+      return result;
+    }
+    const auto expected_digest = journal_digest(session_id_, entry.sequence, entry.timestamp_ms,
+      entry.type, entry.payload, entry.previous_digest);
+    if (entry.event_digest != expected_digest) {
+      result.error = "journal event digest mismatch";
+      return result;
+    }
+    previous_digest = entry.event_digest;
+    ++expected_sequence;
+  }
+  result.ok = true;
+  return result;
+}
+
+NativeSessionStore::NativeSessionStore(std::filesystem::path file_path, std::string session_id)
+  : file_path_(std::move(file_path)), session_id_(std::move(session_id)), journal_(file_path_, session_id_) {}
+
+bool NativeSessionStore::load_observations() {
+  observations_.clear();
+  std::ifstream input(file_path_, std::ios::binary);
+  if (!input) return false;
+  std::string line;
+  if (!std::getline(input, line)) return false;
+  while (std::getline(input, line)) {
+    if (line.empty() || line.rfind("O\t", 0) != 0) continue;
+    const auto fields = split_tab(line);
+    if (fields.size() != 9) return false;
+    Observation observation;
+    if (!parse_u64(fields[1], observation.sequence) || !parse_i64(fields[2], observation.timestamp_ms) ||
+        !hex_decode(fields[3], observation.id) || !hex_decode(fields[4], observation.source_id) ||
+        !hex_decode(fields[5], observation.channel) || !parse_double(fields[6], observation.value) ||
+        !parse_double(fields[7], observation.quality_score) || !evidence_from_value(fields[8], observation.evidence_state)) {
+      return false;
+    }
+    observation.schema = "sidechannel.observation/2";
+    observations_.push_back(std::move(observation));
+  }
+  return input.eof();
+}
+
+bool NativeSessionStore::append_observation_record(const Observation& observation) {
+  std::ofstream output(file_path_, std::ios::binary | std::ios::app);
+  if (!output) return false;
+  output << std::setprecision(17) << "O\t" << observation.sequence << '\t'
+    << observation.timestamp_ms << '\t' << hex_encode(observation.id) << '\t'
+    << hex_encode(observation.source_id) << '\t' << hex_encode(observation.channel) << '\t'
+    << observation.value << '\t' << observation.quality_score << '\t'
+    << evidence_value(observation.evidence_state) << '\n';
+  output.flush();
+  return static_cast<bool>(output);
+}
+
+bool NativeSessionStore::open() {
+  if (state_ != "closed") return true;
+  if (!journal_.open()) return false;
+  if (!load_observations()) return false;
+  if (!journal_.verify().ok) return false;
+  if (journal_.entries().empty()) {
+    if (!journal_.was_created()) return false;
+    const auto opened = journal_.append("SessionOpened", 0,
+      "{\"sessionId\":" + quote_json(session_id_) + '}');
+    if (opened.sequence == 0) return false;
+    state_ = "recording";
+    return verify().ok;
+  }
+  const auto& last = journal_.entries().back();
+  if (last.type == "SessionClosed") {
+    state_ = "completed";
+    return verify().ok;
+  }
+  if (last.type == "RuntimeRecovered") {
+    state_ = "interrupted";
+    return verify().ok;
+  }
+  const auto recovered = journal_.append("RuntimeRecovered", last.timestamp_ms,
+    "{\"reason\":\"process_restart\"}");
+  if (recovered.sequence == 0) return false;
+  state_ = "interrupted";
+  return verify().ok;
+}
+
+bool NativeSessionStore::append(Observation observation) {
+  if (state_ != "recording") return false;
+  observation.sequence = observations_.size() + 1;
+  const auto admitted = journal_.append("ObservationAdmitted", observation.timestamp_ms,
+    observation_payload(observation));
+  if (admitted.sequence == 0 || !append_observation_record(observation)) return false;
+  observations_.push_back(std::move(observation));
+  return true;
+}
+
+bool NativeSessionStore::close(std::int64_t ended_at_ms) {
+  if (state_ != "recording") return false;
+  const auto closed = journal_.append("SessionClosed", ended_at_ms,
+    "{\"endedAtMs\":" + std::to_string(ended_at_ms) + '}');
+  if (closed.sequence == 0) return false;
+  state_ = "completed";
+  return true;
+}
+
+const std::string& NativeSessionStore::state() const noexcept {
+  return state_;
+}
+
+const std::vector<Observation>& NativeSessionStore::observations() const noexcept {
+  return observations_;
+}
+
+const SessionJournal& NativeSessionStore::journal() const noexcept {
+  return journal_;
+}
+
+JournalVerification NativeSessionStore::verify() const {
+  auto result = journal_.verify();
+  if (!result.ok) return result;
+  std::size_t admitted_count = 0;
+  for (const auto& entry : journal_.entries()) {
+    if (entry.type != "ObservationAdmitted") continue;
+    if (admitted_count >= observations_.size() || entry.payload != observation_payload(observations_[admitted_count])) {
+      result.ok = false;
+      result.error = "observation journal does not match retained records";
+      return result;
+    }
+    ++admitted_count;
+  }
+  if (admitted_count != observations_.size()) {
+    result.ok = false;
+    result.error = "retained observation count does not match journal";
+    return result;
+  }
+  result.ok = true;
+  return result;
+}
+
+std::string NativeSessionStore::export_json() const {
+  SessionArchive archive(session_id_);
+  for (const auto& observation : observations_) archive.append(observation);
+  return archive.to_json();
 }
 
 const char* to_string(EvidenceState state) noexcept {

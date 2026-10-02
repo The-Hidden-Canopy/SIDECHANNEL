@@ -91,6 +91,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A confirmation-gated local prune route removes only older terminal sessions, preserves the newest keep count, and protects active recordings.'
   },
   {
+    id: 'native-session-journal-replay',
+    label: 'Native durable session journal and replay foundation',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The native reference core persists hash-chained events and encoded observation rows, recovers unclosed files as interrupted, and verifies replay parity; it is not yet native SQLite, IPC, desktop, or hardware authority.'
+  },
+  {
     id: 'bounded-websocket-controls',
     label: 'Bounded WebSocket controls',
     status: 'implemented',

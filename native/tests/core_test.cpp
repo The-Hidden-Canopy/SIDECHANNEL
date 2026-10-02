@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <cmath>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 int main() {
@@ -48,5 +50,80 @@ int main() {
   assert(package.find("\"type\":\"ObservationAdmitted\"") != std::string::npos);
   assert(package.find("\"type\":\"SessionClosed\"") != std::string::npos);
   assert(package.find("\"sequence\":1") != std::string::npos);
+
+  const auto journal_path = std::filesystem::temp_directory_path() / "sidechannel-native-session-test.scj";
+  std::error_code cleanup_error;
+  std::filesystem::remove(journal_path, cleanup_error);
+  {
+    sidechannel::NativeSessionStore store(journal_path, "session_native_test");
+    assert(store.open());
+    assert(store.state() == "recording");
+    assert(store.append(first_tick[0]));
+    assert(store.close(1250));
+    assert(store.state() == "completed");
+    assert(store.verify().ok);
+  }
+  {
+    sidechannel::NativeSessionStore reopened(journal_path, "session_native_test");
+    assert(reopened.open());
+    assert(reopened.state() == "completed");
+    assert(reopened.observations().size() == 1);
+    assert(reopened.observations()[0].id == first_tick[0].id);
+    assert(reopened.verify().ok);
+    assert(reopened.export_json().find("\"packageDigest\":\"") != std::string::npos);
+  }
+
+  std::filesystem::remove(journal_path, cleanup_error);
+  {
+    sidechannel::NativeSessionStore interrupted(journal_path, "session_native_test");
+    assert(interrupted.open());
+    assert(interrupted.append(first_tick[1]));
+  }
+  {
+    sidechannel::NativeSessionStore recovered(journal_path, "session_native_test");
+    assert(recovered.open());
+    assert(recovered.state() == "interrupted");
+    assert(recovered.observations().size() == 1);
+    assert(!recovered.append(first_tick[2]));
+    assert(recovered.verify().ok);
+  }
+
+  std::ifstream journal_input(journal_path, std::ios::binary);
+  const std::string journal_contents((std::istreambuf_iterator<char>(journal_input)), {});
+  journal_input.close();
+  const auto observation_event = journal_contents.find("4f62736572766174696f6e41646d6974746564");
+  assert(observation_event != std::string::npos);
+  std::string tampered_contents = journal_contents;
+  tampered_contents[observation_event] = '5';
+  std::ofstream journal_output(journal_path, std::ios::binary | std::ios::trunc);
+  journal_output << tampered_contents;
+  journal_output.close();
+  sidechannel::NativeSessionStore tampered(journal_path, "session_native_test");
+  assert(!tampered.open());
+
+  std::filesystem::remove(journal_path, cleanup_error);
+  {
+    sidechannel::NativeSessionStore value_tamper_source(journal_path, "session_native_test");
+    assert(value_tamper_source.open());
+    assert(value_tamper_source.append(first_tick[2]));
+    assert(value_tamper_source.close(1500));
+  }
+  std::ifstream value_input(journal_path, std::ios::binary);
+  std::string value_contents((std::istreambuf_iterator<char>(value_input)), {});
+  value_input.close();
+  const auto observation_line = value_contents.find("O\t");
+  assert(observation_line != std::string::npos);
+  auto value_start = observation_line;
+  for (int field = 0; field < 6; ++field) {
+    value_start = value_contents.find('\t', value_start) + 1;
+    assert(value_start != 0);
+  }
+  value_contents[value_start] = value_contents[value_start] == '0' ? '1' : '0';
+  std::ofstream value_output(journal_path, std::ios::binary | std::ios::trunc);
+  value_output << value_contents;
+  value_output.close();
+  sidechannel::NativeSessionStore value_tampered(journal_path, "session_native_test");
+  assert(!value_tampered.open());
+  std::filesystem::remove(journal_path, cleanup_error);
   return 0;
 }
