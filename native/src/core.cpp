@@ -31,6 +31,10 @@ double round4(double value) {
   return std::round(value * 10000.0) / 10000.0;
 }
 
+double round3(double value) {
+  return std::round(value * 1000.0) / 1000.0;
+}
+
 } // namespace
 
 AdmissionSequencer::AdmissionSequencer(std::size_t max_queue)
@@ -94,7 +98,7 @@ std::vector<Observation> DeterministicSimulator::tick(std::uint64_t tick, std::i
       source.channel,
       timestamp_ms,
       round4(value),
-      round4(0.88 + random() * 0.11),
+      round3(0.88 + random() * 0.11),
       0,
       EvidenceState::simulated
     });

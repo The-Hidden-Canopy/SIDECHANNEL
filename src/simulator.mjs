@@ -155,6 +155,7 @@ export function createSimulator({ emit, sources = DEFAULT_SOURCES, clock = () =>
 
   function emitTick() {
     const timestampMs = clock();
+    const observations = [];
     sources.forEach((source, index) => {
       const range = source.range;
       const wave = 0.5 + 0.5 * Math.sin(tick * 0.18 + index * 0.91);
@@ -162,7 +163,7 @@ export function createSimulator({ emit, sources = DEFAULT_SOURCES, clock = () =>
       const jitter = (random() - 0.5) * 0.06;
       const normalized = Math.min(0.98, Math.max(0.02, 0.18 + 0.62 * wave + 0.18 * pulse + jitter));
       const value = range[0] + (range[1] - range[0]) * normalized;
-      emit({
+      const observation = {
         schemaVersion: '0.1',
         id: source.id + '_' + tick,
         sourceId: source.id,
@@ -180,9 +181,12 @@ export function createSimulator({ emit, sources = DEFAULT_SOURCES, clock = () =>
         position: { ...source.position },
         feature: source.capabilities[0],
         metadata: { scenario: 'deterministic-room', seed }
-      });
+      };
+      observations.push(observation);
+      emit(observation);
     });
     tick += 1;
+    return observations;
   }
 
   return {
@@ -198,7 +202,9 @@ export function createSimulator({ emit, sources = DEFAULT_SOURCES, clock = () =>
     get tick() {
       return tick;
     },
+    step() {
+      return emitTick();
+    },
     channels: CHANNELS.slice()
   };
 }
-
