@@ -133,6 +133,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Signals, evidence overlays, and scene context can be shown or hidden as groups while each underlying layer remains independently toggleable.'
   },
   {
+    id: 'calibration-age-visuals',
+    label: 'Calibration and data-age visuals',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Source marks expose stale age, uncalibrated state, and inferred/derived shape semantics without changing admitted values or status.'
+  },
+  {
     id: 'scene-regions-and-zones',
     label: 'Scene rooms and zones',
     status: 'implemented',

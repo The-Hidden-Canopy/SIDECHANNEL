@@ -43,6 +43,10 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /data-layer-group/);
   assert.match(appSource, /Hide group/);
   assert.match(appSource, /Show group/);
+  assert.match(appSource, /Calibration state/);
+  assert.match(appSource, /Data age/);
+  assert.match(appSource, /evidenceState === 'inferred'/);
+  assert.match(appSource, /state\.visible\.age/);
   assert.match(appSource, /renderTransforms/);
   assert.match(appSource, /transformForm/);
   assert.match(appSource, /\/api\/transforms/);

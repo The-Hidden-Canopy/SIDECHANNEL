@@ -16,13 +16,15 @@ const DISPLAY_LAYERS = [
   ['uncertainty', 'Uncertainty geometry', '#ffb47b', 0],
   ['trails', 'Temporal trails', '#79a7ff', 0],
   ['events', 'Activity event pulses', '#ff8f97', 0],
+  ['calibration', 'Calibration state', '#ffb47b', 0],
+  ['age', 'Data age', '#ff8f97', 0],
   ['background', 'Imported background', '#79a7ff', 0],
   ['zones', 'Rooms / zones', '#a9e88b', 0],
   ['portals', 'Doors / portals', '#ffd166', 0]
 ];
 const LAYER_GROUPS = [
   { id: 'signals', label: 'Signals', layers: ['activity', ...CHANNELS.map((channel) => channel[0])] },
-  { id: 'evidence', label: 'Evidence overlays', layers: ['support', 'uncertainty', 'trails', 'events'] },
+  { id: 'evidence', label: 'Evidence overlays', layers: ['support', 'uncertainty', 'trails', 'events', 'calibration', 'age'] },
   { id: 'scene', label: 'Scene context', layers: ['background', 'zones', 'portals'] }
 ];
 const JOURNAL_MARKER_TYPES = new Set([
@@ -1013,22 +1015,47 @@ function draw() {
     const point = source.position;
     if (!point) return;
     const x = transform.x(point.x); const y = transform.y(point.y);
-    const observation = valid.find((item) => item.sourceId === source.id);
+    const observation = observations.find((item) => item.sourceId === source.id);
     const color = colorFor(source.channels[0]);
+    const uncalibrated = source.calibrationState !== 'calibrated';
+    const inferred = observation?.status === 'inferred' || observation?.evidenceState === 'inferred' || observation?.evidenceState === 'derived';
+    const ageMs = observation
+      ? (Number.isFinite(observation.ageMs)
+        ? observation.ageMs
+        : Math.max(0, (state.replay ? state.replayTime : Date.now()) - observation.timestampMs))
+      : null;
     context.beginPath();
     context.arc(x, y, 14, 0, Math.PI * 2);
-    context.strokeStyle = hexToRgba(color, .18);
+    context.strokeStyle = state.visible.calibration && uncalibrated ? '#ffb47b' : hexToRgba(color, .18);
+    context.setLineDash(state.visible.calibration && uncalibrated ? [3, 3] : []);
     context.stroke();
+    context.setLineDash([]);
     context.beginPath();
-    context.arc(x, y, 5, 0, Math.PI * 2);
     context.fillStyle = color;
-    context.shadowColor = color; context.shadowBlur = 12; context.fill(); context.shadowBlur = 0;
+    context.shadowColor = color; context.shadowBlur = 12;
+    if (inferred) {
+      context.save();
+      context.translate(x, y);
+      context.rotate(Math.PI / 4);
+      context.fillRect(-5, -5, 10, 10);
+      context.restore();
+    } else {
+      context.arc(x, y, 5, 0, Math.PI * 2);
+      context.fill();
+    }
+    context.shadowBlur = 0;
     context.fillStyle = 'rgba(236, 244, 248, .72)';
     context.font = '10px system-ui';
     context.fillText(source.name, x + 10, y - 9);
     if (observation?.status === 'stale') {
       context.strokeStyle = '#ffb47b'; context.setLineDash([2, 3]);
       context.beginPath(); context.arc(x, y, 9, 0, Math.PI * 2); context.stroke(); context.setLineDash([]);
+    }
+    if (state.visible.age && Number.isFinite(ageMs)) {
+      const ageLabel = ageMs < 1000 ? Math.round(ageMs) + 'ms' : (ageMs / 1000).toFixed(1) + 's';
+      context.fillStyle = observation.status === 'stale' ? '#ffb47b' : 'rgba(236, 244, 248, .5)';
+      context.font = '9px system-ui';
+      context.fillText(ageLabel, x + 10, y + 11);
     }
   });
   drawEventPulses(transform);

@@ -83,6 +83,8 @@ The Layers panel independently toggles the unified activity field, each channel 
 
 Layer controls are also grouped into Signals, Evidence overlays, and Scene context. Group actions change only the child visibility flags; the individual layer checkboxes remain authoritative and can be changed afterward. Grouping is a presentation convenience and does not alter admitted observations, field values, support, or historical session packages.
 
+Source marks expose calibration and age semantics as separate toggles. Uncalibrated or expired source placement uses a dashed amber ring, stale observations retain their value but receive an explicit stale ring and age label, and inferred or derived observations use a diamond marker. These are visual evidence-state cues only; they do not upgrade measurement quality or turn inference into a physical measurement.
+
 Scenes also support bounded room/zone polygons. The workspace creates rectangle-backed polygons in scene coordinates, the loopback API validates that points stay inside the frame, and the region list can remove them. Regions are part of the scene snapshot, so historical session packages retain the floor-plan structure that was authoritative when recording began.
 
 The scene editor exposes the coordinate unit (`m`, `ft`, or `px`) and a one-shot measurement ruler. A measured segment is rendered and reported in the selected scene unit; it is a view aid only and does not rewrite observation values, provider identity, calibration lineage, or historical session data.
