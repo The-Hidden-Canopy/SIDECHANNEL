@@ -18,7 +18,7 @@ if (!executable || !Number.isInteger(ticks) || ticks < 1 || ticks > 100) {
   for (clockTick = 0; clockTick < ticks; clockTick += 1) simulator.step();
 
   const output = await new Promise((resolve, reject) => {
-    const child = spawn(executable, ['--ticks', String(ticks), '--csv'], { windowsHide: true });
+    const child = spawn(executable, ['--ticks', String(ticks), '--json'], { windowsHide: true });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
@@ -27,10 +27,14 @@ if (!executable || !Number.isInteger(ticks) || ticks < 1 || ticks > 100) {
     child.on('close', (code) => code === 0 ? resolve(stdout) : reject(new Error(stderr || 'native parity command failed')));
   });
 
-  const rows = output.trim().split(/\r?\n/).slice(1).map((line) => {
-    const [schema, id, sourceId, channel, timestampMs, value, qualityScore, evidenceState] = line.split(',');
-    return { schema, id, sourceId, channel, timestampMs: Number(timestampMs), value: Number(value), qualityScore: Number(qualityScore), evidenceState };
-  });
+  let fixture;
+  try {
+    fixture = JSON.parse(output);
+  } catch (error) {
+    console.error(JSON.stringify({ ok: false, reasons: ['native JSON fixture is invalid: ' + error.message] }, null, 2));
+    process.exitCode = 1;
+  }
+  const rows = fixture?.observations || [];
   const reasons = [];
   if (rows.length !== expected.length) reasons.push(`row count ${rows.length} != ${expected.length}`);
   for (let index = 0; index < Math.min(rows.length, expected.length); index += 1) {
@@ -49,6 +53,6 @@ if (!executable || !Number.isInteger(ticks) || ticks < 1 || ticks > 100) {
     console.error(JSON.stringify({ ok: false, reasons }, null, 2));
     process.exitCode = 1;
   } else {
-    console.log(JSON.stringify({ ok: true, ticks, rows: rows.length, compared: ['schema', 'id', 'sourceId', 'channel', 'timestampMs', 'value', 'qualityScore', 'evidenceState'] }, null, 2));
+    console.log(JSON.stringify({ ok: true, ticks, rows: rows.length, fixtureFormat: fixture.format, compared: ['schema', 'id', 'sourceId', 'channel', 'timestampMs', 'value', 'qualityScore', 'evidenceState'] }, null, 2));
   }
 }
