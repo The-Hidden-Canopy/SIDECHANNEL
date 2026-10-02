@@ -11,6 +11,7 @@ SIDECHANNEL is a local-first spatial sensing explorer for making incidental emis
 - `public/` — responsive 2D scene explorer with channel layers, source health, inspector, diagnostics, activity events, recording, replay, and export controls.
 - `test/` — deterministic simulator, validation, freshness, spatial field, and activity-fusion tests.
 - `docs/PACKAGING.md` — runtime, verification, portable packaging boundary, and data-directory runbook.
+- `docs/ACCEPTANCE_MATRIX.md` — docuseries work-package status, evidence commands, and explicit remaining gates.
 - `package.json` — Node.js project manifest.
 
 ## Safety and privacy boundaries
