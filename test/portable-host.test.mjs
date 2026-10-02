@@ -47,6 +47,6 @@ test('portable host supervises a healthy loopback server and shuts down', async 
         new Promise((resolvePromise) => setTimeout(resolvePromise, 3000))
       ]);
     }
-    await rm(dataDirectory, { recursive: true, force: true });
+    await rm(dataDirectory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });

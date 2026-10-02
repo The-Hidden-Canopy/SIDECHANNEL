@@ -21,6 +21,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'SQLite sessions, frozen snapshots, historical replay, recompute, and verification.'
   },
   {
+    id: 'portable-loopback-host',
+    label: 'Supervised portable loopback host',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A bounded Node host supervises the loopback server, waits for a healthy local response, emits a ready receipt, and forwards shutdown; it is not a native desktop shell, installer, deployment, or hardware authority.'
+  },
+  {
     id: 'calibration-provenance-gates',
     label: 'Calibration provenance gates',
     status: 'implemented',
