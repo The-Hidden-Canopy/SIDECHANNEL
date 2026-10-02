@@ -78,6 +78,7 @@ const state = {
   temporalComparisonBusy: false,
   replayMode: 'historical',
   viewPaused: false,
+  fieldSettings: { power: 2, radius: 0 },
   capabilities: null,
   benchmarkReceipt: null,
   benchmarkBusy: false,
@@ -337,6 +338,23 @@ function renderLayers() {
     group.layers.forEach(renderLayer);
   });
   document.getElementById('layerCount').textContent = DISPLAY_LAYERS.filter((item) => state.visible[item[0]]).length;
+}
+
+function renderFieldSettings() {
+  const power = document.getElementById('fieldPower');
+  const radius = document.getElementById('fieldRadius');
+  const hint = document.getElementById('fieldSettingsHint');
+  if (!power || !radius || !hint) return;
+  if (document.activeElement !== power) power.value = state.fieldSettings.power;
+  if (document.activeElement !== radius) radius.value = state.fieldSettings.radius;
+  hint.textContent = 'Power ' + state.fieldSettings.power + ' · ' +
+    (state.fieldSettings.radius > 0 ? 'search radius ' + state.fieldSettings.radius + ' ' + (state.scene?.unit || 'm') + '.' : 'unlimited search radius.') +
+    ' Cells outside the radius show insufficient data.';
+}
+
+function fieldWeight(distance) {
+  if (state.fieldSettings.radius > 0 && distance > state.fieldSettings.radius) return 0;
+  return 1 / Math.max(distance, .08) ** state.fieldSettings.power;
 }
 
 function renderSources() {
@@ -878,7 +896,8 @@ function drawActivityField(valid, transform) {
         const source = sourceById(point.sourceId);
         supportPositions(point, source).forEach((position) => {
           const distance = Math.hypot(x - position.x, y - position.y);
-          const weight = 1 / Math.max(distance, .08) ** 2;
+          const weight = fieldWeight(distance);
+          if (weight === 0) return;
           const confidence = point.quality?.score || 0;
           total += normalize(point.channel, point.value) * weight;
           spatialWeightTotal += weight;
@@ -887,6 +906,7 @@ function drawActivityField(valid, transform) {
       });
       const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
       const support = spatialWeightTotal ? Math.max(0, Math.min(1, supportTotal / spatialWeightTotal)) : 0;
+      if (!spatialWeightTotal) continue;
       const supportOpacity = state.visible.support ? (.25 + support * .75) : .6;
       context.fillStyle = hexToRgba(color, (.025 + intensity * .12) * supportOpacity);
       context.fillRect(
@@ -993,7 +1013,8 @@ function draw() {
           const source = sourceById(point.sourceId);
           supportPositions(point, source).forEach((position) => {
             const distance = Math.hypot(x - position.x, y - position.y);
-            const weight = 1 / Math.max(distance, .08) ** 2;
+            const weight = fieldWeight(distance);
+            if (weight === 0) return;
             total += normalize(channel, point.value) * weight;
             spatialWeightTotal += weight;
             supportTotal += (point.quality?.score || 0) * weight;
@@ -1002,6 +1023,7 @@ function draw() {
         const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
         const support = spatialWeightTotal ? Math.max(0, Math.min(1, supportTotal / spatialWeightTotal)) : 0;
         const supportOpacity = state.visible.support ? (.25 + support * .75) : .6;
+        if (!spatialWeightTotal) continue;
         context.fillStyle = hexToRgba(color, (.045 + intensity * .19) * supportOpacity);
         context.fillRect(transform.x(x - state.scene.width / cols / 2), transform.y(y - state.scene.height / rows / 2),
           transform.sx * state.scene.width / cols + 1, transform.sy * state.scene.height / rows + 1);
@@ -1226,7 +1248,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderFieldSettings(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1247,6 +1269,18 @@ document.getElementById('liveButton').addEventListener('click', () => {
 
 document.getElementById('pauseViewButton').addEventListener('click', () => {
   state.viewPaused = !state.viewPaused;
+  render();
+});
+
+document.getElementById('fieldSettingsForm').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const power = Number(document.getElementById('fieldPower').value);
+  const radius = Number(document.getElementById('fieldRadius').value);
+  if (!Number.isFinite(power) || power < 0.5 || power > 6 || !Number.isFinite(radius) || radius < 0) {
+    document.getElementById('freshnessLabel').textContent = 'Field power must be 0.5–6 and search radius must be zero or positive.';
+    return;
+  }
+  state.fieldSettings = { power, radius };
   render();
 });
 

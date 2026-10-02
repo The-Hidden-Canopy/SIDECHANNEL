@@ -129,6 +129,15 @@
           <span id="layerCount" class="count">0</span>
         </div>
         <div id="layerPanel" class="layer-list"></div>
+        <form id="fieldSettingsForm" class="source-form field-settings">
+          <div class="eyebrow">FIELD ESTIMATOR</div>
+          <div class="field-grid">
+            <label>Power <input id="fieldPower" type="number" min="0.5" max="6" step="0.5" value="2"></label>
+            <label>Search radius <input id="fieldRadius" type="number" min="0" step="0.1" value="0"></label>
+          </div>
+          <button class="button small ghost" type="submit">Apply field settings</button>
+          <p id="fieldSettingsHint" class="muted">Power 2 · unlimited search radius.</p>
+        </form>
       </section>
       <section class="panel">
         <div class="panel-heading">

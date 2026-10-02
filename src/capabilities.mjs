@@ -147,6 +147,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace can freeze presentation updates while the loopback stream, admission, and active recording continue receiving data.'
   },
   {
+    id: 'field-interpolation-controls',
+    label: 'Field interpolation controls',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The workspace exposes inverse-distance power and bounded search radius controls; cells outside the radius remain insufficient-data instead of being filled.'
+  },
+  {
     id: 'scene-regions-and-zones',
     label: 'Scene rooms and zones',
     status: 'implemented',

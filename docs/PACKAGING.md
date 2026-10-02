@@ -83,6 +83,8 @@ The live workspace can pause its presentation without stopping ingestion or reco
 
 The Layers panel independently toggles the unified activity field, each channel field, support/confidence rendering, uncertainty geometry, replay trails, and activity-event pulses. Support changes visual opacity only; it never changes the underlying field value. Geometry and trail overlays are bounded to the retained observation/session data and remain software-derived evidence.
 
+The layer panel exposes the live estimator's inverse-distance power and search radius. Power is bounded to 0.5–6; a zero radius means unlimited search, while a positive radius masks cells with no contributing support and leaves them `insufficient_data`. These controls affect the local presentation estimator only and are not physical localization or triangulation claims.
+
 Layer controls are also grouped into Signals, Evidence overlays, and Scene context. Group actions change only the child visibility flags; the individual layer checkboxes remain authoritative and can be changed afterward. Grouping is a presentation convenience and does not alter admitted observations, field values, support, or historical session packages.
 
 Source marks expose calibration and age semantics as separate toggles. Uncalibrated or expired source placement uses a dashed amber ring, stale observations retain their value but receive an explicit stale ring and age label, and inferred or derived observations use a diamond marker. These are visual evidence-state cues only; they do not upgrade measurement quality or turn inference into a physical measurement.
