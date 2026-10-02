@@ -176,9 +176,9 @@ const char* unit_for(const char* channel) {
   if (std::string_view(channel) == "heat") return "C";
   if (std::string_view(channel) == "vibration") return "g";
   if (std::string_view(channel) == "sound") return "normalized";
-  if (std::string_view(channel) == "network") return "bps";
+  if (std::string_view(channel) == "network") return "bytes/s";
   if (std::string_view(channel) == "electrical") return "W";
-  if (std::string_view(channel) == "bluetooth") return "percent";
+  if (std::string_view(channel) == "bluetooth") return "devices";
   return "normalized";
 }
 

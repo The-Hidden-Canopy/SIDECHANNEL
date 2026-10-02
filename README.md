@@ -49,6 +49,6 @@ Native hardware adapters, richer calibration, and desktop packaging remain follo
 
 GitHub Actions runs the Node reference tests plus native CTest/parity on Ubuntu and Windows; passing CI is software evidence only and is not a hardware, deployment, or regulated-operation claim.
 
-The native directory is an independently tested reference slice. It now emits a dependency-free session-package fixture that the Node verifier checks for canonical observation shape, frozen snapshot digest, and retained references, but it is not yet the authority for SQLite persistence, local IPC, or full semantic export parity. Build it with the CMake instructions in `native/README.md` and run `npm run verify:native-session -- path/to/sidechannel-native.exe 2` for the package gate.
+The native directory is an independently tested reference slice. It now emits a dependency-free session-package fixture that the Node verifier checks for canonical observation shape, semantic observation-row parity, frozen snapshot/package digests, journal integrity, and retained references, but it is not yet the authority for SQLite persistence, local IPC, or mutation-journal replay. Build it with the CMake instructions in `native/README.md` and run `npm run verify:native-session -- path/to/sidechannel-native.exe 2` for the package gate.
 
 See the build specification for the authoritative requirements.
