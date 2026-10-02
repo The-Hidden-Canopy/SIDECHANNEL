@@ -52,6 +52,8 @@ While a session is recording, adapter failures are emitted as bounded diagnostic
 
 The server creates `data/sidechannel.sqlite` plus SQLite WAL files. `data/` is ignored by Git. If a legacy `data/sidechannel.json` exists and the SQLite file does not, the first startup migrates scenes, sessions, observations, and events without deleting the legacy file. New sessions freeze their scene, source registry, calibration summary, and transform snapshot so later live edits do not rewrite historical export meaning. Observations are returned in admitted row order, not timestamp order. A session left open by a process restart is retained as `interrupted` with a `process_restart` reason; it is not eligible for new observations or normal completion.
 
+Calibration reuse is fail-closed. A calibration record used by an observation must be valid, unexpired, and bound to both the current provider digest and source-profile digest. `GET /api/calibrations/:id/compatibility?providerDigest=...&sourceProfileDigest=...` returns the explicit compatibility decision; observations carrying an incompatible or unbound `calibrationRef` are rejected with the decision and reasons. This proves software enforcement of provenance, not physical calibration accuracy.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

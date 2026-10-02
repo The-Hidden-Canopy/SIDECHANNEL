@@ -150,6 +150,7 @@ export function validateObservation(raw, options = {}) {
       ...(raw.position ? { position: { ...raw.position } } : {}),
       ...(typeof raw.feature === 'string' ? { feature: raw.feature } : {}),
       ...(typeof raw.calibrationRef === 'string' ? { calibrationRef: raw.calibrationRef } : {}),
+      ...(typeof raw.sourceProfileDigest === 'string' ? { sourceProfileDigest: raw.sourceProfileDigest } : {}),
       ...(typeof raw.sourceProfileRevision === 'string' ? { sourceProfileRevision: raw.sourceProfileRevision } : {}),
       ...(isPlainObject(raw.metadata) ? { metadata: { ...raw.metadata } } : {})
     }

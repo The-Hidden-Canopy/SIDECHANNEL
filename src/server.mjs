@@ -175,6 +175,23 @@ async function processObservation(raw) {
     });
   }
 
+  if (typeof raw?.calibrationRef === 'string') {
+    const source = sourceMap().get(result.observation.sourceId);
+    const compatibility = calibrationRegistry.assess(raw.calibrationRef, {
+      providerDigest: result.observation.provider.digest,
+      sourceProfileDigest: raw.sourceProfileDigest || source?.sourceProfileDigest || null
+    });
+    if (!compatibility.ok) {
+      return recordDiagnostic({
+        type: 'observation.rejected',
+        id: result.observation.id,
+        reasons: compatibility.reasons,
+        calibrationCompatibility: compatibility,
+        receivedAtMs: Date.now()
+      });
+    }
+  }
+
   if (admittedIds.has(result.observation.id)) {
     return recordDiagnostic({
       type: 'observation.rejected',
@@ -327,6 +344,15 @@ async function handleApi(request, response, pathname) {
   }
   if (request.method === 'GET' && pathname === '/api/calibrations') {
     return sendJson(response, 200, { revision: calibrationRegistry.revision, calibrations: calibrationRegistry.list() });
+  }
+  if (request.method === 'GET' && parts[0] === 'api' && parts[1] === 'calibrations' && parts[2] && parts[3] === 'compatibility') {
+    const calibrationId = decodeURIComponent(parts[2]);
+    const query = new URL(request.url, 'http://127.0.0.1').searchParams;
+    const compatibility = calibrationRegistry.assess(calibrationId, {
+      providerDigest: query.get('providerDigest'),
+      sourceProfileDigest: query.get('sourceProfileDigest')
+    });
+    return sendJson(response, compatibility.status === 'missing' ? 404 : 200, compatibility);
   }
   if (request.method === 'POST' && pathname === '/api/calibrations') {
     const body = await bodyJson(request);

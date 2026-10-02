@@ -8,6 +8,90 @@ function finite(value) {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+function compatibilityReason(id, message) {
+  return { id, message };
+}
+
+export function assessCalibrationCompatibility(calibration, {
+  providerDigest = null,
+  sourceProfileDigest = null,
+  nowMs = Date.now()
+} = {}) {
+  const reasons = [];
+  if (!calibration) {
+    reasons.push(compatibilityReason('calibration.missing', 'calibration record is missing'));
+    return {
+      ok: false,
+      status: 'missing',
+      calibrationId: null,
+      providerDigest,
+      sourceProfileDigest,
+      reasons
+    };
+  }
+
+  if (calibration.validityState !== 'valid') {
+    reasons.push(compatibilityReason('calibration.invalid', 'calibration record is not valid'));
+  }
+  if (calibration.expiresAtMs !== null && calibration.expiresAtMs !== undefined) {
+    if (!finite(calibration.expiresAtMs) || calibration.expiresAtMs <= nowMs) {
+      reasons.push(compatibilityReason('calibration.expired', 'calibration record is expired'));
+    }
+  }
+
+  if (calibration.providerDigest) {
+    if (!providerDigest) {
+      reasons.push(compatibilityReason(
+        'calibration.provider_digest_missing',
+        'current provider digest is required for this calibration'
+      ));
+    } else if (calibration.providerDigest !== providerDigest) {
+      reasons.push(compatibilityReason(
+        'calibration.provider_digest_mismatch',
+        'calibration was created for a different provider digest'
+      ));
+    }
+  } else {
+    reasons.push(compatibilityReason(
+      'calibration.provider_digest_unbound',
+      'calibration has no provider digest and cannot be safely reused'
+    ));
+  }
+
+  if (calibration.sourceProfileDigest) {
+    if (!sourceProfileDigest) {
+      reasons.push(compatibilityReason(
+        'calibration.source_profile_digest_missing',
+        'current source profile digest is required for this calibration'
+      ));
+    } else if (calibration.sourceProfileDigest !== sourceProfileDigest) {
+      reasons.push(compatibilityReason(
+        'calibration.source_profile_digest_mismatch',
+        'calibration was created for a different source profile digest'
+      ));
+    }
+  } else {
+    reasons.push(compatibilityReason(
+      'calibration.source_profile_digest_unbound',
+      'calibration has no source profile digest and cannot be safely reused'
+    ));
+  }
+
+  const status = reasons.length === 0
+    ? 'compatible'
+    : reasons.some((reason) => reason.id.endsWith('_unbound'))
+      ? 'unbound'
+      : 'incompatible';
+  return {
+    ok: status === 'compatible',
+    status,
+    calibrationId: calibration.calibrationId || null,
+    providerDigest,
+    sourceProfileDigest,
+    reasons
+  };
+}
+
 export class CalibrationRegistry {
   constructor({ clock = () => Date.now() } = {}) {
     this.clock = clock;
@@ -64,6 +148,13 @@ export class CalibrationRegistry {
   get(calibrationId) {
     const record = this.records.get(calibrationId);
     return record ? { ...record } : null;
+  }
+
+  assess(calibrationId, context = {}) {
+    return assessCalibrationCompatibility(this.records.get(calibrationId) || null, {
+      ...context,
+      nowMs: context.nowMs === undefined ? this.clock() : context.nowMs
+    });
   }
 
   list() {

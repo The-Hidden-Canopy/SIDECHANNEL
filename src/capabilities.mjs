@@ -21,6 +21,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'SQLite sessions, frozen snapshots, historical replay, recompute, and verification.'
   },
   {
+    id: 'calibration-provenance-gates',
+    label: 'Calibration provenance gates',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Calibration reuse fails closed unless provider and source-profile digests match and the record is valid and unexpired.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',
