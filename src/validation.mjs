@@ -161,6 +161,7 @@ export function validateObservation(raw, options = {}) {
       ...(typeof raw.calibrationRef === 'string' ? { calibrationRef: raw.calibrationRef } : {}),
       ...(typeof raw.sourceProfileDigest === 'string' ? { sourceProfileDigest: raw.sourceProfileDigest } : {}),
       ...(typeof raw.sourceProfileRevision === 'string' ? { sourceProfileRevision: raw.sourceProfileRevision } : {}),
+      ...(Number.isInteger(raw.transformRevision) ? { transformRevision: raw.transformRevision } : {}),
       ...(isPlainObject(raw.metadata) ? { metadata: { ...raw.metadata } } : {})
     }
   };

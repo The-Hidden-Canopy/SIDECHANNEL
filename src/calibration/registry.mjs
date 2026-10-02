@@ -15,6 +15,7 @@ function compatibilityReason(id, message) {
 export function assessCalibrationCompatibility(calibration, {
   providerDigest = null,
   sourceProfileDigest = null,
+  transformRevision = null,
   nowMs = Date.now()
 } = {}) {
   const reasons = [];
@@ -26,6 +27,7 @@ export function assessCalibrationCompatibility(calibration, {
       calibrationId: null,
       providerDigest,
       sourceProfileDigest,
+      transformRevision,
       reasons
     };
   }
@@ -77,6 +79,20 @@ export function assessCalibrationCompatibility(calibration, {
     ));
   }
 
+  if (calibration.transformRevision !== null && calibration.transformRevision !== undefined) {
+    if (!Number.isInteger(transformRevision) || transformRevision < 0) {
+      reasons.push(compatibilityReason(
+        'calibration.transform_revision_missing',
+        'current transform revision is required for this calibration'
+      ));
+    } else if (calibration.transformRevision !== transformRevision) {
+      reasons.push(compatibilityReason(
+        'calibration.transform_revision_mismatch',
+        'calibration was created for a different transform revision'
+      ));
+    }
+  }
+
   const status = reasons.length === 0
     ? 'compatible'
     : reasons.some((reason) => reason.id.endsWith('_unbound'))
@@ -88,6 +104,7 @@ export function assessCalibrationCompatibility(calibration, {
     calibrationId: calibration.calibrationId || null,
     providerDigest,
     sourceProfileDigest,
+    transformRevision,
     reasons
   };
 }
@@ -112,6 +129,10 @@ export class CalibrationRegistry {
     if (input.expiresAtMs !== undefined && (!finite(input.expiresAtMs) || input.expiresAtMs <= this.clock())) {
       throw new Error('expiresAtMs must be in the future');
     }
+    if (input.transformRevision !== undefined &&
+        (!Number.isInteger(input.transformRevision) || input.transformRevision < 0)) {
+      throw new Error('transformRevision must be a non-negative integer');
+    }
     const record = {
       schemaVersion: '0.1',
       calibrationId: input.calibrationId || 'cal_' + randomUUID(),
@@ -119,6 +140,7 @@ export class CalibrationRegistry {
       sourceId: input.sourceId,
       sourceProfileDigest: input.sourceProfileDigest || null,
       providerDigest: input.providerDigest || null,
+      transformRevision: input.transformRevision === undefined ? null : input.transformRevision,
       algorithmId: input.algorithmId,
       algorithmVersion: input.algorithmVersion || '0.1.0',
       createdAtMs: this.clock(),

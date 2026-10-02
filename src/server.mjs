@@ -184,7 +184,8 @@ async function processObservation(raw) {
     const source = sourceMap().get(result.observation.sourceId);
     const compatibility = calibrationRegistry.assess(raw.calibrationRef, {
       providerDigest: result.observation.provider.digest,
-      sourceProfileDigest: source ? computeSourceProfileDigest(source) : null
+      sourceProfileDigest: source ? computeSourceProfileDigest(source) : null,
+      transformRevision: transformGraph.revision
     });
     if (!compatibility.ok) {
       return recordDiagnostic({
@@ -212,6 +213,7 @@ async function processObservation(raw) {
   const observation = {
     ...result.observation,
     ...(source ? { sourceProfileDigest: computeSourceProfileDigest(source) } : {}),
+    transformRevision: transformGraph.revision,
     sequence: ++admissionSequence
   };
   latest.set(observation.sourceId + ':' + observation.channel, observation);
@@ -366,7 +368,8 @@ async function handleApi(request, response, pathname) {
     const query = new URL(request.url, 'http://127.0.0.1').searchParams;
     const compatibility = calibrationRegistry.assess(calibrationId, {
       providerDigest: query.get('providerDigest'),
-      sourceProfileDigest: query.get('sourceProfileDigest')
+      sourceProfileDigest: query.get('sourceProfileDigest'),
+      transformRevision: transformGraph.revision
     });
     return sendJson(response, compatibility.status === 'missing' ? 404 : 200, compatibility);
   }
@@ -376,6 +379,7 @@ async function handleApi(request, response, pathname) {
       const source = typeof body.sourceId === 'string' ? sourceMap().get(body.sourceId) : null;
       const runtimeSourceProfileDigest = source ? computeSourceProfileDigest(source) : null;
       const runtimeProviderDigest = source?.providerManifest?.providerDigest || null;
+      const runtimeTransformRevision = transformGraph.revision;
       if (source && body.sourceProfileDigest && body.sourceProfileDigest !== runtimeSourceProfileDigest) {
         return sendJson(response, 422, {
           error: 'sourceProfileDigest does not match the current source profile',
@@ -388,10 +392,17 @@ async function handleApi(request, response, pathname) {
           providerDigest: runtimeProviderDigest
         });
       }
+      if (body.transformRevision !== undefined && body.transformRevision !== runtimeTransformRevision) {
+        return sendJson(response, 422, {
+          error: 'transformRevision does not match the current transform graph',
+          transformRevision: runtimeTransformRevision
+        });
+      }
       const calibration = calibrationRegistry.publish({
         ...body,
         ...(runtimeSourceProfileDigest ? { sourceProfileDigest: runtimeSourceProfileDigest } : {}),
-        ...(runtimeProviderDigest ? { providerDigest: runtimeProviderDigest } : {})
+        ...(runtimeProviderDigest ? { providerDigest: runtimeProviderDigest } : {}),
+        transformRevision: runtimeTransformRevision
       });
       return sendJson(response, 201, calibration);
     } catch (error) {

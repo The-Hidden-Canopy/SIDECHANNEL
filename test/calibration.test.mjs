@@ -27,33 +27,44 @@ test('calibration compatibility requires matching provider and source profile di
     sourceId: 'sensor_1',
     providerDigest: 'provider_a',
     sourceProfileDigest: 'profile_1',
+    transformRevision: 2,
     algorithmId: 'baseline.temperature',
     expiresAtMs: 5000
   });
 
   assert.deepEqual(registry.assess(record.calibrationId, {
     providerDigest: 'provider_a',
-    sourceProfileDigest: 'profile_1'
+    sourceProfileDigest: 'profile_1',
+    transformRevision: 2
   }), {
     ok: true,
     status: 'compatible',
     calibrationId: record.calibrationId,
     providerDigest: 'provider_a',
     sourceProfileDigest: 'profile_1',
+    transformRevision: 2,
     reasons: []
   });
 
   const mismatch = registry.assess(record.calibrationId, {
     providerDigest: 'provider_b',
-    sourceProfileDigest: 'profile_1'
+    sourceProfileDigest: 'profile_1',
+    transformRevision: 2
   });
   assert.equal(mismatch.ok, false);
   assert.equal(mismatch.status, 'incompatible');
   assert.equal(mismatch.reasons[0].id, 'calibration.provider_digest_mismatch');
 
-  const missing = registry.assess(record.calibrationId, { providerDigest: 'provider_a' });
+  const missing = registry.assess(record.calibrationId, { providerDigest: 'provider_a', transformRevision: 2 });
   assert.equal(missing.ok, false);
   assert.ok(missing.reasons.some((reason) => reason.id === 'calibration.source_profile_digest_missing'));
+
+  const transformMismatch = registry.assess(record.calibrationId, {
+    providerDigest: 'provider_a',
+    sourceProfileDigest: 'profile_1',
+    transformRevision: 3
+  });
+  assert.ok(transformMismatch.reasons.some((reason) => reason.id === 'calibration.transform_revision_mismatch'));
 });
 
 test('calibration compatibility rejects unbound, expired, and invalidated records', () => {
@@ -73,15 +84,17 @@ test('calibration compatibility rejects unbound, expired, and invalidated record
   const expired = assessCalibrationCompatibility({
     ...record,
     providerDigest: 'provider_a',
-    sourceProfileDigest: 'profile_1'
-  }, { providerDigest: 'provider_a', sourceProfileDigest: 'profile_1', nowMs: now });
+    sourceProfileDigest: 'profile_1',
+    transformRevision: 0
+  }, { providerDigest: 'provider_a', sourceProfileDigest: 'profile_1', transformRevision: 0, nowMs: now });
   assert.equal(expired.ok, false);
   assert.ok(expired.reasons.some((reason) => reason.id === 'calibration.expired'));
 
   registry.invalidate(record.calibrationId, 'source moved');
   const invalidated = registry.assess(record.calibrationId, {
     providerDigest: 'provider_a',
-    sourceProfileDigest: 'profile_1'
+    sourceProfileDigest: 'profile_1',
+    transformRevision: 0
   });
   assert.equal(invalidated.ok, false);
   assert.ok(invalidated.reasons.some((reason) => reason.id === 'calibration.invalid'));

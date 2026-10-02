@@ -49,6 +49,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Revoking an active subprocess permission cancels its run, records the reason, and leaves the provider disabled.'
   },
   {
+    id: 'calibration-transform-binding',
+    label: 'Calibration transform binding',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Calibration reuse is bound to the current transform revision so spatial-anchor changes invalidate new use.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',
