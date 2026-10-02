@@ -119,6 +119,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A bounded repeatable campaign exercises stale publication, ordering, adapter framing, range, permission, journal, and spatial rejection paths and emits a tamper-detectable software receipt.'
   },
   {
+    id: 'adaptive-tile-evaluation',
+    label: 'Adaptive tile field evaluation',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A bounded adaptive 2D estimator refines high-variation tiles under a hard tile budget while retaining separate value/support outputs and input lineage.'
+  },
+  {
     id: 'temporal-comparison-surface',
     label: 'Within-session temporal comparison',
     status: 'implemented',

@@ -29,6 +29,7 @@ import { validateBackground } from './spatial/background.mjs';
 import { decryptSessionPackage, encryptSessionPackage } from './session-crypto.mjs';
 import { createCoOccurrenceArtifact } from './evaluation/cooccurrence.mjs';
 import { runFaultCampaign, verifyFaultCampaignReceipt } from './verification/faults.mjs';
+import { interpolateAdaptiveActivityField } from './spatial/adaptive.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -863,6 +864,28 @@ async function handleApi(request, response, pathname) {
         sourceSessionId: session?.id || null
       });
       return sendJson(response, 200, { artifact });
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
+  }
+  if (request.method === 'POST' && pathname === '/api/evaluation/adaptive-field') {
+    const body = await bodyJson(request);
+    const session = body.sessionId ? store.getSession(body.sessionId) : null;
+    if (body.sessionId && !session) return sendJson(response, 404, { error: 'adaptive field session not found' });
+    try {
+      const field = interpolateAdaptiveActivityField({
+        scene: session?.sceneSnapshot || activeScene,
+        observations: session?.observations || currentObservations(),
+        sources: session?.sourceRegistrySnapshot || activeScene.sources,
+        weights: body.weights || {},
+        baseGrid: body.baseGrid === undefined ? 4 : Number(body.baseGrid),
+        maxDepth: body.maxDepth === undefined ? 2 : Number(body.maxDepth),
+        maxTiles: body.maxTiles === undefined ? 512 : Number(body.maxTiles),
+        refineThreshold: body.refineThreshold === undefined ? .12 : Number(body.refineThreshold),
+        power: body.power === undefined ? 2 : Number(body.power),
+        sourceSessionId: session?.id || null
+      });
+      return sendJson(response, 200, { field });
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
     }
