@@ -45,6 +45,50 @@ std::vector<std::string> split_pipe(const std::string& value) {
   return fields;
 }
 
+std::vector<std::string> split_csv(const std::string& value) {
+  if (value.empty()) return {};
+  std::vector<std::string> fields;
+  std::size_t start = 0;
+  while (start <= value.size()) {
+    const auto end = value.find(',', start);
+    const auto field = value.substr(start, end == std::string::npos ? std::string::npos : end - start);
+    if (!field.empty()) fields.push_back(field);
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return fields;
+}
+
+std::string string_array_json(const std::vector<std::string>& values) {
+  std::ostringstream output;
+  output << '[';
+  for (std::size_t index = 0; index < values.size(); ++index) {
+    if (index > 0) output << ',';
+    output << quote_json(values[index]);
+  }
+  output << ']';
+  return output.str();
+}
+
+std::string adapter_record_json(const sidechannel::NativeAdapterRecord& record) {
+  std::ostringstream output;
+  output << "{\"providerId\":" << quote_json(record.manifest.provider_id)
+    << ",\"providerVersion\":" << quote_json(record.manifest.provider_version)
+    << ",\"providerDigest\":" << quote_json(record.manifest.provider_digest)
+    << ",\"protocolVersion\":" << quote_json(record.manifest.protocol_version)
+    << ",\"capabilities\":" << string_array_json(record.manifest.capabilities)
+    << ",\"requiredPermissions\":" << string_array_json(record.manifest.required_permissions)
+    << ",\"grantedPermissions\":" << string_array_json(record.granted_permissions)
+    << ",\"maximumFrameBytes\":" << record.manifest.maximum_frame_bytes
+    << ",\"state\":" << quote_json(record.state)
+    << ",\"failureCount\":" << record.failure_count
+    << ",\"lastFailure\":";
+  if (record.last_failure.empty()) output << "null";
+  else output << quote_json(record.last_failure);
+  output << ",\"lastTransitionAtMs\":" << record.last_transition_at_ms << '}';
+  return output.str();
+}
+
 bool parse_observation_payload(const std::string& payload, sidechannel::Observation& observation) {
   const auto fields = split_pipe(payload);
   if (fields.size() != 7 || fields[0].empty() || fields[1].empty() || fields[2].empty()) return false;
@@ -79,6 +123,7 @@ std::int64_t now_ms() {
 
 int run_ipc_stdio(const std::string& token, const std::string& session_file) {
   std::unique_ptr<sidechannel::NativeSessionStore> session;
+  sidechannel::NativeAdapterSupervisor adapters;
   if (!session_file.empty()) {
     session = std::make_unique<sidechannel::NativeSessionStore>(session_file, "session_native_cli");
     if (!session->open()) {
@@ -144,6 +189,91 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
       else {
         response.type = "session.closed";
         response.payload = "{\"state\":" + quote_json(session->state()) + '}';
+      }
+    } else if (decoded.frame.type == "adapter.register") {
+      const auto fields = split_pipe(decoded.frame.payload);
+      sidechannel::NativeAdapterManifest manifest;
+      bool valid = fields.size() == 6;
+      if (valid) {
+        manifest.protocol_version = "sidechannel.adapter/1";
+        manifest.provider_id = fields[0];
+        manifest.provider_version = fields[1];
+        manifest.provider_digest = fields[2];
+        manifest.capabilities = split_csv(fields[3]);
+        manifest.required_permissions = split_csv(fields[4]);
+        try {
+          std::size_t consumed = 0;
+          manifest.maximum_frame_bytes = std::stoul(fields[5], &consumed, 10);
+          valid = consumed == fields[5].size();
+        } catch (...) {
+          valid = false;
+        }
+      }
+      std::string adapter_error;
+      if (!valid || !adapters.register_provider(std::move(manifest), now_ms(), adapter_error)) {
+        response.payload = "{\"error\":" + quote_json(valid ? adapter_error : "invalid adapter manifest payload") + '}';
+      } else {
+        response.type = "adapter.updated";
+        response.payload = "{\"adapter\":" + adapter_record_json(*adapters.get(fields[0])) + '}';
+      }
+    } else if (decoded.frame.type == "adapter.grant" || decoded.frame.type == "adapter.revoke") {
+      const auto fields = split_pipe(decoded.frame.payload);
+      std::string adapter_error;
+      bool ok = fields.size() == 1 || fields.size() == 2;
+      if (ok) {
+        const auto permissions = fields.size() == 2 ? split_csv(fields[1]) : std::vector<std::string>{};
+        if (decoded.frame.type == "adapter.grant") {
+          ok = adapters.grant_permissions(fields[0], permissions, now_ms(), adapter_error);
+        } else {
+          ok = adapters.revoke_permissions(fields[0], permissions, now_ms(), adapter_error);
+        }
+      } else {
+        adapter_error = "invalid adapter permission payload";
+      }
+      if (!ok) response.payload = "{\"error\":" + quote_json(adapter_error) + '}';
+      else {
+        response.type = "adapter.updated";
+        response.payload = "{\"adapter\":" + adapter_record_json(*adapters.get(fields[0])) + '}';
+      }
+    } else if (decoded.frame.type == "adapter.start" || decoded.frame.type == "adapter.stop" ||
+        decoded.frame.type == "adapter.clear") {
+      const auto fields = split_pipe(decoded.frame.payload);
+      std::string adapter_error;
+      bool ok = fields.size() == 1;
+      if (ok) {
+        if (decoded.frame.type == "adapter.start") ok = adapters.start(fields[0], now_ms(), adapter_error);
+        else if (decoded.frame.type == "adapter.stop") ok = adapters.stop(fields[0], now_ms(), adapter_error);
+        else ok = adapters.clear_quarantine(fields[0], now_ms(), adapter_error);
+      } else {
+        adapter_error = "invalid adapter provider payload";
+      }
+      if (!ok) response.payload = "{\"error\":" + quote_json(adapter_error) + '}';
+      else {
+        response.type = "adapter.updated";
+        response.payload = "{\"adapter\":" + adapter_record_json(*adapters.get(fields[0])) + '}';
+      }
+    } else if (decoded.frame.type == "adapter.fail") {
+      const auto fields = split_pipe(decoded.frame.payload);
+      std::string adapter_error;
+      const bool ok = fields.size() == 2 && adapters.record_failure(fields[0], fields[1], now_ms(), adapter_error);
+      if (!ok) response.payload = "{\"error\":" + quote_json(adapter_error.empty() ? "invalid adapter failure payload" : adapter_error) + '}';
+      else {
+        response.type = "adapter.updated";
+        response.payload = "{\"adapter\":" + adapter_record_json(*adapters.get(fields[0])) + '}';
+      }
+    } else if (decoded.frame.type == "adapter.list") {
+      if (!decoded.frame.payload.empty()) response.payload = "{\"error\":\"adapter.list does not accept a payload\"}";
+      else {
+        response.type = "adapter.list";
+        const auto records = adapters.list();
+        std::ostringstream payload;
+        payload << "{\"adapters\":[";
+        for (std::size_t index = 0; index < records.size(); ++index) {
+          if (index > 0) payload << ',';
+          payload << adapter_record_json(records[index]);
+        }
+        payload << "]}";
+        response.payload = payload.str();
       }
     } else if (decoded.frame.type == "shutdown") {
       response.type = "stopped";

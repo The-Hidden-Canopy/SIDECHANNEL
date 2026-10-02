@@ -116,7 +116,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Bounded native local IPC contract',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'The native reference exposes a token-authenticated sidechannel.native-ipc/1 stdio boundary with bounded frames and ping/status/shutdown commands; it is not a network, OS permission, deployment, or hardware claim.'
+    note: 'The native reference exposes a token-authenticated sidechannel.native-ipc/1 stdio boundary with bounded frames, session controls, and adapter registration/lifecycle commands; it is not a network, OS permission, deployment, or hardware claim.'
   },
   {
     id: 'native-ipc-session-control',
