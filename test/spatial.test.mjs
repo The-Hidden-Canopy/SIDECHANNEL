@@ -41,4 +41,21 @@ test('unified activity field fuses channels, respects weights, and stays bounded
   assert.equal(field.pointCount, 2);
   assert.ok(field.cells.some((cell) => cell.intensity !== null));
   assert.ok(field.cells.filter((cell) => cell.intensity !== null).every((cell) => cell.intensity >= 0 && cell.intensity <= 1));
+  assert.ok(field.cells.filter((cell) => cell.intensity !== null).every((cell) => cell.support >= 0 && cell.support <= 1));
+});
+
+test('field value remains physical while confidence is reported separately as support', () => {
+  const result = interpolateField({
+    scene: { width: 2, height: 2 },
+    channel: 'heat',
+    observations: [{ sourceId: 'a', channel: 'heat', value: 80, status: 'measured', quality: { score: 0.1 }, position: { x: 1, y: 1 } }],
+    sources: new Map(),
+    gridSize: 4
+  });
+  const center = result.cells.reduce((closest, cell) =>
+    Math.hypot(cell.x - 1, cell.y - 1) < Math.hypot(closest.x - 1, closest.y - 1) ? cell : closest
+  );
+  assert.ok(center.intensity > 0.9);
+  assert.ok(center.support < 0.2);
+  assert.equal(center.status, 'estimated');
 });

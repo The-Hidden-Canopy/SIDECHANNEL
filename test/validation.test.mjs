@@ -44,13 +44,25 @@ test('validation preserves explicit evidence, privacy, provider, and lineage met
     providerId: 'fixture.temperature',
     providerDigest: 'abc',
     calibrationRef: 'cal_1',
-    provenance: [{ parentId: 'obs_parent', relation: 'derived_from' }]
+    provenance: [{ parentId: 'obs_parent', relation: 'derived_from' }],
+    support: { type: 'RegionSupport', frameId: 'scene', center: { x: 1, y: 2 }, radius: 0.5 }
   }, { sources, now: 1000 });
   assert.equal(result.ok, true);
   assert.equal(result.observation.evidenceState, 'imported');
   assert.equal(result.observation.provider.id, 'fixture.temperature');
   assert.equal(result.observation.calibrationRef, 'cal_1');
   assert.equal(result.observation.provenance[0].relation, 'derived_from');
+  assert.equal(result.observation.support.type, 'RegionSupport');
+});
+
+test('validation rejects an unsupported spatial support type', () => {
+  const result = validateObservation({
+    schemaVersion: '0.1', id: 'obs_support_bad', sourceId: 'sensor_1', channel: 'heat',
+    timestampMs: 1000, value: 22, unit: 'C', status: 'measured',
+    support: { type: 'PointMaybe' }
+  }, { sources, now: 1000 });
+  assert.equal(result.ok, false);
+  assert.ok(result.reasons.some((reason) => reason.id === 'support.type'));
 });
 
 test('rejects malformed, unknown, and out-of-range observations', () => {

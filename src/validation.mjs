@@ -9,6 +9,7 @@ import {
   privacyClassForSource
 } from './contracts.mjs';
 import { normalizeProvenance } from './provenance/graph.mjs';
+import { validateSpatialSupport } from './spatial/support.mjs';
 
 function finite(value) {
   return typeof value === 'number' && Number.isFinite(value);
@@ -78,6 +79,8 @@ export function validateObservation(raw, options = {}) {
   }
   const provenance = normalizeProvenance(raw.provenance);
   if (!provenance.ok) reasons.push(...provenance.reasons);
+  const support = validateSpatialSupport(raw.support);
+  if (!support.ok) reasons.push(...support.reasons);
   if (raw.quality !== undefined && !isPlainObject(raw.quality)) {
     reasons.push(reason('quality', 'quality must be an object'));
   }
@@ -138,6 +141,7 @@ export function validateObservation(raw, options = {}) {
       },
       quality,
       provenance: provenance.edges,
+      ...(support.support ? { support: support.support } : {}),
       ...(raw.position ? { position: { ...raw.position } } : {}),
       ...(typeof raw.feature === 'string' ? { feature: raw.feature } : {}),
       ...(typeof raw.calibrationRef === 'string' ? { calibrationRef: raw.calibrationRef } : {}),

@@ -13,6 +13,7 @@ import { createEventDetector } from './events.mjs';
 import { createIngressSequencer } from './admission/sequencer.mjs';
 import { createProviderManifest, validateProviderManifest } from './admission/manifest.mjs';
 import { CalibrationRegistry } from './calibration/registry.mjs';
+import { TransformGraph } from './spatial/transform-graph.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -32,6 +33,7 @@ const recentEvents = [];
 const clients = new Set();
 const eventDetector = createEventDetector();
 const calibrationRegistry = new CalibrationRegistry();
+const transformGraph = new TransformGraph();
 let admissionSequence = 0;
 const admittedIds = new Set();
 
@@ -53,6 +55,7 @@ function snapshot() {
     events: recentEvents.slice(-40),
     diagnostics: diagnostics.slice(-40),
     calibrations: calibrationRegistry.list(),
+    transforms: transformGraph.snapshot(),
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
       : null,
@@ -162,6 +165,7 @@ function ingest(raw) {
 function sessionPackage(session) {
   const scene = session.sceneSnapshot || activeScene;
   const sources = session.sourceRegistrySnapshot || scene.sources || [];
+  const privacyClasses = Array.from(new Set(session.observations.map((observation) => observation.privacyClass || 'local_numeric'))).sort();
   return {
     format: 'sidechannel-session',
     formatVersion: '0.2',
@@ -179,6 +183,7 @@ function sessionPackage(session) {
     events: session.events,
     createdAtMs: session.startedAtMs,
     privacy: {
+      classes: privacyClasses,
       rawAudioIncluded: false,
       networkPayloadsIncluded: false,
       persistentDeviceIdsIncluded: false
@@ -211,6 +216,17 @@ async function handleApi(request, response, pathname) {
     try {
       const calibration = calibrationRegistry.publish(body);
       return sendJson(response, 201, calibration);
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
+  }
+  if (request.method === 'GET' && pathname === '/api/transforms') {
+    return sendJson(response, 200, transformGraph.snapshot());
+  }
+  if (request.method === 'POST' && pathname === '/api/transforms') {
+    const body = await bodyJson(request);
+    try {
+      return sendJson(response, 201, transformGraph.publish(body));
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
     }
@@ -331,7 +347,7 @@ async function handleApi(request, response, pathname) {
       scene,
       sources: scene.sources,
       calibrations: calibrationRegistry.list(),
-      transformGraph: scene.transformGraph || { schemaVersion: '0.1', placements: scene.placements || [] }
+      transformGraph: transformGraph.snapshot()
     });
     recordingSessionId = session.id;
     broadcast({ type: 'session.state', state: 'recording', id: session.id });

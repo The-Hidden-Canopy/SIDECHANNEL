@@ -241,10 +241,13 @@ function renderInspector() {
     detail('Channel', observation.channel) +
     detail('Value', String(observation.value) + ' ' + observation.unit) +
     detail('Status', '<span class="badge">' + observation.status + '</span>') +
+    detail('Evidence', observation.evidenceState || observation.status) +
     detail('Quality', Math.round((observation.quality?.score || 0) * 100) + '% · ' + (observation.quality?.state || 'unknown')) +
+    detail('Provider', observation.provider?.id || 'not declared') +
     detail('Timestamp', new Date(observation.timestampMs).toLocaleTimeString()) +
     detail('Position', observation.position ? observation.position.x.toFixed(2) + ', ' + observation.position.y.toFixed(2) : 'source anchor') +
-    detail('Privacy', source?.privacyMode || 'not declared') +
+    detail('Calibration', observation.calibrationRef || source?.calibrationState || 'not declared') +
+    detail('Privacy', observation.privacyClass || source?.privacyClass || source?.privacyMode || 'not declared') +
     detail('Processing', observation.status === 'measured' ? 'source → normalized observation' : 'source → derived feature → scene') +
     '</div>';
 }
@@ -305,7 +308,8 @@ function drawActivityField(valid, transform) {
       const x = state.scene.width * (col + .5) / cols;
       const y = state.scene.height * (row + .5) / rows;
       let total = 0;
-      let weightTotal = 0;
+      let spatialWeightTotal = 0;
+      let supportTotal = 0;
       valid.forEach((point) => {
         if (!state.visible[point.channel]) return;
         const source = sourceById(point.sourceId);
@@ -314,11 +318,13 @@ function drawActivityField(valid, transform) {
         const distance = Math.hypot(x - position.x, y - position.y);
         const weight = 1 / Math.max(distance, .08) ** 2;
         const confidence = point.quality?.score || 0;
-        total += normalize(point.channel, point.value) * confidence * weight;
-        weightTotal += confidence * weight;
+        total += normalize(point.channel, point.value) * weight;
+        spatialWeightTotal += weight;
+        supportTotal += confidence * weight;
       });
-      const intensity = weightTotal ? Math.max(0, Math.min(1, total / weightTotal)) : 0;
-      context.fillStyle = hexToRgba(color, .025 + intensity * .12);
+      const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
+      const support = spatialWeightTotal ? Math.max(0, Math.min(1, supportTotal / spatialWeightTotal)) : 0;
+      context.fillStyle = hexToRgba(color, (.025 + intensity * .12) * (.25 + support * .75));
       context.fillRect(
         transform.x(x - state.scene.width / cols / 2),
         transform.y(y - state.scene.height / rows / 2),
@@ -374,18 +380,20 @@ function draw() {
       for (let col = 0; col < cols; col += 1) {
         const x = state.scene.width * (col + .5) / cols;
         const y = state.scene.height * (row + .5) / rows;
-        let total = 0; let weightTotal = 0;
+        let total = 0; let spatialWeightTotal = 0; let supportTotal = 0;
         points.forEach((point) => {
           const source = sourceById(point.sourceId);
           const position = point.position || source?.position;
           if (!position) return;
           const distance = Math.hypot(x - position.x, y - position.y);
           const weight = 1 / Math.max(distance, .08) ** 2;
-          total += normalize(channel, point.value) * (point.quality?.score || 0) * weight;
-          weightTotal += weight;
+          total += normalize(channel, point.value) * weight;
+          spatialWeightTotal += weight;
+          supportTotal += (point.quality?.score || 0) * weight;
         });
-        const intensity = weightTotal ? Math.max(0, Math.min(1, total / weightTotal)) : 0;
-        context.fillStyle = hexToRgba(color, .045 + intensity * .19);
+        const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
+        const support = spatialWeightTotal ? Math.max(0, Math.min(1, supportTotal / spatialWeightTotal)) : 0;
+        context.fillStyle = hexToRgba(color, (.045 + intensity * .19) * (.25 + support * .75));
         context.fillRect(transform.x(x - state.scene.width / cols / 2), transform.y(y - state.scene.height / rows / 2),
           transform.sx * state.scene.width / cols + 1, transform.sy * state.scene.height / rows + 1);
       }
