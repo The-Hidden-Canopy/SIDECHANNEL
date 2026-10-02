@@ -99,3 +99,25 @@ export function verifyRuntimeManifest(manifest) {
   }
   return { ok: errors.length === 0, errors };
 }
+
+export function verifyRuntimeBundle(root, manifest) {
+  const errors = [...verifyRuntimeManifest(manifest).errors];
+  if (errors.length) return { ok: false, errors };
+  for (const entry of manifest.files) {
+    const filePath = join(root, entry.path);
+    let metadata;
+    try {
+      metadata = statSync(filePath);
+    } catch {
+      errors.push('bundle file is missing: ' + entry.path);
+      continue;
+    }
+    if (!metadata.isFile()) {
+      errors.push('bundle path is not a file: ' + entry.path);
+      continue;
+    }
+    if (metadata.size !== entry.bytes) errors.push('bundle byte count mismatch: ' + entry.path);
+    if (sha256(filePath) !== entry.sha256) errors.push('bundle digest mismatch: ' + entry.path);
+  }
+  return { ok: errors.length === 0, errors };
+}

@@ -6,6 +6,7 @@ import {
   RUNTIME_MANIFEST_FORMAT,
   RUNTIME_REQUIRED_FILES,
   createRuntimeManifest,
+  verifyRuntimeBundle,
   verifyRuntimeManifest
 } from '../src/packaging.mjs';
 
@@ -26,6 +27,7 @@ test('runtime manifest covers the portable loopback bundle boundary', () => {
   }
   assert.equal(manifest.files.some((file) => file.path.startsWith('data/')), false);
   assert.equal(manifest.files.some((file) => file.path.startsWith('native/')), false);
+  assert.deepEqual(verifyRuntimeBundle(root, manifest), { ok: true, errors: [] });
 });
 
 test('runtime manifest verifier rejects missing, excluded, and malformed entries', () => {
@@ -44,4 +46,13 @@ test('runtime manifest verifier rejects missing, excluded, and malformed entries
   assert.ok(report.errors.some((error) => error.includes('public/app.js')));
   assert.ok(report.errors.some((error) => error.includes('excluded path')));
   assert.ok(report.errors.some((error) => error.includes('invalid runtime file path')));
+});
+
+test('runtime bundle verifier catches a changed copied file', () => {
+  const manifest = createRuntimeManifest(root);
+  const tampered = { ...manifest, files: manifest.files.map((file) => ({ ...file })) };
+  tampered.files.find((file) => file.path === 'README.md').bytes += 1;
+  const report = verifyRuntimeBundle(root, tampered);
+  assert.equal(report.ok, false);
+  assert.ok(report.errors.includes('bundle byte count mismatch: README.md'));
 });

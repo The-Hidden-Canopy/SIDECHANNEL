@@ -21,6 +21,8 @@ jobs:
           node-version: 22.x
       - name: Verify reference runtime
         run: npm run verify
+      - name: Assemble portable loopback bundle
+        run: node scripts/package-runtime.mjs . "$RUNNER_TEMP/sidechannel-runtime"
 
   native:
     name: Native ${{ matrix.os }}
