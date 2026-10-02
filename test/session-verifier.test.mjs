@@ -91,3 +91,18 @@ test('session verifier requires retained pose samples for pose-resolved observat
   assert.equal(missing.checks.poseReferencesVerified, false);
   assert.ok(missing.reasons.some((reason) => reason.includes('pose sample not retained')));
 });
+
+test('session verifier rejects missing source, calibration, and derived-input references', () => {
+  const packaged = packageData();
+  packaged.observations[0].calibrationRef = 'cal_missing';
+  packaged.observations[0].provenance = [{ parentId: 'observation_missing', relation: 'derived_from' }];
+  const report = verifySessionPackage(packaged);
+  assert.equal(report.ok, false);
+  assert.equal(report.checks.calibrationReferencesVerified, false);
+  assert.equal(report.checks.provenanceReferencesVerified, false);
+
+  packaged.observations[0].sourceId = 'source_missing';
+  const sourceReport = verifySessionPackage(packaged);
+  assert.equal(sourceReport.ok, false);
+  assert.equal(sourceReport.checks.sourceReferencesVerified, false);
+});

@@ -45,6 +45,21 @@ export function verifySessionPackage(packageData) {
 
   const ids = new Set();
   const poseIds = new Set();
+  const sourceSnapshot = Array.isArray(packageData?.sourceRegistrySnapshot)
+    ? packageData.sourceRegistrySnapshot
+    : Array.isArray(packageData?.sources)
+      ? packageData.sources
+      : Array.isArray(packageData?.sceneSnapshot?.sources) ? packageData.sceneSnapshot.sources : null;
+  const sourceIds = new Set((sourceSnapshot || []).map((source) => source?.id).filter((id) => typeof id === 'string'));
+  const calibrationSnapshot = Array.isArray(packageData?.calibrationRegistrySnapshot)
+    ? packageData.calibrationRegistrySnapshot
+    : Array.isArray(packageData?.sceneSnapshot?.calibrations) ? packageData.sceneSnapshot.calibrations : null;
+  const calibrationIds = new Set((calibrationSnapshot || [])
+    .map((calibration) => calibration?.calibrationId)
+    .filter((id) => typeof id === 'string'));
+  let sourceReferencesVerified = true;
+  let calibrationReferencesVerified = true;
+  let provenanceReferencesVerified = true;
   let previousSequence = null;
   for (const observation of observations || []) {
     if (!observation || typeof observation.id !== 'string') {
@@ -53,11 +68,32 @@ export function verifySessionPackage(packageData) {
     }
     if (ids.has(observation.id)) reasons.push('duplicate observation id: ' + observation.id);
     ids.add(observation.id);
+    if (sourceIds.size > 0 && !sourceIds.has(observation.sourceId)) {
+      sourceReferencesVerified = false;
+      reasons.push('observation references a source not retained in the package: ' + observation.sourceId);
+    }
+    if (typeof observation.calibrationRef === 'string' && calibrationSnapshot &&
+        !calibrationIds.has(observation.calibrationRef)) {
+      calibrationReferencesVerified = false;
+      reasons.push('observation references a calibration not retained in the package: ' + observation.calibrationRef);
+    }
+    if (Number.isInteger(observation.transformRevision) && observation.transformRevision < 0) {
+      reasons.push('observation transform revision must be non-negative: ' + observation.id);
+    }
     if (typeof observation.sequence === 'number') {
       if (previousSequence !== null && observation.sequence <= previousSequence) {
         reasons.push('observation sequence is not strictly increasing');
       }
       previousSequence = observation.sequence;
+    }
+  }
+
+  for (const observation of observations || []) {
+    for (const edge of Array.isArray(observation?.provenance) ? observation.provenance : []) {
+      if (edge.relation === 'derived_from' && !ids.has(edge.parentId)) {
+        provenanceReferencesVerified = false;
+        reasons.push('observation derived input is not retained in the package: ' + edge.parentId);
+      }
     }
   }
 
@@ -141,6 +177,9 @@ export function verifySessionPackage(packageData) {
       eventCount: events?.length || 0,
       poseCount: poses?.length || 0,
       poseReferencesVerified,
+      sourceReferencesVerified,
+      calibrationReferencesVerified,
+      provenanceReferencesVerified,
       uniqueObservationIds: ids.size === (observations?.length || 0),
       historicalSnapshotComplete: snapshotComplete,
       snapshotDigestVerified: packageData?.formatVersion === '0.2' && snapshotComplete && reasons.every((reason) => reason !== 'snapshot digest mismatch'),
