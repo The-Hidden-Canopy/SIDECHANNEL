@@ -15,7 +15,8 @@ const DISPLAY_LAYERS = [
   ['support', 'Support / confidence', '#6ce4db', 0],
   ['uncertainty', 'Uncertainty geometry', '#ffb47b', 0],
   ['trails', 'Temporal trails', '#79a7ff', 0],
-  ['events', 'Activity event pulses', '#ff8f97', 0]
+  ['events', 'Activity event pulses', '#ff8f97', 0],
+  ['zones', 'Rooms / zones', '#a9e88b', 0]
 ];
 const JOURNAL_MARKER_TYPES = new Set([
   'SessionOpened', 'SessionClosed', 'CalibrationPublished', 'CalibrationInvalidated',
@@ -142,6 +143,32 @@ function renderSceneTools() {
     ? 'Drag a source marker, then release to save its calibrated position.'
     : 'Turn on Edit scene, then drag source markers to calibrate placement.';
   canvas.classList.toggle('canvas-editing', state.editMode);
+}
+
+function renderRegions() {
+  const list = document.getElementById('regionList');
+  if (!list) return;
+  const regions = state.scene?.regions || [];
+  if (!regions.length) {
+    list.innerHTML = '<span class="muted">No rooms or zones defined.</span>';
+    return;
+  }
+  list.innerHTML = regions.map((region) =>
+    '<div class="region-entry"><span><strong>' + escapeHtml(region.name) + '</strong> · ' +
+    escapeHtml(region.kind || 'zone') + ' · ' + region.points.length + ' points</span>' +
+    '<button class="button small ghost" type="button" data-delete-region="' + escapeHtml(region.id) + '">Remove</button></div>'
+  ).join('');
+  list.querySelectorAll('[data-delete-region]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      const regionId = button.dataset.deleteRegion;
+      try {
+        await api('/api/scenes/' + state.scene.id + '/regions/' + encodeURIComponent(regionId), { method: 'DELETE' });
+        hydrate(await api('/api/state'));
+      } catch (error) {
+        document.getElementById('freshnessLabel').textContent = 'Region removal failed: ' + error.message;
+      }
+    });
+  });
 }
 
 function updateObservation(observation) {
@@ -717,6 +744,29 @@ function draw() {
   context.lineWidth = 1.5;
   context.strokeRect(transform.x(0), transform.y(0), transform.sx * state.scene.width, transform.sy * state.scene.height);
 
+  if (state.visible.zones) {
+    (state.scene.regions || []).forEach((region) => {
+      if (!Array.isArray(region.points) || region.points.length < 3) return;
+      context.save();
+      context.beginPath();
+      context.moveTo(transform.x(region.points[0].x), transform.y(region.points[0].y));
+      region.points.slice(1).forEach((point) => context.lineTo(transform.x(point.x), transform.y(point.y)));
+      context.closePath();
+      const color = /^#[0-9a-f]{6}$/i.test(region.color || '') ? region.color : '#a9e88b';
+      context.fillStyle = hexToRgba(color, .055);
+      context.fill();
+      context.strokeStyle = hexToRgba(color, .48);
+      context.setLineDash([6, 4]);
+      context.stroke();
+      const anchor = region.points[0];
+      context.setLineDash([]);
+      context.fillStyle = hexToRgba(color, .85);
+      context.font = '10px system-ui';
+      context.fillText(region.name, transform.x(anchor.x) + 5, transform.y(anchor.y) + 13);
+      context.restore();
+    });
+  }
+
   drawActivityField(valid, transform);
 
   CHANNELS.forEach(([channel, label, color]) => {
@@ -901,7 +951,7 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); draw();
+  renderLayers(); renderSources(); renderRegions(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1080,6 +1130,43 @@ document.getElementById('saveSceneButton').addEventListener('click', async () =>
   });
   state.scene = scene;
   render();
+});
+
+document.getElementById('addRegionButton').addEventListener('click', () => {
+  const form = document.getElementById('regionForm');
+  form.hidden = !form.hidden;
+  if (!form.hidden) document.getElementById('regionName').focus();
+});
+
+document.getElementById('regionForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const name = document.getElementById('regionName').value.trim();
+  const kind = document.getElementById('regionKind').value;
+  const x = Number(document.getElementById('regionX').value);
+  const y = Number(document.getElementById('regionY').value);
+  const width = Number(document.getElementById('regionWidth').value);
+  const height = Number(document.getElementById('regionHeight').value);
+  if (!name || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 ||
+      x + width > state.scene.width || y + height > state.scene.height) {
+    document.getElementById('freshnessLabel').textContent = 'Region must remain inside the scene frame.';
+    return;
+  }
+  try {
+    await api('/api/scenes/' + state.scene.id + '/regions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        kind,
+        points: [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }]
+      })
+    });
+    document.getElementById('regionForm').reset();
+    document.getElementById('regionForm').hidden = true;
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Could not add region: ' + error.message;
+  }
 });
 
 document.getElementById('addSourceButton').addEventListener('click', () => {

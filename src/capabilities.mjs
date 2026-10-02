@@ -119,6 +119,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The scene independently toggles support/confidence, uncertainty geometry, replay trails, and activity-event pulses without changing observation truth.'
   },
   {
+    id: 'scene-regions-and-zones',
+    label: 'Scene rooms and zones',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Bounded room/zone polygons are validated, persisted with scene snapshots, rendered as a layer, and removable through the loopback workspace.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

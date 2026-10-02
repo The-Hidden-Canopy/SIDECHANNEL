@@ -133,6 +133,13 @@ export function createDefaultScene() {
     width: 5,
     height: 4,
     unit: 'm',
+    regions: [{
+      id: 'region_main_room',
+      name: 'Main room',
+      kind: 'room',
+      points: [{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 4 }, { x: 0, y: 4 }],
+      color: '#6ce4db'
+    }],
     sources,
     placements: sources.map((source) => ({
       sourceId: source.id,

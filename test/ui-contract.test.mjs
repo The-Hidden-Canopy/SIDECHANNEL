@@ -29,4 +29,7 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /drawUncertainty/);
   assert.match(appSource, /drawTemporalTrails/);
   assert.match(appSource, /drawEventPulses/);
+  assert.match(appSource, /\/regions/);
+  assert.match(appSource, /renderRegions/);
+  assert.match(appSource, /Rooms \/ zones/);
 });

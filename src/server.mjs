@@ -23,6 +23,7 @@ import { runBurstBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, v
 import { capabilitySnapshot } from './capabilities.mjs';
 import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/source-profile.mjs';
 import { PoseHistory } from './spatial/pose-history.mjs';
+import { validateRegion, validateRegions } from './spatial/regions.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -555,10 +556,20 @@ async function handleApi(request, response, pathname) {
   }
   if (request.method === 'POST' && pathname === '/api/scenes') {
     const body = await bodyJson(request);
+    const sceneWidth = Number(body.width ?? defaultScene.width);
+    const sceneHeight = Number(body.height ?? defaultScene.height);
+    const regionResult = validateRegions(Array.isArray(body.regions) ? body.regions : [], {
+      width: sceneWidth,
+      height: sceneHeight
+    });
+    if (!regionResult.ok) return sendJson(response, 422, { error: 'invalid scene regions', reasons: regionResult.reasons });
     const scene = {
       ...defaultScene,
       ...body,
       id: 'scene_' + randomUUID(),
+      width: sceneWidth,
+      height: sceneHeight,
+      regions: regionResult.regions,
       sources: Array.isArray(body.sources) ? body.sources.map((source) => withSourceProfileDigest(source)) : [],
       placements: Array.isArray(body.placements) ? body.placements : []
     };
@@ -575,6 +586,11 @@ async function handleApi(request, response, pathname) {
     if (request.method === 'PATCH' && parts.length === 3) {
       const body = await bodyJson(request);
       const updated = { ...scene, ...body, id: scene.id };
+      if (Object.prototype.hasOwnProperty.call(body, 'regions')) {
+        const regionResult = validateRegions(body.regions, { width: updated.width, height: updated.height });
+        if (!regionResult.ok) return sendJson(response, 422, { error: 'invalid scene regions', reasons: regionResult.reasons });
+        updated.regions = regionResult.regions;
+      }
       await store.upsertScene(updated);
       if (activeScene.id === updated.id) activeScene = updated;
       appendRuntimeEvent('SceneRevisionPublished', {
@@ -586,6 +602,41 @@ async function handleApi(request, response, pathname) {
       });
       broadcast({ type: 'scene.updated', scene: updated });
       return sendJson(response, 200, updated);
+    }
+    if (request.method === 'POST' && parts[3] === 'regions' && parts.length === 4) {
+      const body = await bodyJson(request);
+      const result = validateRegion(body, { width: scene.width, height: scene.height });
+      if (!result.ok) return sendJson(response, 422, { error: 'invalid scene region', reasons: result.reasons });
+      const region = { ...result.region, id: 'region_' + randomUUID(), createdAtMs: Date.now() };
+      const updated = { ...scene, regions: [...(scene.regions || []), region] };
+      await store.upsertScene(updated);
+      if (activeScene.id === updated.id) activeScene = updated;
+      appendRuntimeEvent('SceneRevisionPublished', {
+        sceneId: updated.id,
+        fields: ['regions'],
+        regionId: region.id,
+        regionKind: region.kind,
+        regionCount: updated.regions.length
+      });
+      broadcast({ type: 'scene.updated', scene: updated });
+      return sendJson(response, 201, region);
+    }
+    if (request.method === 'DELETE' && parts[3] === 'regions' && parts[4]) {
+      const regionId = parts[4];
+      if (!(scene.regions || []).some((region) => region.id === regionId)) {
+        return sendJson(response, 404, { error: 'region not found' });
+      }
+      const updated = { ...scene, regions: scene.regions.filter((region) => region.id !== regionId) };
+      await store.upsertScene(updated);
+      if (activeScene.id === updated.id) activeScene = updated;
+      appendRuntimeEvent('SceneRevisionPublished', {
+        sceneId: updated.id,
+        fields: ['regions'],
+        removedRegionId: regionId,
+        regionCount: updated.regions.length
+      });
+      broadcast({ type: 'scene.updated', scene: updated });
+      return sendJson(response, 200, { regionId, removed: true });
     }
     if (request.method === 'POST' && parts[3] === 'sources') {
       const body = await bodyJson(request);

@@ -45,6 +45,23 @@
         </div>
         <button id="saveSceneButton" class="button small ghost" type="button">Save frame</button>
         <p id="editHint" class="muted">Turn on Edit scene, then drag source markers to calibrate placement.</p>
+        <button id="addRegionButton" class="button small ghost" type="button">Add room / zone</button>
+        <form id="regionForm" class="source-form" hidden>
+          <label>Name <input id="regionName" type="text" placeholder="Workbench zone" required></label>
+          <label>Kind
+            <select id="regionKind"><option value="zone">Zone</option><option value="room">Room</option></select>
+          </label>
+          <div class="field-grid">
+            <label>X <input id="regionX" type="number" min="0" step="0.1" value="0"></label>
+            <label>Y <input id="regionY" type="number" min="0" step="0.1" value="0"></label>
+          </div>
+          <div class="field-grid">
+            <label>Width <input id="regionWidth" type="number" min="0.1" step="0.1" value="1"></label>
+            <label>Height <input id="regionHeight" type="number" min="0.1" step="0.1" value="1"></label>
+          </div>
+          <button class="button small accent" type="submit">Add polygon</button>
+        </form>
+        <div id="regionList" class="region-list"></div>
       </section>
       <section class="panel">
         <div class="panel-heading">

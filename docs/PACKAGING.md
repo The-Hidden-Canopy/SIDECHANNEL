@@ -81,6 +81,8 @@ Replay also exposes bounded temporal evidence markers. Activity-change events us
 
 The Layers panel independently toggles the unified activity field, each channel field, support/confidence rendering, uncertainty geometry, replay trails, and activity-event pulses. Support changes visual opacity only; it never changes the underlying field value. Geometry and trail overlays are bounded to the retained observation/session data and remain software-derived evidence.
 
+Scenes also support bounded room/zone polygons. The workspace creates rectangle-backed polygons in scene coordinates, the loopback API validates that points stay inside the frame, and the region list can remove them. Regions are part of the scene snapshot, so historical session packages retain the floor-plan structure that was authoritative when recording began.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:
