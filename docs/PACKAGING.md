@@ -75,6 +75,8 @@ npm start
 
 Open `http://127.0.0.1:4173/`. The application starts with deterministic simulated sources, supports scene/source authoring, manual numeric input, JSON-lines and WebSocket ingestion, recording, replay, export/import, local deletion, and loopback adapter-supervisor lifecycle controls. The supervised subprocess adapter is a tested local transport primitive with bounded JSONL frames, stdout limits, cancellation, and supervisor integration; it does not provide or imply a native hardware driver.
 
+For a supervised portable launch, run `npm run start:portable -- --port 4173 --data-dir path/to/data`. The host starts the loopback server as a child process, waits for a healthy `/api/health` response, prints a `sidechannel-portable-host/1` ready receipt, and forwards `SIGINT`/`SIGTERM` shutdown. It is still a Node-based local host; no installer, signing, native desktop shell, deployment approval, or hardware authority is implied.
+
 While a session is recording, adapter failures are emitted as bounded diagnostics and journaled as `AdapterFailure`; crossing the quarantine threshold adds `AdapterQuarantined`. The runtime does not synthesize a zero-valued observation for a failed provider.
 
 For the built-in simulator, entering `QUARANTINED` also stops the simulator emission loop and changes the source health projection to `quarantined`; clearing quarantine leaves the provider disabled until an explicit start. Adapter lifecycle changes are broadcast to the live workspace so source health does not depend on a stale observation snapshot.

@@ -21,6 +21,7 @@
     "verify:native-benchmark": "node scripts/verify-native-benchmark.mjs",
     "package:audit": "node scripts/package-audit.mjs",
     "package:runtime": "node scripts/package-runtime.mjs",
+    "start:portable": "node src/portable-host.mjs",
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:scene-view": "node scripts/benchmark-scene-view.mjs",
     "benchmark:matrix": "node scripts/benchmark-matrix.mjs",
