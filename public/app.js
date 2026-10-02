@@ -92,6 +92,8 @@ const state = {
   benchmarkBusy: false,
   burstReceipt: null,
   burstBusy: false,
+  faultReceipt: null,
+  faultBusy: false,
   selected: null,
   editMode: false,
   draggedSourceId: null,
@@ -628,6 +630,25 @@ function renderBurstBenchmark() {
     ['Backpressure', receipt.droppedCount + ' dropped · queue ' + receipt.queueCapacity],
     ['Timing', receipt.admissionLatencyUs.p95 + ' µs p95 · ' + receipt.framesPerSecond + ' frames/s host-local'],
     ['Receipt', receipt.receiptDigest.slice(0, 12) + '… verified']
+  ].map(([label, value]) => '<div class="benchmark-row"><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('');
+}
+
+function renderFaultCampaign() {
+  const button = document.getElementById('faultCampaignButton');
+  const result = document.getElementById('faultCampaignResult');
+  if (!button || !result) return;
+  button.disabled = state.faultBusy;
+  button.textContent = state.faultBusy ? 'Running fault checks…' : 'Run fault campaign';
+  if (!state.faultReceipt) {
+    result.innerHTML = '<span class="muted">No fault campaign receipt yet.</span>';
+    return;
+  }
+  const receipt = state.faultReceipt;
+  result.innerHTML = [
+    ['Cases', receipt.passedCaseCount + '/' + receipt.caseCount + ' passed'],
+    ['Evidence', receipt.evidenceLevel + ' software receipt'],
+    ['Receipt', receipt.receiptDigest.slice(0, 12) + '… verified'],
+    ['Boundary', 'no hardware or production claim']
   ].map(([label, value]) => '<div class="benchmark-row"><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('');
 }
 
@@ -1464,7 +1485,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderFieldSettings(); renderActivityWeights(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderFieldSettings(); renderActivityWeights(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderFaultCampaign(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1749,6 +1770,24 @@ document.getElementById('burstBenchmarkButton').addEventListener('click', async 
   } finally {
     state.burstBusy = false;
     renderBurstBenchmark();
+  }
+});
+
+document.getElementById('faultCampaignButton').addEventListener('click', async () => {
+  state.faultBusy = true;
+  renderFaultCampaign();
+  try {
+    const payload = await api('/api/verification/faults', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    state.faultReceipt = payload.receipt;
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Fault campaign failed: ' + error.message;
+  } finally {
+    state.faultBusy = false;
+    renderFaultCampaign();
   }
 });
 

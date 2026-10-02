@@ -28,6 +28,7 @@ import { validatePortal, validatePortals } from './spatial/portals.mjs';
 import { validateBackground } from './spatial/background.mjs';
 import { decryptSessionPackage, encryptSessionPackage } from './session-crypto.mjs';
 import { createCoOccurrenceArtifact } from './evaluation/cooccurrence.mjs';
+import { runFaultCampaign, verifyFaultCampaignReceipt } from './verification/faults.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -862,6 +863,18 @@ async function handleApi(request, response, pathname) {
         sourceSessionId: session?.id || null
       });
       return sendJson(response, 200, { artifact });
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
+  }
+  if (request.method === 'POST' && pathname === '/api/verification/faults') {
+    const body = await bodyJson(request);
+    try {
+      const receipt = await runFaultCampaign({
+        runId: typeof body.runId === 'string' && body.runId.length ? body.runId : 'faults_' + Date.now(),
+        sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
+      });
+      return sendJson(response, 200, { receipt, verification: verifyFaultCampaignReceipt(receipt) });
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
     }

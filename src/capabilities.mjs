@@ -112,6 +112,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A bounded evaluator compares normalized temporal changes across channels, retains input observation IDs and lag estimates, and labels the result co-occurrence rather than causation.'
   },
   {
+    id: 'software-fault-campaign',
+    label: 'Software fault campaign receipts',
+    status: 'implemented',
+    evidenceLevel: 'E2',
+    note: 'A bounded repeatable campaign exercises stale publication, ordering, adapter framing, range, permission, journal, and spatial rejection paths and emits a tamper-detectable software receipt.'
+  },
+  {
     id: 'temporal-comparison-surface',
     label: 'Within-session temporal comparison',
     status: 'implemented',

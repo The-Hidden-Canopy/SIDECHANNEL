@@ -97,6 +97,10 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(htmlSource, /id="activityWeightsForm"/);
   assert.match(htmlSource, /Apply activity weights/);
   assert.match(htmlSource, /id="activityWeight_network"/);
+  assert.match(appSource, /renderFaultCampaign/);
+  assert.match(appSource, /\/api\/verification\/faults/);
+  assert.match(htmlSource, /id="faultCampaignButton"/);
+  assert.match(htmlSource, /Run fault campaign/);
   assert.match(serverSource, /'\.mjs': 'text\/javascript; charset=utf-8'/);
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);
