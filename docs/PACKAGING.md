@@ -62,6 +62,8 @@ While a session is recording, calibration publication/invalidation, transform pu
 
 Pose history is bounded and explicit. `POST /api/poses` records a `sidechannel.pose/1` sample for a registered source; an observation from a `pose_required` source without a direct position resolves to the nearest sample within `poseMaxAgeMs`, records `poseRef`, `poseFrameId`, and `poseDistanceMs`, and adds a provenance edge. Missing or stale pose resolution rejects the observation instead of inventing a position. This is software spatial resolution, not hardware localization accuracy.
 
+Spatial evaluation preserves support geometry. `RegionSupport` is sampled across a bounded center/cardinal footprint, `PathSupport` across its bounded trajectory points, and `EllipseSupport` across a bounded perimeter sample set; field artifacts report both observation count and support sample count/types. Unsupported or malformed geometry is rejected instead of silently becoming a point.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

@@ -372,6 +372,36 @@ function nearestSource(point) {
   return distance < .45 ? nearest : null;
 }
 
+function supportPositions(observation, source) {
+  const support = observation.support || source?.support;
+  const fallback = observation.position || source?.position;
+  const center = support?.center || support?.position || fallback;
+  if (!center) return [];
+  if (support?.type === 'RegionSupport') {
+    const radius = Number.isFinite(support.radius) ? support.radius : 0;
+    return radius > 0
+      ? [
+        center,
+        { x: center.x + radius, y: center.y },
+        { x: center.x - radius, y: center.y },
+        { x: center.x, y: center.y + radius },
+        { x: center.x, y: center.y - radius }
+      ]
+      : [center];
+  }
+  if (support?.type === 'PathSupport' && Array.isArray(support.points)) return support.points;
+  if (support?.type === 'EllipseSupport') {
+    const radiusX = Number.isFinite(support.radiusX) ? support.radiusX : 0;
+    const radiusY = Number.isFinite(support.radiusY) ? support.radiusY : 0;
+    return Array.from({ length: 9 }, (_, index) => {
+      if (index === 0) return center;
+      const angle = (index - 1) * Math.PI / 4;
+      return { x: center.x + radiusX * Math.cos(angle), y: center.y + radiusY * Math.sin(angle) };
+    });
+  }
+  return [center];
+}
+
 function drawActivityField(valid, transform) {
   if (!state.visible.activity) return;
   const cols = 22;
@@ -403,14 +433,14 @@ function drawActivityField(valid, transform) {
       valid.forEach((point) => {
         if (!state.visible[point.channel]) return;
         const source = sourceById(point.sourceId);
-        const position = point.position || source?.position;
-        if (!position) return;
-        const distance = Math.hypot(x - position.x, y - position.y);
-        const weight = 1 / Math.max(distance, .08) ** 2;
-        const confidence = point.quality?.score || 0;
-        total += normalize(point.channel, point.value) * weight;
-        spatialWeightTotal += weight;
-        supportTotal += confidence * weight;
+        supportPositions(point, source).forEach((position) => {
+          const distance = Math.hypot(x - position.x, y - position.y);
+          const weight = 1 / Math.max(distance, .08) ** 2;
+          const confidence = point.quality?.score || 0;
+          total += normalize(point.channel, point.value) * weight;
+          spatialWeightTotal += weight;
+          supportTotal += confidence * weight;
+        });
       });
       const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
       const support = spatialWeightTotal ? Math.max(0, Math.min(1, supportTotal / spatialWeightTotal)) : 0;
@@ -473,13 +503,13 @@ function draw() {
         let total = 0; let spatialWeightTotal = 0; let supportTotal = 0;
         points.forEach((point) => {
           const source = sourceById(point.sourceId);
-          const position = point.position || source?.position;
-          if (!position) return;
-          const distance = Math.hypot(x - position.x, y - position.y);
-          const weight = 1 / Math.max(distance, .08) ** 2;
-          total += normalize(channel, point.value) * weight;
-          spatialWeightTotal += weight;
-          supportTotal += (point.quality?.score || 0) * weight;
+          supportPositions(point, source).forEach((position) => {
+            const distance = Math.hypot(x - position.x, y - position.y);
+            const weight = 1 / Math.max(distance, .08) ** 2;
+            total += normalize(channel, point.value) * weight;
+            spatialWeightTotal += weight;
+            supportTotal += (point.quality?.score || 0) * weight;
+          });
         });
         const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
         const support = spatialWeightTotal ? Math.max(0, Math.min(1, supportTotal / spatialWeightTotal)) : 0;

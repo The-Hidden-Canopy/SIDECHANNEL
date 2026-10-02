@@ -125,6 +125,24 @@ test('validation rejects an unsupported spatial support type', () => {
   assert.ok(result.reasons.some((reason) => reason.id === 'support.type'));
 });
 
+test('validation rejects unbounded region and path geometry', () => {
+  const region = validateObservation({
+    schemaVersion: '0.1', id: 'obs_region_bad', sourceId: 'sensor_1', channel: 'heat',
+    timestampMs: 1000, value: 22, unit: 'C', status: 'measured',
+    support: { type: 'RegionSupport', center: { x: 1, y: 2 }, radius: -1 }
+  }, { sources, now: 1000 });
+  assert.equal(region.ok, false);
+  assert.ok(region.reasons.some((reason) => reason.id === 'support.region.radius'));
+
+  const path = validateObservation({
+    schemaVersion: '0.1', id: 'obs_path_bad', sourceId: 'sensor_1', channel: 'heat',
+    timestampMs: 1000, value: 22, unit: 'C', status: 'measured',
+    support: { type: 'PathSupport', points: [{ x: 1, y: 2 }] }
+  }, { sources, now: 1000 });
+  assert.equal(path.ok, false);
+  assert.ok(path.reasons.some((reason) => reason.id === 'support.path.points'));
+});
+
 test('rejects malformed, unknown, and out-of-range observations', () => {
   const result = validateObservation({
     schemaVersion: '0.1',

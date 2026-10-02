@@ -1,5 +1,5 @@
 import { clamp, normalizeIntensity } from './contracts.mjs';
-import { supportPosition } from './spatial/support.mjs';
+import { supportPosition, supportSamples } from './spatial/support.mjs';
 
 export function interpolateField({
   scene,
@@ -12,18 +12,17 @@ export function interpolateField({
 }) {
   const width = Math.max(2, gridSize);
   const height = Math.max(2, Math.round(gridSize * scene.height / scene.width));
-  const points = observations
-    .filter((observation) => observation.channel === channel && observation.status !== 'stale')
-    .map((observation) => {
+  const inputObservations = observations
+    .filter((observation) => observation.channel === channel && observation.status !== 'stale');
+  const points = inputObservations.flatMap((observation) => {
       const source = sources.get(observation.sourceId);
-      const position = supportPosition(observation, source);
-      if (!position) return null;
-      return {
+      return supportSamples(observation, source).map(({ position, supportType }) => position ? {
         x: position.x,
         y: position.y,
         intensity: normalizeIntensity(channel, observation.value, source),
-        confidence: clamp(observation.quality?.score ?? 0)
-      };
+        confidence: clamp(observation.quality?.score ?? 0),
+        supportType
+      } : null);
     })
     .filter(Boolean);
 
@@ -52,7 +51,17 @@ export function interpolateField({
       });
     }
   }
-  return { width, height, cells, pointCount: points.length };
+  return {
+    width,
+    height,
+    cells,
+    pointCount: points.length,
+    observationCount: inputObservations.length,
+    supportResolution: {
+      types: Array.from(new Set(points.map((point) => point.supportType))).sort(),
+      sampleCount: points.length
+    }
+  };
 }
 
 export function composeActivity({ scene, observations, sources, weights = {} }) {
@@ -90,19 +99,18 @@ export function interpolateActivityField({
 }) {
   const width = Math.max(2, gridSize);
   const height = Math.max(2, Math.round(gridSize * scene.height / scene.width));
-  const points = observations
-    .filter((observation) => observation.status !== 'stale' && observation.status !== 'rejected')
-    .map((observation) => {
+  const inputObservations = observations
+    .filter((observation) => observation.status !== 'stale' && observation.status !== 'rejected');
+  const points = inputObservations.flatMap((observation) => {
       const source = sources.get(observation.sourceId);
-      const position = supportPosition(observation, source);
-      if (!position) return null;
-      return {
+      return supportSamples(observation, source).map(({ position, supportType }) => position ? {
         x: position.x,
         y: position.y,
         intensity: normalizeIntensity(observation.channel, observation.value, source),
         confidence: clamp(observation.quality?.score ?? 0),
-        weight: weights[observation.channel] ?? 1
-      };
+        weight: weights[observation.channel] ?? 1,
+        supportType
+      } : null);
     })
     .filter(Boolean);
 
@@ -131,5 +139,15 @@ export function interpolateActivityField({
       });
     }
   }
-  return { width, height, cells, pointCount: points.length };
+  return {
+    width,
+    height,
+    cells,
+    pointCount: points.length,
+    observationCount: inputObservations.length,
+    supportResolution: {
+      types: Array.from(new Set(points.map((point) => point.supportType))).sort(),
+      sampleCount: points.length
+    }
+  };
 }

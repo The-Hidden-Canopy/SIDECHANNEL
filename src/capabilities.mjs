@@ -70,6 +70,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Pose-required observations resolve to a nearest bounded sample and retain pose provenance; stale resolution fails closed.'
   },
   {
+    id: 'geometry-aware-support-evaluation',
+    label: 'Geometry-aware support evaluation',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Region, path, and ellipse supports are validated and sampled with bounded geometry metadata instead of being reduced to point precision.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

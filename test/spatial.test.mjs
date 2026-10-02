@@ -59,3 +59,46 @@ test('field value remains physical while confidence is reported separately as su
   assert.ok(center.support < 0.2);
   assert.equal(center.status, 'estimated');
 });
+
+test('region support is sampled as bounded geometry instead of becoming a point', () => {
+  const result = interpolateField({
+    scene: { width: 5, height: 4 },
+    channel: 'heat',
+    observations: [{
+      sourceId: 'region',
+      channel: 'heat',
+      value: 60,
+      status: 'measured',
+      quality: { score: 1 },
+      support: { type: 'RegionSupport', frameId: 'scene', center: { x: 2, y: 2 }, radius: 1 }
+    }],
+    sources: new Map(),
+    gridSize: 8
+  });
+  assert.equal(result.observationCount, 1);
+  assert.equal(result.pointCount, 5);
+  assert.deepEqual(result.supportResolution.types, ['RegionSupport']);
+});
+
+test('path support contributes its bounded trajectory samples', () => {
+  const result = interpolateActivityField({
+    scene: { width: 5, height: 4 },
+    observations: [{
+      sourceId: 'mobile',
+      channel: 'heat',
+      value: 60,
+      status: 'measured',
+      quality: { score: 1 },
+      support: {
+        type: 'PathSupport',
+        frameId: 'scene',
+        points: [{ x: 1, y: 1 }, { x: 2, y: 1.5 }, { x: 3, y: 2 }]
+      }
+    }],
+    sources: new Map(),
+    gridSize: 8
+  });
+  assert.equal(result.observationCount, 1);
+  assert.equal(result.pointCount, 3);
+  assert.deepEqual(result.supportResolution.types, ['PathSupport']);
+});
