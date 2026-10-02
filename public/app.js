@@ -30,6 +30,8 @@ const state = {
   replayReport: null,
   sessionVerification: null,
   verificationBusy: false,
+  comparison: null,
+  comparisonBusy: false,
   replayMode: 'historical',
   capabilities: null,
   benchmarkReceipt: null,
@@ -196,15 +198,20 @@ function renderSources() {
 
 function renderSessions() {
   const select = document.getElementById('sessionSelect');
+  const compareSelect = document.getElementById('compareSessionSelect');
   const current = select.value;
+  const compareCurrent = compareSelect.value;
   select.innerHTML = '<option value="">Choose session</option>';
+  compareSelect.innerHTML = '<option value="">Choose session</option>';
   state.sessions.forEach((session) => {
     const option = document.createElement('option');
     option.value = session.id;
     option.textContent = new Date(session.startedAtMs).toLocaleString() + ' · ' + (session.state || 'recorded') + ' · ' + session.observationCount + ' obs';
     select.appendChild(option);
+    compareSelect.appendChild(option.cloneNode(true));
   });
   select.value = current;
+  compareSelect.value = compareCurrent;
 }
 
 function renderDiagnostics() {
@@ -652,6 +659,39 @@ function renderSessionVerification() {
       checks.provenanceReferencesVerified && checks.poseReferencesVerified ? 'valid' : 'incomplete');
 }
 
+function renderComparison() {
+  const button = document.getElementById('compareButton');
+  const result = document.getElementById('comparisonResult');
+  const leftId = document.getElementById('sessionSelect').value;
+  const rightId = document.getElementById('compareSessionSelect').value;
+  if (!button || !result) return;
+  button.disabled = !leftId || !rightId || leftId === rightId || state.comparisonBusy;
+  button.textContent = state.comparisonBusy ? 'Comparing…' : 'Compare';
+  result.className = 'comparison-result muted';
+  if (!leftId || !rightId) {
+    result.textContent = 'Choose two sessions to compare derived fields.';
+    return;
+  }
+  if (leftId === rightId) {
+    result.textContent = 'Choose two different sessions.';
+    return;
+  }
+  if (state.comparison?.leftSessionId !== leftId || state.comparison?.rightSessionId !== rightId) {
+    result.textContent = 'Comparison not run for this pair.';
+    return;
+  }
+  if (state.comparison.error) {
+    result.className = 'comparison-result fail';
+    result.textContent = 'Comparison failed · ' + state.comparison.error;
+    return;
+  }
+  const comparison = state.comparison.artifact;
+  result.className = 'comparison-result ok';
+  result.textContent = 'DERIVED difference · ' + comparison.metrics.changedCellCount + ' changed of ' +
+    comparison.metrics.cellCount + ' cells · max intensity Δ ' + comparison.metrics.maxAbsoluteIntensityDelta.toFixed(3) +
+    ' · max support Δ ' + comparison.metrics.maxAbsoluteSupportDelta.toFixed(3);
+}
+
 function render() {
   if (!state.scene) return;
   document.getElementById('sceneName').textContent = state.scene.name;
@@ -665,7 +705,7 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); draw();
+  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -750,6 +790,29 @@ document.getElementById('verifyButton').addEventListener('click', async () => {
   }
 });
 
+document.getElementById('compareSessionSelect').addEventListener('change', () => renderComparison());
+
+document.getElementById('compareButton').addEventListener('click', async () => {
+  const leftSessionId = document.getElementById('sessionSelect').value;
+  const rightSessionId = document.getElementById('compareSessionSelect').value;
+  if (!leftSessionId || !rightSessionId || leftSessionId === rightSessionId) return;
+  state.comparisonBusy = true;
+  renderComparison();
+  try {
+    const payload = await api('/api/sessions/compare', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ leftSessionId, rightSessionId })
+    });
+    state.comparison = { leftSessionId, rightSessionId, artifact: payload.comparison };
+  } catch (error) {
+    state.comparison = { leftSessionId, rightSessionId, error: error.message };
+  } finally {
+    state.comparisonBusy = false;
+    renderComparison();
+  }
+});
+
 document.getElementById('benchmarkButton').addEventListener('click', async () => {
   state.benchmarkBusy = true;
   renderBenchmark();
@@ -794,6 +857,7 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
   state.replayArtifact = null;
   state.replayReport = null;
   state.sessionVerification = null;
+  state.comparison = null;
   state.selected = null;
   hydrate(await api('/api/state'));
 });

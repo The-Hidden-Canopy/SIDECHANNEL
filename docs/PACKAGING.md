@@ -75,6 +75,8 @@ The live inspector is an evidence-explainability surface, not a decorative toolt
 
 The session toolbar exposes the same independent verifier used by import. Selecting a local session and choosing `Verify` reports package, snapshot, journal, source/calibration/provenance reference, pose, and observation checks in the UI; a green result is evidence of package integrity only, not hardware validation or production readiness.
 
+The workspace also exposes a two-session `Compare` action. It calls the bounded recompute comparison path and labels the result `DERIVED difference`, including changed-cell and maximum intensity/support deltas; comparison output retains both source session IDs and estimator provenance and is never presented as a new measurement.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

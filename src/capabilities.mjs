@@ -98,6 +98,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The UI can run the independent package verifier and expose snapshot, journal, reference, pose, and observation checks for a selected local session.'
   },
   {
+    id: 'derived-session-comparison-surface',
+    label: 'Derived session comparison surface',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The workspace can compare two self-contained sessions and labels cell differences as derived evidence with source-session provenance.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',
