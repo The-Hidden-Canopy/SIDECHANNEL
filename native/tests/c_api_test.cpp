@@ -28,6 +28,12 @@ int main() {
     1
   };
   assert(sidechannel_session_append(session, &observation, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  char scene[8192]{};
+  assert(sidechannel_session_scene_view(session, 1000, 2, 2, scene, sizeof(scene)) == SIDECHANNEL_C_OK);
+  assert(std::string(scene).find("\"format\":\"sidechannel.scene-view/1\"") != std::string::npos);
+  assert(std::string(scene).find("\"maxSources\":2") != std::string::npos);
+  assert(sidechannel_session_scene_view(session, 1000, 0, 2, scene, sizeof(scene)) == SIDECHANNEL_C_INVALID_ARGUMENT);
+  assert(sidechannel_session_scene_view(session, 1000, 2, 2, scene, 4) == SIDECHANNEL_C_BUFFER_TOO_SMALL);
   const sidechannel_observation invalid_observation{
     "invalid", "c_api_source", "heat", 1100, 23.5, 2.0, 1
   };
@@ -58,6 +64,8 @@ int main() {
   assert(sidechannel_session_open_sqlite(sqlite_path.string().c_str(), "c_api_sqlite_session", &session, error, sizeof(error)) == SIDECHANNEL_C_OK);
   assert(session != nullptr);
   assert(sidechannel_session_append(session, &observation, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(sidechannel_session_scene_view(session, 1000, 2, 2, scene, sizeof(scene)) == SIDECHANNEL_C_OK);
+  assert(std::string(scene).find("\"boundedObservationCount\":1") != std::string::npos);
   assert(sidechannel_session_close(session, 1250, error, sizeof(error)) == SIDECHANNEL_C_OK);
   assert(sidechannel_session_verify(session, error, sizeof(error)) == SIDECHANNEL_C_OK);
   sidechannel_session_destroy(session);

@@ -36,6 +36,10 @@ struct sidechannel_session {
     return sqlite_store ? sqlite_store->state() : file_store->state();
   }
 
+  const std::vector<sidechannel::Observation>& observations() const {
+    return sqlite_store ? sqlite_store->observations() : file_store->observations();
+  }
+
   sidechannel::JournalVerification verify() const {
     return sqlite_store ? sqlite_store->verify() : file_store->verify();
   }
@@ -191,6 +195,24 @@ extern "C" int sidechannel_session_state(
 ) {
   if (!session) return SIDECHANNEL_C_INVALID_ARGUMENT;
   return copy_text(session->state(), state_out, state_capacity);
+}
+
+extern "C" int sidechannel_session_scene_view(
+  const sidechannel_session* session,
+  int64_t now_ms,
+  size_t max_sources,
+  size_t max_observations,
+  char* scene_out,
+  size_t scene_capacity
+) {
+  if (!session || !scene_out || scene_capacity == 0 || max_sources == 0 || max_sources > 256 ||
+      max_observations == 0 || max_observations > 512) {
+    return SIDECHANNEL_C_INVALID_ARGUMENT;
+  }
+  const auto view = sidechannel::create_native_scene_view(
+    session->observations(), now_ms, sidechannel::SceneViewLimits{max_sources, max_observations, 0, 0, 0}
+  );
+  return copy_text(view.to_json(), scene_out, scene_capacity);
 }
 
 extern "C" int sidechannel_session_verify(

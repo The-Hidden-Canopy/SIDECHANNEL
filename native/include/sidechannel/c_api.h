@@ -64,6 +64,15 @@ int sidechannel_session_state(
   size_t state_capacity
 );
 
+int sidechannel_session_scene_view(
+  const sidechannel_session* session,
+  int64_t now_ms,
+  size_t max_sources,
+  size_t max_observations,
+  char* scene_out,
+  size_t scene_capacity
+);
+
 int sidechannel_session_verify(
   const sidechannel_session* session,
   char* error_out,
