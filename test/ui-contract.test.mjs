@@ -27,6 +27,9 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /detail\('Source identity policy'/);
   assert.match(appSource, /privacyOmittedFields/);
   assert.match(appSource, /renderAccessibilitySummary/);
+  assert.match(appSource, /state\.adapterRuntime/);
+  assert.match(appSource, /adapter\.state !== 'RUNNING'/);
+  assert.match(appSource, /adapter\.runtime/);
   assert.match(appSource, /renderBudgetForObservationCount/);
   assert.match(appSource, /state\.renderBudget/);
   assert.match(appSource, /budget\.trailLimit/);
@@ -98,6 +101,8 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(htmlSource, /role="region"/);
   assert.match(stylesSource, /prefers-reduced-motion/);
   assert.match(stylesSource, /performance-warning/);
+  assert.match(stylesSource, /health-disconnected/);
+  assert.match(stylesSource, /health-quarantined/);
   assert.match(htmlSource, /Publish revision/);
   assert.match(appSource, /syncBackgroundImage/);
   assert.match(appSource, /drawBackground/);

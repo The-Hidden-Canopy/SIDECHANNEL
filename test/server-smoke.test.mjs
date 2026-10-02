@@ -210,6 +210,8 @@ test('loopback server smoke covers live websocket reconnect, adapter ingress, se
     });
     assert.equal(simulatorStopped.response.status, 200);
     assert.equal(simulatorStopped.payload.adapter.state, 'STOPPED');
+    const stoppedRuntime = await requestJson(baseUrl + '/api/adapter-runtime');
+    assert.equal(stoppedRuntime.payload.adapters.find((adapter) => adapter.manifest.providerId === 'builtin:simulator').state, 'STOPPED');
     let ingressDrained = false;
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const ingressState = await requestJson(baseUrl + '/api/ingress');
@@ -305,8 +307,17 @@ test('loopback server smoke covers live websocket reconnect, adapter ingress, se
     });
     assert.equal(simulatorStarted.response.status, 200);
     assert.equal(simulatorStarted.payload.adapter.state, 'RUNNING');
-    const resumedEvent = await withTimeout(reconnect.nextFrame(), 3000, 'simulator restart event');
-    assert.equal(resumedEvent.type, 'observation.accepted');
+    const startedRuntime = await requestJson(baseUrl + '/api/adapter-runtime');
+    assert.equal(startedRuntime.payload.adapters.find((adapter) => adapter.manifest.providerId === 'builtin:simulator').state, 'RUNNING');
+    let resumedEvent = null;
+    let runtimeEvent = null;
+    for (let attempt = 0; attempt < 12 && !resumedEvent; attempt += 1) {
+      const event = await withTimeout(reconnect.nextFrame(), 1000, 'simulator restart event');
+      if (event.type === 'adapter.runtime') runtimeEvent = event;
+      if (event.type === 'observation.accepted' && /^sim_/.test(event.observation?.sourceId || '')) resumedEvent = event;
+    }
+    assert.equal(runtimeEvent?.adapter?.state, 'RUNNING');
+    assert.equal(resumedEvent?.type, 'observation.accepted');
     assert.match(resumedEvent.observation?.sourceId || '', /^sim_/);
 
     const observationResult = await requestJson(baseUrl + '/api/observations', {

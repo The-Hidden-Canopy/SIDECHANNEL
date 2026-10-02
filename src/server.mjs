@@ -479,12 +479,14 @@ async function handleApi(request, response, pathname) {
         if (providerId === 'builtin:simulator') simulatorDesiredState = true;
         if (providerId === 'builtin:simulator' && simulator) simulator.start();
         appendRuntimeEvent('ProviderStarted', { providerId });
+        broadcast({ type: 'adapter.runtime', adapter });
       }
       else if (parts[3] === 'stop') {
         if (providerId === 'builtin:simulator') simulatorDesiredState = false;
         if (providerId === 'builtin:simulator' && simulator) simulator.stop();
         adapter = adapterSupervisor.stop(providerId);
         appendRuntimeEvent('ProviderStopped', { providerId });
+        broadcast({ type: 'adapter.runtime', adapter });
       }
       else if (parts[3] === 'success') adapter = adapterSupervisor.recordSuccess(providerId);
       else if (parts[3] === 'failure') adapter = recordAdapterFailure(providerId, body.reason || 'operator-reported failure');

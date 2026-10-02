@@ -63,6 +63,7 @@ const RANGES = {
 const state = {
   scene: null,
   observations: [],
+  adapterRuntime: [],
   diagnostics: [],
   events: [],
   recording: null,
@@ -169,6 +170,7 @@ function activeObservations() {
 function hydrate(payload) {
   state.scene = payload.scene;
   state.observations = payload.observations || [];
+  state.adapterRuntime = payload.adapterRuntime || state.adapterRuntime;
   state.diagnostics = payload.diagnostics || [];
   state.events = payload.events || [];
   state.recording = payload.recording;
@@ -463,18 +465,29 @@ function renderSources() {
   (state.scene?.sources || []).forEach((source) => {
     const observation = state.observations.find((item) => item.sourceId === source.id && item.channel === source.channels[0]);
     const stale = observation?.status === 'stale';
+    const providerId = source.providerManifest?.providerId || (source.adapterType === 'simulator' ? 'builtin:simulator' : null);
+    const adapter = providerId ? state.adapterRuntime.find((item) => item.manifest?.providerId === providerId) : null;
+    const health = adapter?.state === 'QUARANTINED'
+      ? 'quarantined'
+      : source.adapterType === 'simulator' && adapter && adapter.state !== 'RUNNING'
+        ? 'disconnected'
+        : stale
+          ? 'stale'
+          : observation
+            ? 'live'
+            : 'waiting';
     const privacyMode = source.privacyMode || source.privacyClass || 'not declared';
     const wrapper = document.createElement('div');
     wrapper.className = 'source-entry';
     const row = document.createElement('div');
-    row.className = 'source-row ' + (stale ? '' : 'live');
+    row.className = 'source-row health-' + health + (health === 'live' ? ' live' : '');
     row.tabIndex = 0;
     row.setAttribute('role', 'button');
-    row.setAttribute('aria-label', source.name + ', ' + (observation ? 'observation available' : 'no observation') + ', privacy mode ' + privacyMode);
+    row.setAttribute('aria-label', source.name + ', ' + health + ', ' + (observation ? 'observation available' : 'no observation') + ', privacy mode ' + privacyMode);
     row.innerHTML = '<span class="layer-swatch" style="color:' + colorFor(source.channels[0]) +
       ';background:' + colorFor(source.channels[0]) + '"></span><span>' +
       escapeHtml(source.name) + '</span><span class="source-meta">' +
-      (stale ? 'stale' : observation ? 'live' : '—') + ' · ' + escapeHtml(privacyMode) + '</span>';
+      health + ' · ' + escapeHtml(privacyMode) + '</span>';
     const selectSourceObservation = () => {
       if (!observation) return;
       state.selected = observation;
@@ -1534,7 +1547,13 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
-  document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
+  const disconnectedCount = (state.scene?.sources || []).filter((source) => {
+    const providerId = source.providerManifest?.providerId || (source.adapterType === 'simulator' ? 'builtin:simulator' : null);
+    const adapter = providerId ? state.adapterRuntime.find((item) => item.manifest?.providerId === providerId) : null;
+    return source.adapterType === 'simulator' && adapter && adapter.state !== 'RUNNING';
+  }).length;
+  document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels' +
+    (disconnectedCount ? ' · ' + disconnectedCount + ' disconnected' : '');
   renderLayers(); renderFieldSettings(); renderActivityWeights(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderFaultCampaign(); renderCapabilities(); renderEvents(); renderInspector(); renderAccessibilitySummary(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
@@ -2294,6 +2313,10 @@ function connect() {
       if (!state.viewPaused) renderEvents();
     }
     if (message.type === 'scene.updated') { state.scene = message.scene; syncBackgroundImage(); render(); }
+    if (message.type === 'adapter.runtime') {
+      state.adapterRuntime = [...state.adapterRuntime.filter((item) => item.manifest?.providerId !== message.adapter?.manifest?.providerId), message.adapter];
+      render();
+    }
     if (message.type === 'session.state') api('/api/state').then(hydrate);
   };
   socket.onclose = () => {

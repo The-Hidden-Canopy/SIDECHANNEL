@@ -63,6 +63,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Revoking an active subprocess permission cancels its run, records the reason, and leaves the provider disabled.'
   },
   {
+    id: 'adapter-health-visuals',
+    label: 'Adapter health and disconnect visuals',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Runtime adapter events drive explicit live, stale, waiting, disconnected, and quarantined source states in the local workspace.'
+  },
+  {
     id: 'bounded-websocket-controls',
     label: 'Bounded WebSocket controls',
     status: 'implemented',
