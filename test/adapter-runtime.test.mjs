@@ -31,3 +31,22 @@ test('adapter supervisor requires permissions and quarantines repeated failures'
   assert.throws(() => supervisor.start(manifest.providerId), /quarantined/);
   assert.equal(supervisor.clearQuarantine(manifest.providerId).state, 'DISABLED');
 });
+
+test('permission revocation disables the provider and records cancellation intent', async () => {
+  const supervisor = new AdapterSupervisor({ clock: () => 1000 });
+  const manifest = createProviderManifest({
+    providerId: 'fixture.revocation',
+    capabilities: ['watts'],
+    requiredPermissions: ['system.power.read']
+  });
+  supervisor.register(manifest);
+  supervisor.grantPermissions(manifest.providerId, ['system.power.read']);
+  supervisor.start(manifest.providerId);
+  const stopped = [];
+  supervisor.attachRuntime(manifest.providerId, { stop: async (reason) => { stopped.push(reason); return { ok: true, state: 'STOPPED' }; } });
+  const result = await supervisor.revokePermissions(manifest.providerId, ['system.power.read']);
+  assert.deepEqual(stopped, ['permission_revoked']);
+  assert.equal(result.adapter.state, 'DISABLED');
+  assert.deepEqual(result.adapter.grantedPermissions, []);
+  assert.equal(supervisor.get(manifest.providerId).lastCancellation.reason, 'permission_revoked');
+});

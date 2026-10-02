@@ -42,6 +42,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'When a source has a provider manifest, frame provider id and digest claims must match that registered manifest.'
   },
   {
+    id: 'permission-revocation-cancellation',
+    label: 'Permission revocation cancellation',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Revoking an active subprocess permission cancels its run, records the reason, and leaves the provider disabled.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

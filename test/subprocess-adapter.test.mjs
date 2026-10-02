@@ -66,6 +66,29 @@ test('subprocess adapter can run under the permission-gated supervisor', async (
   assert.equal(supervisor.get('fixture.adapter').state, 'STOPPED');
 });
 
+test('permission revocation cancels an active subprocess and leaves it disabled', async () => {
+  const supervisor = new AdapterSupervisor({ failureThreshold: 2, clock: () => 1 });
+  supervisor.register({
+    protocolVersion: 'sidechannel.adapter/1',
+    providerId: 'fixture.revocable',
+    providerVersion: '0.1.0',
+    capabilities: ['normalized_observation'],
+    supportedUnits: ['normalized'],
+    requiredPermissions: ['system.power.read'],
+    rawContentPolicy: 'none'
+  });
+  supervisor.grantPermissions('fixture.revocable', ['system.power.read']);
+  const processAdapter = adapter('wait', { providerId: 'fixture.revocable', supervisor });
+  const task = processAdapter.start();
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  const revocation = await supervisor.revokePermissions('fixture.revocable', ['system.power.read']);
+  const result = await task;
+  assert.equal(result.ok, true);
+  assert.equal(result.state, 'STOPPED');
+  assert.equal(revocation.adapter.state, 'DISABLED');
+  assert.equal(supervisor.get('fixture.revocable').lastCancellation.reason, 'permission_revoked');
+});
+
 test('repeated subprocess crashes quarantine the provider and block restart', async () => {
   const supervisor = new AdapterSupervisor({ failureThreshold: 2, clock: () => 1 });
   supervisor.register({

@@ -338,16 +338,22 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'adapter-runtime' && parts[2] && parts[3]) {
     const providerId = decodeURIComponent(parts[2]);
     try {
-      const body = parts[3] === 'grant' || parts[3] === 'failure' ? await bodyJson(request) : {};
+      const body = parts[3] === 'grant' || parts[3] === 'revoke' || parts[3] === 'failure' ? await bodyJson(request) : {};
       let adapter;
+      let cancellation = null;
       if (parts[3] === 'grant') adapter = adapterSupervisor.grantPermissions(providerId, body.permissions || []);
+      else if (parts[3] === 'revoke') {
+        const result = await adapterSupervisor.revokePermissions(providerId, body.permissions || []);
+        adapter = result.adapter;
+        cancellation = result.cancellation;
+      }
       else if (parts[3] === 'start') adapter = adapterSupervisor.start(providerId);
       else if (parts[3] === 'stop') adapter = adapterSupervisor.stop(providerId);
       else if (parts[3] === 'success') adapter = adapterSupervisor.recordSuccess(providerId);
       else if (parts[3] === 'failure') adapter = recordAdapterFailure(providerId, body.reason || 'operator-reported failure');
       else if (parts[3] === 'clear-quarantine') adapter = adapterSupervisor.clearQuarantine(providerId);
       else return sendJson(response, 400, { error: 'unsupported adapter runtime action' });
-      return sendJson(response, 200, { adapter });
+      return sendJson(response, 200, { adapter, ...(cancellation ? { cancellation } : {}) });
     } catch (error) {
       return sendJson(response, error.message.startsWith('adapter not registered:') ? 404 : 422, { error: error.message });
     }

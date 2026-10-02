@@ -56,6 +56,8 @@ Calibration reuse is fail-closed. A calibration record used by an observation mu
 
 Provider identity is authoritative when a source has a registered provider manifest. A normalized frame may omit identity fields and inherit the registered manifest, but it may not claim a different provider id or digest. Sources without a manifest remain explicitly less bound and are not hardware evidence.
 
+Permission revocation is an active boundary: `POST /api/adapter-runtime/:providerId/revoke` removes the selected grants (or all grants when omitted), records a bounded cancellation reason, and asks a supervised subprocess to stop. The provider remains disabled until permissions are explicitly granted again; this is local process supervision, not a claim that an external hardware device has been powered down.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

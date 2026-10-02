@@ -20,6 +20,7 @@ export class AdapterSupervisor {
     this.failureThreshold = failureThreshold;
     this.clock = clock;
     this.adapters = new Map();
+    this.runtimeControllers = new Map();
   }
 
   register(rawManifest) {
@@ -32,6 +33,7 @@ export class AdapterSupervisor {
       grantedPermissions: current?.grantedPermissions || [],
       failureCount: current?.failureCount || 0,
       lastFailure: current?.lastFailure || null,
+      lastCancellation: current?.lastCancellation || null,
       lastTransitionAtMs: this.clock()
     };
     this.adapters.set(result.manifest.providerId, adapter);
@@ -55,6 +57,46 @@ export class AdapterSupervisor {
     }
     adapter.grantedPermissions = [...new Set(permissions)];
     adapter.state = 'DISABLED';
+    adapter.lastTransitionAtMs = this.clock();
+    return clone(adapter);
+  }
+
+  async revokePermissions(providerId, permissions = []) {
+    const adapter = this.require(providerId);
+    const requested = permissions.length ? [...new Set(permissions)] : adapter.grantedPermissions.slice();
+    if (!requested.every((permission) => adapter.grantedPermissions.includes(permission))) {
+      throw new Error('permission revocation includes a permission that is not granted');
+    }
+    adapter.grantedPermissions = adapter.grantedPermissions.filter((permission) => !requested.includes(permission));
+    adapter.state = 'DISABLED';
+    adapter.lastTransitionAtMs = this.clock();
+    const controller = this.runtimeControllers.get(providerId);
+    let cancellation = null;
+    if (controller) {
+      cancellation = await controller.stop('permission_revoked');
+    }
+    this.recordCancellation(providerId, 'permission_revoked', requested);
+    return { adapter: clone(adapter), cancellation };
+  }
+
+  attachRuntime(providerId, controller) {
+    this.require(providerId);
+    if (!controller || typeof controller.stop !== 'function') throw new TypeError('runtime controller must provide stop()');
+    this.runtimeControllers.set(providerId, controller);
+  }
+
+  detachRuntime(providerId, controller) {
+    if (this.runtimeControllers.get(providerId) === controller) this.runtimeControllers.delete(providerId);
+  }
+
+  recordCancellation(providerId, reason, permissions = []) {
+    const adapter = this.require(providerId);
+    adapter.lastCancellation = {
+      reason,
+      permissions: permissions.slice(),
+      atMs: this.clock()
+    };
+    if (reason === 'permission_revoked' && adapter.state !== 'QUARANTINED') adapter.state = 'DISABLED';
     adapter.lastTransitionAtMs = this.clock();
     return clone(adapter);
   }

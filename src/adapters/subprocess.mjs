@@ -24,6 +24,7 @@ export class SubprocessAdapter {
     this.child = null;
     this.task = null;
     this.stopRequested = false;
+    this.stopReason = null;
     this.stdoutBytes = 0;
     this.stderrBytes = 0;
     this.frameCount = 0;
@@ -39,6 +40,7 @@ export class SubprocessAdapter {
     if (this.supervisor && this.providerId) this.supervisor.start(this.providerId);
     this.state = 'STARTING';
     this.stopRequested = false;
+    this.stopReason = null;
     this.stdoutBytes = 0;
     this.stderrBytes = 0;
     this.frameCount = 0;
@@ -52,6 +54,7 @@ export class SubprocessAdapter {
     this.child = child;
     this.state = 'RUNNING';
     this.descriptor.connected = true;
+    if (this.supervisor && this.providerId) this.supervisor.attachRuntime(this.providerId, this);
 
     const report = (value) => {
       this.diagnostics.push(value);
@@ -97,7 +100,13 @@ export class SubprocessAdapter {
         this.descriptor.connected = false;
         if (code === 0 || this.stopRequested) {
           this.state = 'STOPPED';
-          if (this.supervisor && this.providerId) this.supervisor.stop(this.providerId);
+          if (this.supervisor && this.providerId) {
+            if (this.stopReason === 'permission_revoked') {
+              this.supervisor.recordCancellation(this.providerId, this.stopReason);
+            } else {
+              this.supervisor.stop(this.providerId);
+            }
+          }
         } else {
           this.state = 'FAILED';
           if (this.supervisor && this.providerId) {
@@ -118,6 +127,7 @@ export class SubprocessAdapter {
       diagnostics: [...this.diagnostics],
       parseErrors: lines.errors
     })).finally(() => {
+      if (this.supervisor && this.providerId) this.supervisor.detachRuntime(this.providerId, this);
       this.child = null;
       this.task = null;
       this.descriptor.connected = false;
@@ -125,9 +135,10 @@ export class SubprocessAdapter {
     return this.task;
   }
 
-  async stop() {
+  async stop(reason = 'operator_stop') {
     if (!this.child || !this.task) return { ok: true, state: this.state };
     this.stopRequested = true;
+    this.stopReason = reason;
     this.state = 'STOPPING';
     this.child.kill('SIGTERM');
     const timeout = new Promise((resolve) => setTimeout(() => resolve('timeout'), this.stopTimeoutMs));
