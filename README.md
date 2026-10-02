@@ -26,6 +26,7 @@ npm test
 npm run verify
 npm run verify:session -- path/to/exported-session.json
 npm run receipt:session -- path/to/exported-session.json
+npm run benchmark -- 8 14
 npm start
 ```
 
