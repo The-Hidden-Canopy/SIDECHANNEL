@@ -154,6 +154,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace exposes inverse-distance power and bounded search radius controls; cells outside the radius remain insufficient-data instead of being filled.'
   },
   {
+    id: 'baseline-anomaly-overlay',
+    label: 'Baseline anomaly overlay',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A local normalized baseline can be captured from valid source channels and compared as a signed derived overlay; it is not added to session exports.'
+  },
+  {
     id: 'scene-regions-and-zones',
     label: 'Scene rooms and zones',
     status: 'implemented',

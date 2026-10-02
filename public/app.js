@@ -1,3 +1,5 @@
+import { baselineDelta, createBaselineIndex, createBaselineSnapshot, latestValidObservations } from './baseline.mjs';
+
 const CHANNELS = [
   ['rf', 'RF', '#6ce4db', 220],
   ['magnetic', 'Magnetic field', '#79a7ff', 210],
@@ -18,13 +20,14 @@ const DISPLAY_LAYERS = [
   ['events', 'Activity event pulses', '#ff8f97', 0],
   ['calibration', 'Calibration state', '#ffb47b', 0],
   ['age', 'Data age', '#ff8f97', 0],
+  ['baseline', 'Baseline delta', '#ff8f97', 0],
   ['background', 'Imported background', '#79a7ff', 0],
   ['zones', 'Rooms / zones', '#a9e88b', 0],
   ['portals', 'Doors / portals', '#ffd166', 0]
 ];
 const LAYER_GROUPS = [
   { id: 'signals', label: 'Signals', layers: ['activity', ...CHANNELS.map((channel) => channel[0])] },
-  { id: 'evidence', label: 'Evidence overlays', layers: ['support', 'uncertainty', 'trails', 'events', 'calibration', 'age'] },
+  { id: 'evidence', label: 'Evidence overlays', layers: ['support', 'uncertainty', 'trails', 'events', 'calibration', 'age', 'baseline'] },
   { id: 'scene', label: 'Scene context', layers: ['background', 'zones', 'portals'] }
 ];
 const JOURNAL_MARKER_TYPES = new Set([
@@ -79,6 +82,7 @@ const state = {
   replayMode: 'historical',
   viewPaused: false,
   fieldSettings: { power: 2, radius: 0 },
+  baseline: null,
   capabilities: null,
   benchmarkReceipt: null,
   benchmarkBusy: false,
@@ -350,6 +354,19 @@ function renderFieldSettings() {
   hint.textContent = 'Power ' + state.fieldSettings.power + ' · ' +
     (state.fieldSettings.radius > 0 ? 'search radius ' + state.fieldSettings.radius + ' ' + (state.scene?.unit || 'm') + '.' : 'unlimited search radius.') +
     ' Cells outside the radius show insufficient data.';
+}
+
+function renderBaseline() {
+  const capture = document.getElementById('captureBaselineButton');
+  const clear = document.getElementById('clearBaselineButton');
+  const hint = document.getElementById('baselineHint');
+  if (!capture || !clear || !hint) return;
+  const available = latestValidObservations(activeObservations()).length;
+  capture.disabled = available === 0;
+  clear.disabled = !state.baseline;
+  hint.textContent = state.baseline
+    ? 'Captured ' + state.baseline.observationCount + ' source channels at ' + new Date(state.baseline.capturedAtMs).toLocaleTimeString() + '. Red is above baseline; blue is below.'
+    : 'No baseline captured. The overlay is local, derived, and not part of session export.';
 }
 
 function fieldWeight(distance) {
@@ -919,6 +936,46 @@ function drawActivityField(valid, transform) {
   }
 }
 
+function drawBaselineField(valid, transform) {
+  if (!state.visible.baseline || !state.baseline) return;
+  const current = latestValidObservations(valid);
+  const baselineIndex = createBaselineIndex(state.baseline);
+  if (!current.length) return;
+  const cols = 22;
+  const rows = 18;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const x = state.scene.width * (col + .5) / cols;
+      const y = state.scene.height * (row + .5) / rows;
+      let total = 0;
+      let spatialWeightTotal = 0;
+      current.forEach((point) => {
+        const delta = baselineDelta(point, baselineIndex, normalize);
+        if (delta === null || !state.visible[point.channel]) return;
+        const source = sourceById(point.sourceId);
+        supportPositions(point, source).forEach((position) => {
+          const distance = Math.hypot(x - position.x, y - position.y);
+          const weight = fieldWeight(distance);
+          if (weight === 0) return;
+          total += delta * weight;
+          spatialWeightTotal += weight;
+        });
+      });
+      if (!spatialWeightTotal) continue;
+      const delta = Math.max(-1, Math.min(1, total / spatialWeightTotal));
+      const magnitude = Math.min(1, Math.abs(delta) * 1.6);
+      const color = delta >= 0 ? '#ff8f97' : '#79a7ff';
+      context.fillStyle = hexToRgba(color, (.035 + magnitude * .2) * (state.visible.support ? .85 : 1));
+      context.fillRect(
+        transform.x(x - state.scene.width / cols / 2),
+        transform.y(y - state.scene.height / rows / 2),
+        transform.sx * state.scene.width / cols + 1,
+        transform.sy * state.scene.height / rows + 1
+      );
+    }
+  }
+}
+
 function draw() {
   if (!state.scene) return;
   const rect = canvas.getBoundingClientRect();
@@ -1030,6 +1087,8 @@ function draw() {
       }
     }
   });
+
+  drawBaselineField(valid, transform);
 
   drawTemporalTrails(transform);
   drawSupportGeometry(valid, transform);
@@ -1248,7 +1307,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderFieldSettings(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderFieldSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1263,7 +1322,7 @@ document.getElementById('recordButton').addEventListener('click', async () => {
 });
 
 document.getElementById('liveButton').addEventListener('click', () => {
-  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null; state.viewPaused = false;
+  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null; state.viewPaused = false; state.baseline = null;
   state.temporalPins = { a: null, b: null }; state.temporalComparison = null; api('/api/state').then(hydrate);
 });
 
@@ -1281,6 +1340,22 @@ document.getElementById('fieldSettingsForm').addEventListener('submit', (event) 
     return;
   }
   state.fieldSettings = { power, radius };
+  render();
+});
+
+document.getElementById('captureBaselineButton').addEventListener('click', () => {
+  const observations = latestValidObservations(activeObservations());
+  if (!observations.length || !state.scene) return;
+  state.baseline = createBaselineSnapshot({
+    sceneId: state.scene.id,
+    observations,
+    normalize
+  });
+  render();
+});
+
+document.getElementById('clearBaselineButton').addEventListener('click', () => {
+  state.baseline = null;
   render();
 });
 
@@ -1353,6 +1428,7 @@ document.getElementById('replayButton').addEventListener('click', async () => {
     state.replayArtifact = await api('/api/sessions/' + id + '/replay?mode=recompute').then((result) => result.replay);
   }
   state.replayMode = mode;
+  state.baseline = null;
   state.temporalPins = { a: null, b: null };
   state.temporalComparison = null;
   state.scene = state.replay.sceneSnapshot || state.scene;
