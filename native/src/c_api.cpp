@@ -1,19 +1,44 @@
 #include "sidechannel/c_api.h"
 
 #include "sidechannel/core.hpp"
+#include "sidechannel/sqlite_store.hpp"
 
 #include <cmath>
 #include <cstring>
 #include <exception>
+#include <memory>
 #include <new>
 #include <string>
 #include <utility>
 
 struct sidechannel_session {
-  sidechannel::NativeSessionStore store;
+  std::unique_ptr<sidechannel::NativeSessionStore> file_store;
+  std::unique_ptr<sidechannel::NativeSqliteSessionStore> sqlite_store;
 
-  sidechannel_session(const char* file_path, const char* session_id)
-    : store(file_path, session_id) {}
+  sidechannel_session(const char* file_path, const char* session_id, bool sqlite) {
+    if (sqlite) sqlite_store = std::make_unique<sidechannel::NativeSqliteSessionStore>(file_path, session_id);
+    else file_store = std::make_unique<sidechannel::NativeSessionStore>(file_path, session_id);
+  }
+
+  bool open() {
+    return sqlite_store ? sqlite_store->open() : file_store->open();
+  }
+
+  bool append(sidechannel::Observation observation) {
+    return sqlite_store ? sqlite_store->append(std::move(observation)) : file_store->append(std::move(observation));
+  }
+
+  bool close(int64_t ended_at_ms) {
+    return sqlite_store ? sqlite_store->close(ended_at_ms) : file_store->close(ended_at_ms);
+  }
+
+  const std::string& state() const {
+    return sqlite_store ? sqlite_store->state() : file_store->state();
+  }
+
+  sidechannel::JournalVerification verify() const {
+    return sqlite_store ? sqlite_store->verify() : file_store->verify();
+  }
 };
 
 namespace {
@@ -53,20 +78,21 @@ bool bounded_text(const char* value, size_t maximum = 256) {
 
 } // namespace
 
-extern "C" int sidechannel_session_open(
+int open_session(
   const char* file_path,
   const char* session_id,
   sidechannel_session** out_session,
   char* error_out,
-  size_t error_capacity
+  size_t error_capacity,
+  bool sqlite
 ) {
   if (!bounded_text(file_path, 1024) || !bounded_text(session_id) || !out_session) {
     return fail(SIDECHANNEL_C_INVALID_ARGUMENT, "file path, session id, and output handle are required", error_out, error_capacity);
   }
   *out_session = nullptr;
   try {
-    auto* session = new sidechannel_session(file_path, session_id);
-    if (!session->store.open()) {
+    auto* session = new sidechannel_session(file_path, session_id, sqlite);
+    if (!session->open()) {
       delete session;
       return fail(SIDECHANNEL_C_IO_ERROR, "native session open failed", error_out, error_capacity);
     }
@@ -77,6 +103,26 @@ extern "C" int sidechannel_session_open(
   } catch (...) {
     return fail(SIDECHANNEL_C_IO_ERROR, "native session open failed", error_out, error_capacity);
   }
+}
+
+extern "C" int sidechannel_session_open(
+  const char* file_path,
+  const char* session_id,
+  sidechannel_session** out_session,
+  char* error_out,
+  size_t error_capacity
+) {
+  return open_session(file_path, session_id, out_session, error_out, error_capacity, false);
+}
+
+extern "C" int sidechannel_session_open_sqlite(
+  const char* file_path,
+  const char* session_id,
+  sidechannel_session** out_session,
+  char* error_out,
+  size_t error_capacity
+) {
+  return open_session(file_path, session_id, out_session, error_out, error_capacity, true);
 }
 
 extern "C" int sidechannel_session_append(
@@ -109,7 +155,7 @@ extern "C" int sidechannel_session_append(
       0,
       evidence_state
     };
-    if (!session->store.append(std::move(value))) {
+    if (!session->append(std::move(value))) {
       return fail(SIDECHANNEL_C_IO_ERROR, "native session rejected observation", error_out, error_capacity);
     }
     return SIDECHANNEL_C_OK;
@@ -128,7 +174,7 @@ extern "C" int sidechannel_session_close(
 ) {
   if (!session) return fail(SIDECHANNEL_C_INVALID_ARGUMENT, "session handle is required", error_out, error_capacity);
   try {
-    return session->store.close(ended_at_ms)
+    return session->close(ended_at_ms)
       ? SIDECHANNEL_C_OK
       : fail(SIDECHANNEL_C_IO_ERROR, "native session close rejected", error_out, error_capacity);
   } catch (const std::exception& error) {
@@ -144,7 +190,7 @@ extern "C" int sidechannel_session_state(
   size_t state_capacity
 ) {
   if (!session) return SIDECHANNEL_C_INVALID_ARGUMENT;
-  return copy_text(session->store.state(), state_out, state_capacity);
+  return copy_text(session->state(), state_out, state_capacity);
 }
 
 extern "C" int sidechannel_session_verify(
@@ -153,7 +199,7 @@ extern "C" int sidechannel_session_verify(
   size_t error_capacity
 ) {
   if (!session) return fail(SIDECHANNEL_C_INVALID_ARGUMENT, "session handle is required", error_out, error_capacity);
-  const auto verification = session->store.verify();
+  const auto verification = session->verify();
   if (verification.ok) return SIDECHANNEL_C_OK;
   return fail(SIDECHANNEL_C_VERIFY_ERROR, verification.error.c_str(), error_out, error_capacity);
 }

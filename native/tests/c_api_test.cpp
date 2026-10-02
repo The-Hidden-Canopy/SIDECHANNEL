@@ -49,5 +49,27 @@ int main() {
 
   sidechannel_session_destroy(session);
   std::filesystem::remove(path, cleanup_error);
+
+  const auto sqlite_path = std::filesystem::temp_directory_path() / "sidechannel-c-api-test.db";
+  std::filesystem::remove(sqlite_path, cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-wal", cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-shm", cleanup_error);
+  session = nullptr;
+  assert(sidechannel_session_open_sqlite(sqlite_path.string().c_str(), "c_api_sqlite_session", &session, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(session != nullptr);
+  assert(sidechannel_session_append(session, &observation, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(sidechannel_session_close(session, 1250, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(sidechannel_session_verify(session, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  sidechannel_session_destroy(session);
+
+  session = nullptr;
+  assert(sidechannel_session_open_sqlite(sqlite_path.string().c_str(), "c_api_sqlite_session", &session, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(sidechannel_session_state(session, state, sizeof(state)) == SIDECHANNEL_C_OK);
+  assert(std::string(state) == "completed");
+  assert(sidechannel_session_verify(session, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  sidechannel_session_destroy(session);
+  std::filesystem::remove(sqlite_path, cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-wal", cleanup_error);
+  std::filesystem::remove(sqlite_path.string() + "-shm", cleanup_error);
   return 0;
 }

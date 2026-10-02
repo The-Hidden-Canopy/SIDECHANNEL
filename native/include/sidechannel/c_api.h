@@ -36,6 +36,14 @@ int sidechannel_session_open(
   size_t error_capacity
 );
 
+int sidechannel_session_open_sqlite(
+  const char* file_path,
+  const char* session_id,
+  sidechannel_session** out_session,
+  char* error_out,
+  size_t error_capacity
+);
+
 int sidechannel_session_append(
   sidechannel_session* session,
   const sidechannel_observation* observation,

@@ -137,7 +137,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Opaque native C ABI control surface',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'sidechannel/c_api.h exposes bounded opaque-handle session control and IPC encoding with finite-value admission; it is an interoperability contract, not SQLite, deployment permission, or hardware authority.'
+    note: 'sidechannel/c_api.h exposes bounded opaque-handle file-backed or SQLite-backed session control and IPC encoding with finite-value admission; it is an interoperability contract, not deployment permission or hardware authority.'
   },
   {
     id: 'native-scene-view-projection',
