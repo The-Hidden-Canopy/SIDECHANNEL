@@ -127,3 +127,30 @@ test('session verifier rejects malformed v0.2 observation payloads', () => {
   assert.equal(report.checks.observationSchemaVerified, false);
   assert.ok(report.reasons.some((reason) => reason.includes('unit')));
 });
+
+test('session verifier resolves a source introduced by a retained source revision event', () => {
+  const packaged = packageData();
+  packaged.observations[0].sourceId = 'source_2';
+  const journal = new HashChainJournal({ sessionId: 'session_1', clock: () => 1000, idFactory: (() => {
+    let index = 0;
+    return () => 'event_' + (++index);
+  })() });
+  packaged.journal = [
+    journal.append('SessionOpened', { snapshotDigest: 'placeholder' }, 1000),
+    journal.append('SourceRevisionPublished', {
+      sourceId: 'source_2',
+      source: {
+        id: 'source_2',
+        adapterType: 'manual',
+        channels: ['heat'],
+        range: [-20, 80],
+        privacyMode: 'local_numeric',
+        freshnessWindowMs: 2000
+      }
+    }, 1100)
+  ];
+  const report = verifySessionPackage(packaged);
+  assert.equal(report.ok, true);
+  assert.equal(report.checks.sourceReferencesVerified, true);
+  assert.equal(report.checks.journalVerified, true);
+});

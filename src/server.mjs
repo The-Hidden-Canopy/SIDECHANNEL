@@ -138,6 +138,15 @@ function broadcast(event) {
 
 function recordDiagnostic(diagnostic) {
   diagnostics.push(diagnostic);
+  if (recordingSessionId && diagnostic?.type === 'observation.rejected') {
+    appendRuntimeEvent('ObservationRejected', {
+      observationId: diagnostic.id || 'unknown',
+      reasons: (Array.isArray(diagnostic.reasons) ? diagnostic.reasons : []).slice(0, 8).map((item) => ({
+        id: item?.id || 'rejected',
+        message: item?.message || String(item)
+      }))
+    }, diagnostic.receivedAtMs || Date.now());
+  }
   broadcast(diagnostic);
   return { ok: false, diagnostic };
 }
@@ -145,6 +154,27 @@ function recordDiagnostic(diagnostic) {
 function appendRuntimeEvent(type, payload = {}, timestampMs = Date.now()) {
   if (!recordingSessionId) return null;
   return store.appendRuntimeEvent(recordingSessionId, type, payload, timestampMs);
+}
+
+function sourceRevisionPayload(source) {
+  return {
+    id: source.id,
+    name: source.name,
+    adapterType: source.adapterType,
+    channels: Array.isArray(source.channels) ? source.channels.slice(0, 32) : [],
+    unit: source.unit || null,
+    range: Array.isArray(source.range) ? source.range.slice(0, 2) : null,
+    freshnessWindowMs: source.freshnessWindowMs,
+    privacyMode: source.privacyMode,
+    privacyClass: source.privacyClass || null,
+    spatialPolicy: source.spatialPolicy,
+    poseMaxAgeMs: source.poseMaxAgeMs ?? null,
+    poseFrameId: source.poseFrameId || null,
+    position: source.position || null,
+    calibrationState: source.calibrationState,
+    sourceProfileDigest: source.sourceProfileDigest || null,
+    providerManifest: source.providerManifest || null
+  };
 }
 
 function recordAdapterFailure(providerId, reason) {
@@ -547,6 +577,13 @@ async function handleApi(request, response, pathname) {
       const updated = { ...scene, ...body, id: scene.id };
       await store.upsertScene(updated);
       if (activeScene.id === updated.id) activeScene = updated;
+      appendRuntimeEvent('SceneRevisionPublished', {
+        sceneId: updated.id,
+        fields: Object.keys(body).sort().slice(0, 32),
+        sourceCount: updated.sources?.length || 0,
+        width: updated.width,
+        height: updated.height
+      });
       broadcast({ type: 'scene.updated', scene: updated });
       return sendJson(response, 200, updated);
     }
@@ -584,6 +621,12 @@ async function handleApi(request, response, pathname) {
       const updated = { ...scene, sources: [...scene.sources, persistedSource] };
       await store.upsertScene(updated);
       if (activeScene.id === updated.id) activeScene = updated;
+      appendRuntimeEvent('SourceRevisionPublished', {
+        sceneId: updated.id,
+        sourceId: persistedSource.id,
+        created: true,
+        source: sourceRevisionPayload(persistedSource)
+      });
       broadcast({ type: 'scene.updated', scene: updated });
       return sendJson(response, 201, persistedSource);
     }
@@ -617,6 +660,12 @@ async function handleApi(request, response, pathname) {
       };
       await store.upsertScene(updated);
       if (activeScene.id === updated.id) activeScene = updated;
+      appendRuntimeEvent('SourceRevisionPublished', {
+        sceneId: updated.id,
+        sourceId: source.id,
+        created: false,
+        source: sourceRevisionPayload(source)
+      });
       broadcast({ type: 'scene.updated', scene: updated });
       return sendJson(response, 200, source);
     }

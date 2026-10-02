@@ -46,11 +46,17 @@ export function verifySessionPackage(packageData) {
 
   const ids = new Set();
   const poseIds = new Set();
-  const sourceSnapshot = Array.isArray(packageData?.sourceRegistrySnapshot)
+  const baseSourceSnapshot = Array.isArray(packageData?.sourceRegistrySnapshot)
     ? packageData.sourceRegistrySnapshot
     : Array.isArray(packageData?.sources)
       ? packageData.sources
       : Array.isArray(packageData?.sceneSnapshot?.sources) ? packageData.sceneSnapshot.sources : null;
+  const journalSources = (Array.isArray(packageData?.journal) ? packageData.journal : [])
+    .filter((event) => event?.type === 'SourceRevisionPublished' && event.payload?.source?.id)
+    .map((event) => event.payload.source);
+  const sourceSnapshot = Array.from(new Map([...(baseSourceSnapshot || []), ...journalSources]
+    .filter((source) => source?.id)
+    .map((source) => [source.id, source])).values());
   const sourceIds = new Set((sourceSnapshot || []).map((source) => source?.id).filter((id) => typeof id === 'string'));
   const calibrationSnapshot = Array.isArray(packageData?.calibrationRegistrySnapshot)
     ? packageData.calibrationRegistrySnapshot
