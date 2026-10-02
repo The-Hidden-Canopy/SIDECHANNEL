@@ -1,9 +1,10 @@
 # Native reference-core slice
 
-This directory is the first C++23 native-core slice from the docuseries. It implements two hardware-independent contracts:
+This directory is the first C++23 native-core slice from the docuseries. It implements hardware-independent contracts for:
 
 - a seeded nine-channel deterministic simulator;
-- a bounded admission sequencer with backpressure receipt counters.
+- a bounded admission sequencer with backpressure receipt counters;
+- a manifest-gated adapter supervisor with permission checks, lifecycle state, and quarantine recovery.
 
 Build and test from the repository root with a C++23-capable CMake generator:
 

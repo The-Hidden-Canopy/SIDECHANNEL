@@ -105,6 +105,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A completed native file-backed session can be materialized as a sidechannel-session/0.2 package and independently verified by the Node session verifier; interrupted sessions are refused and native SQLite authority remains separate.'
   },
   {
+    id: 'native-adapter-supervisor',
+    label: 'Native adapter lifecycle supervisor',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The native reference admits versioned provider manifests, gates required permissions, bounds lifecycle transitions, quarantines repeated failures, and permits explicit recovery; physical provider processes and hardware accuracy remain separate gates.'
+  },
+  {
     id: 'native-local-ipc-contract',
     label: 'Bounded native local IPC contract',
     status: 'implemented',

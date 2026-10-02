@@ -36,6 +36,36 @@ int main() {
   assert(sequencer.receipt().max_depth == 2);
   assert(std::string(sidechannel::to_string(sidechannel::EvidenceState::simulated)) == "simulated");
 
+  sidechannel::NativeAdapterSupervisor adapters(2);
+  sidechannel::NativeAdapterManifest manifest{
+    "sidechannel.adapter/1", "fixture-provider", "0.1.0", "fixture-digest",
+    {"normalized_observation"}, {"fixture.read"}, 4096
+  };
+  std::string adapter_error;
+  assert(adapters.register_provider(manifest, 10, adapter_error));
+  assert(adapters.get("fixture-provider") != nullptr);
+  assert(adapters.get("fixture-provider")->state == "VALIDATED");
+  assert(!adapters.start("fixture-provider", 11, adapter_error));
+  assert(adapters.get("fixture-provider")->state == "DISABLED");
+  assert(adapters.grant_permissions("fixture-provider", {"fixture.read"}, 12, adapter_error));
+  assert(adapters.start("fixture-provider", 13, adapter_error));
+  assert(adapters.get("fixture-provider")->state == "RUNNING");
+  assert(adapters.record_failure("fixture-provider", "malformed frame", 14, adapter_error));
+  assert(adapters.get("fixture-provider")->state == "RUNNING");
+  assert(adapters.record_failure("fixture-provider", "provider stopped", 15, adapter_error));
+  assert(adapters.get("fixture-provider")->state == "QUARANTINED");
+  assert(!adapters.start("fixture-provider", 16, adapter_error));
+  assert(adapters.clear_quarantine("fixture-provider", 17, adapter_error));
+  assert(adapters.get("fixture-provider")->state == "DISABLED");
+  assert(adapters.start("fixture-provider", 18, adapter_error));
+  assert(adapters.revoke_permissions("fixture-provider", {}, 19, adapter_error));
+  assert(adapters.get("fixture-provider")->state == "DISABLED");
+  assert(!adapters.register_provider(
+    sidechannel::NativeAdapterManifest{"sidechannel.adapter/0", "bad", "0.1.0", "digest", {"x"}, {}, 4096},
+    20, adapter_error
+  ));
+  assert(adapters.list().size() == 1);
+
   const sidechannel::IpcFrame ping{"request-1", "ping", ""};
   const auto ping_wire = sidechannel::LocalIpcCodec::encode(ping, "launch-token");
   const auto decoded_ping = sidechannel::LocalIpcCodec::decode(ping_wire, "launch-token");

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <deque>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,51 @@ private:
   std::size_t max_queue_;
   std::deque<Observation> queue_;
   IngressReceipt receipt_;
+};
+
+struct NativeAdapterManifest {
+  std::string protocol_version;
+  std::string provider_id;
+  std::string provider_version;
+  std::string provider_digest;
+  std::vector<std::string> capabilities;
+  std::vector<std::string> required_permissions;
+  std::size_t maximum_frame_bytes = 64 * 1024;
+};
+
+struct NativeAdapterRecord {
+  NativeAdapterManifest manifest;
+  std::string state = "DISCOVERED";
+  std::vector<std::string> granted_permissions;
+  std::size_t failure_count = 0;
+  std::string last_failure;
+  std::int64_t last_transition_at_ms = 0;
+};
+
+class NativeAdapterSupervisor {
+public:
+  explicit NativeAdapterSupervisor(std::size_t failure_threshold = 3);
+
+  bool register_provider(NativeAdapterManifest manifest, std::int64_t now_ms, std::string& error);
+  bool grant_permissions(const std::string& provider_id, std::vector<std::string> permissions,
+    std::int64_t now_ms, std::string& error);
+  bool revoke_permissions(const std::string& provider_id, std::vector<std::string> permissions,
+    std::int64_t now_ms, std::string& error);
+  bool start(const std::string& provider_id, std::int64_t now_ms, std::string& error);
+  bool stop(const std::string& provider_id, std::int64_t now_ms, std::string& error);
+  bool record_failure(const std::string& provider_id, std::string reason,
+    std::int64_t now_ms, std::string& error);
+  bool record_success(const std::string& provider_id, std::int64_t now_ms, std::string& error);
+  bool clear_quarantine(const std::string& provider_id, std::int64_t now_ms, std::string& error);
+
+  [[nodiscard]] const NativeAdapterRecord* get(const std::string& provider_id) const noexcept;
+  [[nodiscard]] std::vector<NativeAdapterRecord> list() const;
+
+private:
+  NativeAdapterRecord* require(const std::string& provider_id, std::string& error);
+
+  std::size_t failure_threshold_;
+  std::map<std::string, NativeAdapterRecord> adapters_;
 };
 
 class DeterministicSimulator {

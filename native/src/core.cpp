@@ -358,6 +358,189 @@ const IngressReceipt& AdmissionSequencer::receipt() const noexcept {
   return receipt_;
 }
 
+NativeAdapterSupervisor::NativeAdapterSupervisor(std::size_t failure_threshold)
+  : failure_threshold_(std::max<std::size_t>(failure_threshold, 1)) {}
+
+NativeAdapterRecord* NativeAdapterSupervisor::require(const std::string& provider_id, std::string& error) {
+  const auto found = adapters_.find(provider_id);
+  if (found == adapters_.end()) {
+    error = "adapter not registered: " + provider_id;
+    return nullptr;
+  }
+  return &found->second;
+}
+
+bool NativeAdapterSupervisor::register_provider(NativeAdapterManifest manifest, std::int64_t now_ms,
+  std::string& error) {
+  if (manifest.protocol_version != "sidechannel.adapter/1") {
+    error = "unsupported adapter protocol version";
+    return false;
+  }
+  if (manifest.provider_id.empty() || manifest.provider_version.empty() || manifest.provider_digest.empty()) {
+    error = "provider identity and digest are required";
+    return false;
+  }
+  if (manifest.capabilities.empty()) {
+    error = "at least one adapter capability is required";
+    return false;
+  }
+  if (manifest.maximum_frame_bytes < 256 || manifest.maximum_frame_bytes > 2'000'000) {
+    error = "maximum frame bytes are outside the bounded adapter contract";
+    return false;
+  }
+  for (const auto& capability : manifest.capabilities) {
+    if (capability.empty()) {
+      error = "adapter capabilities cannot be empty";
+      return false;
+    }
+  }
+  auto [found, inserted] = adapters_.try_emplace(manifest.provider_id);
+  if (!inserted) {
+    const auto granted = found->second.granted_permissions;
+    const auto failures = found->second.failure_count;
+    const auto last_failure = found->second.last_failure;
+    found->second = NativeAdapterRecord{};
+    found->second.granted_permissions = granted;
+    found->second.failure_count = failures;
+    found->second.last_failure = last_failure;
+  }
+  found->second.manifest = std::move(manifest);
+  found->second.state = "VALIDATED";
+  found->second.last_transition_at_ms = now_ms;
+  error.clear();
+  return true;
+}
+
+bool NativeAdapterSupervisor::grant_permissions(const std::string& provider_id,
+  std::vector<std::string> permissions, std::int64_t now_ms, std::string& error) {
+  auto* adapter = require(provider_id, error);
+  if (!adapter) return false;
+  std::sort(permissions.begin(), permissions.end());
+  permissions.erase(std::unique(permissions.begin(), permissions.end()), permissions.end());
+  for (const auto& permission : permissions) {
+    if (std::find(adapter->manifest.required_permissions.begin(), adapter->manifest.required_permissions.end(), permission) ==
+        adapter->manifest.required_permissions.end()) {
+      error = "permission grant exceeds provider manifest request";
+      return false;
+    }
+  }
+  adapter->granted_permissions = std::move(permissions);
+  adapter->state = "DISABLED";
+  adapter->last_transition_at_ms = now_ms;
+  error.clear();
+  return true;
+}
+
+bool NativeAdapterSupervisor::revoke_permissions(const std::string& provider_id,
+  std::vector<std::string> permissions, std::int64_t now_ms, std::string& error) {
+  auto* adapter = require(provider_id, error);
+  if (!adapter) return false;
+  if (permissions.empty()) permissions = adapter->granted_permissions;
+  std::sort(permissions.begin(), permissions.end());
+  permissions.erase(std::unique(permissions.begin(), permissions.end()), permissions.end());
+  for (const auto& permission : permissions) {
+    if (std::find(adapter->granted_permissions.begin(), adapter->granted_permissions.end(), permission) ==
+        adapter->granted_permissions.end()) {
+      error = "permission revocation includes a permission that is not granted";
+      return false;
+    }
+  }
+  std::vector<std::string> remaining;
+  for (const auto& granted : adapter->granted_permissions) {
+    if (std::find(permissions.begin(), permissions.end(), granted) == permissions.end()) remaining.push_back(granted);
+  }
+  adapter->granted_permissions = std::move(remaining);
+  adapter->state = "DISABLED";
+  adapter->last_transition_at_ms = now_ms;
+  error.clear();
+  return true;
+}
+
+bool NativeAdapterSupervisor::start(const std::string& provider_id, std::int64_t now_ms, std::string& error) {
+  auto* adapter = require(provider_id, error);
+  if (!adapter) return false;
+  if (adapter->state == "QUARANTINED") {
+    error = "adapter is quarantined";
+    return false;
+  }
+  for (const auto& permission : adapter->manifest.required_permissions) {
+    if (std::find(adapter->granted_permissions.begin(), adapter->granted_permissions.end(), permission) ==
+        adapter->granted_permissions.end()) {
+      adapter->state = "DISABLED";
+      error = "required permissions are not granted: " + permission;
+      return false;
+    }
+  }
+  adapter->state = "STARTING";
+  adapter->last_transition_at_ms = now_ms;
+  adapter->state = "RUNNING";
+  adapter->last_transition_at_ms = now_ms;
+  error.clear();
+  return true;
+}
+
+bool NativeAdapterSupervisor::stop(const std::string& provider_id, std::int64_t now_ms, std::string& error) {
+  auto* adapter = require(provider_id, error);
+  if (!adapter) return false;
+  if (adapter->state == "RUNNING" || adapter->state == "STARTING") {
+    adapter->state = "STOPPING";
+    adapter->last_transition_at_ms = now_ms;
+  }
+  adapter->state = "STOPPED";
+  adapter->last_transition_at_ms = now_ms;
+  error.clear();
+  return true;
+}
+
+bool NativeAdapterSupervisor::record_failure(const std::string& provider_id, std::string reason,
+  std::int64_t now_ms, std::string& error) {
+  auto* adapter = require(provider_id, error);
+  if (!adapter) return false;
+  ++adapter->failure_count;
+  adapter->last_failure = std::move(reason);
+  adapter->last_transition_at_ms = now_ms;
+  if (adapter->failure_count >= failure_threshold_) adapter->state = "QUARANTINED";
+  error.clear();
+  return true;
+}
+
+bool NativeAdapterSupervisor::record_success(const std::string& provider_id, std::int64_t now_ms, std::string& error) {
+  auto* adapter = require(provider_id, error);
+  if (!adapter) return false;
+  adapter->failure_count = 0;
+  adapter->last_failure.clear();
+  adapter->last_transition_at_ms = now_ms;
+  error.clear();
+  return true;
+}
+
+bool NativeAdapterSupervisor::clear_quarantine(const std::string& provider_id, std::int64_t now_ms, std::string& error) {
+  auto* adapter = require(provider_id, error);
+  if (!adapter) return false;
+  if (adapter->state != "QUARANTINED") {
+    error.clear();
+    return true;
+  }
+  adapter->state = "DISABLED";
+  adapter->failure_count = 0;
+  adapter->last_failure.clear();
+  adapter->last_transition_at_ms = now_ms;
+  error.clear();
+  return true;
+}
+
+const NativeAdapterRecord* NativeAdapterSupervisor::get(const std::string& provider_id) const noexcept {
+  const auto found = adapters_.find(provider_id);
+  return found == adapters_.end() ? nullptr : &found->second;
+}
+
+std::vector<NativeAdapterRecord> NativeAdapterSupervisor::list() const {
+  std::vector<NativeAdapterRecord> records;
+  records.reserve(adapters_.size());
+  for (const auto& [provider_id, record] : adapters_) records.push_back(record);
+  return records;
+}
+
 DeterministicSimulator::DeterministicSimulator(std::uint32_t seed)
   : random_state_(seed) {}
 
