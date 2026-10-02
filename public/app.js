@@ -308,26 +308,65 @@ function renderInspector() {
   }
   const observation = state.selected;
   const source = sourceById(observation.sourceId);
+  const support = observation.support || source?.support;
+  const provenance = Array.isArray(observation.provenance) ? observation.provenance : [];
+  const inputObservationIds = provenance
+    .filter((edge) => edge.relation === 'derived_from')
+    .map((edge) => edge.parentId);
+  const provenanceLabel = provenance.length
+    ? provenance.map((edge) => edge.relation + ': ' + edge.parentId).join(' · ')
+    : 'none recorded';
+  const inputLabel = inputObservationIds.length ? inputObservationIds.join(' · ') : 'none recorded';
+  const ageMs = Number.isFinite(observation.ageMs)
+    ? observation.ageMs
+    : Number.isFinite(observation.timestampMs)
+      ? Math.max(0, Date.now() - observation.timestampMs)
+      : null;
+  const ageLabel = ageMs === null
+    ? 'not available'
+    : ageMs < 1000 ? Math.round(ageMs) + ' ms' : (ageMs / 1000).toFixed(1) + ' s';
+  const positionLabel = observation.position
+    ? observation.position.x.toFixed(2) + ', ' + observation.position.y.toFixed(2)
+    : observation.poseRef ? 'resolved from pose' : 'source anchor';
+  const supportLabel = support?.type || (observation.position ? 'PointSupport' : 'unknown');
+  const processingPath = [
+    observation.status === 'measured' ? 'source → normalized observation' : 'source → derived feature → scene',
+    observation.poseRef ? 'pose history resolved' : null,
+    support && support.type !== 'PointSupport' ? support.type + ' sampled' : null
+  ].filter(Boolean).join(' · ');
   title.textContent = source?.name || observation.sourceId;
   hint.textContent = observation.feature || 'Normalized observation';
   body.className = 'inspector-body';
   body.innerHTML = '<div class="detail-grid">' +
     detail('Channel', observation.channel) +
     detail('Value', String(observation.value) + ' ' + observation.unit) +
-    detail('Status', '<span class="badge">' + observation.status + '</span>') +
+    detail('Status', '<span class="badge">' + escapeHtml(observation.status || 'unknown') + '</span>', { html: true }) +
     detail('Evidence', observation.evidenceState || observation.status) +
     detail('Quality', Math.round((observation.quality?.score || 0) * 100) + '% · ' + (observation.quality?.state || 'unknown')) +
+    detail('Source', observation.sourceId) +
     detail('Provider', observation.provider?.id || 'not declared') +
+    detail('Provider digest', observation.provider?.digest || 'not declared') +
     detail('Timestamp', new Date(observation.timestampMs).toLocaleTimeString()) +
-    detail('Position', observation.position ? observation.position.x.toFixed(2) + ', ' + observation.position.y.toFixed(2) : 'source anchor') +
+    detail('Age', ageLabel) +
+    detail('Position', positionLabel) +
+    detail('Support', supportLabel) +
+    detail('Pose', observation.poseRef
+      ? observation.poseRef + ' · ' + (Number.isFinite(observation.poseDistanceMs) ? observation.poseDistanceMs + ' ms from sample' : 'resolved')
+      : 'not resolved') +
     detail('Calibration', observation.calibrationRef || source?.calibrationState || 'not declared') +
+    detail('Source profile', observation.sourceProfileDigest || source?.sourceProfileDigest || 'not declared') +
+    detail('Transform revision', Number.isInteger(observation.transformRevision) ? String(observation.transformRevision) : 'not declared') +
+    detail('Sequence', Number.isInteger(observation.sequence) ? String(observation.sequence) : 'not declared') +
+    detail('Input observations', inputLabel) +
+    detail('Provenance', provenanceLabel) +
     detail('Privacy', observation.privacyClass || source?.privacyClass || source?.privacyMode || 'not declared') +
-    detail('Processing', observation.status === 'measured' ? 'source → normalized observation' : 'source → derived feature → scene') +
+    detail('Processing', processingPath) +
     '</div>';
 }
 
-function detail(label, value) {
-  return '<div class="detail-item"><span class="detail-label">' + label + '</span><span class="detail-value">' + value + '</span></div>';
+function detail(label, value, { html = false } = {}) {
+  return '<div class="detail-item"><span class="detail-label">' + escapeHtml(label) + '</span><span class="detail-value">' +
+    (html ? value : escapeHtml(value)) + '</span></div>';
 }
 
 function colorFor(channel) {

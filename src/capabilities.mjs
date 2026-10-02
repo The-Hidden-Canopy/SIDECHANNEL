@@ -77,6 +77,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Region, path, and ellipse supports are validated and sampled with bounded geometry metadata instead of being reduced to point precision.'
   },
   {
+    id: 'evidence-inspector-lineage',
+    label: 'Evidence inspector lineage',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Selected observations expose source/provider identity, calibration and transform bindings, pose resolution, support geometry, sequence, age, inputs, and provenance.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

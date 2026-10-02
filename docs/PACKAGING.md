@@ -64,6 +64,8 @@ Pose history is bounded and explicit. `POST /api/poses` records a `sidechannel.p
 
 Spatial evaluation preserves support geometry. `RegionSupport` is sampled across a bounded center/cardinal footprint, `PathSupport` across its bounded trajectory points, and `EllipseSupport` across a bounded perimeter sample set; field artifacts report both observation count and support sample count/types. Unsupported or malformed geometry is rejected instead of silently becoming a point.
 
+The live inspector is an evidence-explainability surface, not a decorative tooltip. Selecting an observation shows its source and provider identities, provider digest, value/unit, evidence and quality state, timestamp/age, position, support type, pose reference and resolution distance, calibration reference, source-profile digest, transform revision, sequence, input observation IDs, provenance edges, privacy class, and processing path. Runtime-provided values are escaped before rendering. This makes the software's lineage visible without implying physical sensing accuracy.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:
