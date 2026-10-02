@@ -18,6 +18,8 @@ npm run verify
 
 It syntax-checks every `src/*.mjs` file and the browser module, then runs the complete Node test suite.
 
+The complete suite includes an isolated loopback process smoke test. It starts the server on a temporary port with `SIDECHANNEL_DATA_DIR` pointed at a temporary directory, exercises launch-token admission, source creation, observation ingestion, recording, export, and independent package verification, then removes the temporary data. Normal runs continue to use the local `data/` directory.
+
 The hardware-independent C++23 reference slice has its own CTest gate. From a Visual Studio Developer Command Prompt, configure the root CMake project with a C++23 generator, then run `cmake --build <build-dir>` and `ctest --test-dir <build-dir> --output-on-failure`. It currently verifies deterministic simulation and bounded admission only; it is not yet native persistence or export parity.
 
 `.github/workflows/verify.yml` runs the Node reference suite on every push/pull request and runs the native CTest plus Node↔C++ parity gate on Ubuntu and Windows. These CI jobs verify software behavior only; they do not validate physical hardware, deployment, or regulated operation.

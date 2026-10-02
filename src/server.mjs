@@ -35,8 +35,9 @@ import { evaluateFieldGraph } from './evaluation/graph.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
-const dataFile = join(root, 'data', 'sidechannel.sqlite');
-const legacyDataFile = join(root, 'data', 'sidechannel.json');
+const dataDir = process.env.SIDECHANNEL_DATA_DIR ? resolve(process.env.SIDECHANNEL_DATA_DIR) : join(root, 'data');
+const dataFile = join(dataDir, 'sidechannel.sqlite');
+const legacyDataFile = join(dataDir, 'sidechannel.json');
 const port = Number(process.env.PORT || 4173);
 const launchToken = randomUUID();
 const store = new SqliteStore(dataFile, { legacyJsonPath: legacyDataFile });
