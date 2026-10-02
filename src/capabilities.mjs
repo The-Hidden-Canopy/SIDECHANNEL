@@ -35,6 +35,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Source profile digests are derived from measurement identity and policy fields; placement changes do not silently change the profile.'
   },
   {
+    id: 'provider-identity-admission',
+    label: 'Provider identity admission',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'When a source has a provider manifest, frame provider id and digest claims must match that registered manifest.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

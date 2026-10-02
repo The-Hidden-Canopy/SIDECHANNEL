@@ -54,6 +54,8 @@ The server creates `data/sidechannel.sqlite` plus SQLite WAL files. `data/` is i
 
 Calibration reuse is fail-closed. A calibration record used by an observation must be valid, unexpired, and bound to both the current provider digest and the runtime-derived source-profile digest. When a known source is named during publication, the server derives those identities from the current source and rejects caller-supplied mismatches. Source-profile digests cover measurement identity and policy fields, while placement is governed by the spatial transform graph; moving a source does not silently mutate its measurement profile. `GET /api/calibrations/:id/compatibility?providerDigest=...&sourceProfileDigest=...` returns the explicit compatibility decision; observations carrying an incompatible or unbound `calibrationRef` are rejected with the decision and reasons. This proves software enforcement of provenance, not physical calibration accuracy.
 
+Provider identity is authoritative when a source has a registered provider manifest. A normalized frame may omit identity fields and inherit the registered manifest, but it may not claim a different provider id or digest. Sources without a manifest remain explicitly less bound and are not hardware evidence.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

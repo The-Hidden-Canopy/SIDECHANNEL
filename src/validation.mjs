@@ -56,6 +56,15 @@ export function validateObservation(raw, options = {}) {
   } else if (sources.size > 0 && !sources.has(sourceId)) {
     reasons.push(reason('sourceId.unknown', 'sourceId is not registered'));
   }
+  const providerManifest = source?.providerManifest;
+  if (providerManifest) {
+    if (raw.providerId !== undefined && raw.providerId !== providerManifest.providerId) {
+      reasons.push(reason('provider.id.mismatch', 'providerId does not match the registered provider manifest'));
+    }
+    if (raw.providerDigest !== undefined && raw.providerDigest !== providerManifest.providerDigest) {
+      reasons.push(reason('provider.digest.mismatch', 'providerDigest does not match the registered provider manifest'));
+    }
+  }
   if (!CHANNELS.includes(channel)) {
     reasons.push(reason('channel', 'channel is not supported'));
   }

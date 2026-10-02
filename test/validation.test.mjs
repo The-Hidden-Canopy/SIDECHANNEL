@@ -71,6 +71,50 @@ test('validation preserves explicit evidence, privacy, provider, and lineage met
   assert.equal(result.observation.support.type, 'RegionSupport');
 });
 
+test('provider manifest identity is authoritative for admitted observations', () => {
+  const manifestSources = new Map([[
+    'sensor_manifest',
+    {
+      id: 'sensor_manifest',
+      range: [0, 100],
+      freshnessWindowMs: 1000,
+      providerManifest: {
+        providerId: 'local:sensor_manifest',
+        providerDigest: 'provider_a'
+      }
+    }
+  ]]);
+  const accepted = validateObservation({
+    schemaVersion: '0.1',
+    id: 'obs_manifest_ok',
+    sourceId: 'sensor_manifest',
+    channel: 'heat',
+    timestampMs: 1000,
+    value: 22,
+    unit: 'C',
+    status: 'measured',
+    providerId: 'local:sensor_manifest',
+    providerDigest: 'provider_a'
+  }, { sources: manifestSources, now: 1000 });
+  assert.equal(accepted.ok, true);
+  assert.equal(accepted.observation.provider.digest, 'provider_a');
+
+  const rejected = validateObservation({
+    schemaVersion: '0.1',
+    id: 'obs_manifest_bad',
+    sourceId: 'sensor_manifest',
+    channel: 'heat',
+    timestampMs: 1000,
+    value: 22,
+    unit: 'C',
+    status: 'measured',
+    providerId: 'local:sensor_manifest',
+    providerDigest: 'provider_changed'
+  }, { sources: manifestSources, now: 1000 });
+  assert.equal(rejected.ok, false);
+  assert.ok(rejected.reasons.some((reason) => reason.id === 'provider.digest.mismatch'));
+});
+
 test('validation rejects an unsupported spatial support type', () => {
   const result = validateObservation({
     schemaVersion: '0.1', id: 'obs_support_bad', sourceId: 'sensor_1', channel: 'heat',
