@@ -137,6 +137,10 @@ public:
     return sqlite_ ? sqlite_session_->verify() : file_session_->verify();
   }
 
+  std::string export_json() const {
+    return sqlite_ ? sqlite_session_->export_json() : file_session_->export_json();
+  }
+
   std::string last_error() const {
     return sqlite_ ? sqlite_session_->last_error() : std::string{};
   }
@@ -289,6 +293,19 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file, con
       else {
         response.type = "session.closed";
         response.payload = "{\"state\":" + quote_json(session->state()) + '}';
+      }
+    } else if (decoded.frame.type == "session.export") {
+      if (!session) response.payload = "{\"error\":\"session file is required\"}";
+      else if (!decoded.frame.payload.empty()) response.payload = "{\"error\":\"session.export does not accept a payload\"}";
+      else if (session->state() != "completed") response.payload = "{\"error\":\"session export requires a completed session\"}";
+      else {
+        const auto package = session->export_json();
+        if (package.size() > sidechannel::LocalIpcCodec::max_payload_bytes) {
+          response.payload = "{\"error\":\"session export exceeds the IPC payload bound\"}";
+        } else {
+          response.type = "session.exported";
+          response.payload = package;
+        }
       }
     } else if (decoded.frame.type == "adapter.register") {
       const auto fields = split_pipe(decoded.frame.payload);

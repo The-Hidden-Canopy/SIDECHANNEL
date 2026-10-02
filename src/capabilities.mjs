@@ -130,14 +130,14 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Native IPC session control',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'The native IPC boundary can bind to either the durable file-backed or vendored SQLite session authority for bounded status, observation admission, verification, close, and restart/reopen control; it is not a network, desktop shell, deployment security, or hardware claim.'
+    note: 'The native IPC boundary can bind to either the durable file-backed or vendored SQLite session authority for bounded status, observation admission, SceneView, completed-session export, verification, close, and restart/reopen control; it is not a network, desktop shell, deployment security, or hardware claim.'
   },
   {
     id: 'native-c-api-control-surface',
     label: 'Opaque native C ABI control surface',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'sidechannel/c_api.h exposes bounded opaque-handle file-backed or SQLite-backed session control, SceneView export, and IPC encoding with finite-value admission; it is an interoperability contract, not deployment permission or hardware authority.'
+    note: 'sidechannel/c_api.h exposes bounded opaque-handle file-backed or SQLite-backed session control, SceneView and completed-session package export, and IPC encoding with finite-value admission; it is an interoperability contract, not deployment permission or hardware authority.'
   },
   {
     id: 'native-scene-view-projection',

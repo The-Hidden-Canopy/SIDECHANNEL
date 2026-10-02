@@ -43,6 +43,10 @@ struct sidechannel_session {
   sidechannel::JournalVerification verify() const {
     return sqlite_store ? sqlite_store->verify() : file_store->verify();
   }
+
+  std::string export_json() const {
+    return sqlite_store ? sqlite_store->export_json() : file_store->export_json();
+  }
 };
 
 namespace {
@@ -213,6 +217,27 @@ extern "C" int sidechannel_session_scene_view(
     session->observations(), now_ms, sidechannel::SceneViewLimits{max_sources, max_observations, 0, 0, 0}
   );
   return copy_text(view.to_json(), scene_out, scene_capacity);
+}
+
+extern "C" int sidechannel_session_export(
+  const sidechannel_session* session,
+  char* package_out,
+  size_t package_capacity,
+  char* error_out,
+  size_t error_capacity
+) {
+  if (!session || !package_out || package_capacity == 0) {
+    return fail(SIDECHANNEL_C_INVALID_ARGUMENT, "session and package output are required", error_out, error_capacity);
+  }
+  if (session->state() != "completed") {
+    return fail(SIDECHANNEL_C_IO_ERROR, "session export requires a completed session", error_out, error_capacity);
+  }
+  const auto package = session->export_json();
+  const auto result = copy_text(package, package_out, package_capacity);
+  if (result == SIDECHANNEL_C_BUFFER_TOO_SMALL) {
+    return fail(SIDECHANNEL_C_BUFFER_TOO_SMALL, "session package output buffer is too small", error_out, error_capacity);
+  }
+  return result;
 }
 
 extern "C" int sidechannel_session_verify(

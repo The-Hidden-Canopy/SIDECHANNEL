@@ -57,3 +57,4 @@ jobs:
           npm run verify:native-sqlite -- "$native_exe" 2
           npm run verify:native-ipc-sqlite -- "$native_exe"
           npm run verify:native-ipc-scene-view -- "$native_exe"
+          npm run verify:native-ipc-export -- "$native_exe"

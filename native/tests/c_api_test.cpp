@@ -38,8 +38,14 @@ int main() {
     "invalid", "c_api_source", "heat", 1100, 23.5, 2.0, 1
   };
   assert(sidechannel_session_append(session, &invalid_observation, error, sizeof(error)) == SIDECHANNEL_C_INVALID_ARGUMENT);
+  char package[16384]{};
+  assert(sidechannel_session_export(session, package, sizeof(package), error, sizeof(error)) == SIDECHANNEL_C_IO_ERROR);
   assert(sidechannel_session_close(session, 1250, error, sizeof(error)) == SIDECHANNEL_C_OK);
   assert(sidechannel_session_verify(session, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(sidechannel_session_export(session, package, sizeof(package), error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(std::string(package).find("\"format\":\"sidechannel-session\"") != std::string::npos);
+  assert(std::string(package).find("\"packageDigest\":\"") != std::string::npos);
+  assert(sidechannel_session_export(session, package, 4, error, sizeof(error)) == SIDECHANNEL_C_BUFFER_TOO_SMALL);
   sidechannel_session_destroy(session);
 
   session = nullptr;
@@ -68,6 +74,8 @@ int main() {
   assert(std::string(scene).find("\"boundedObservationCount\":1") != std::string::npos);
   assert(sidechannel_session_close(session, 1250, error, sizeof(error)) == SIDECHANNEL_C_OK);
   assert(sidechannel_session_verify(session, error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(sidechannel_session_export(session, package, sizeof(package), error, sizeof(error)) == SIDECHANNEL_C_OK);
+  assert(std::string(package).find("\"packageDigest\":\"") != std::string::npos);
   sidechannel_session_destroy(session);
 
   session = nullptr;

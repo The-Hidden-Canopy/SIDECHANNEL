@@ -73,6 +73,14 @@ int sidechannel_session_scene_view(
   size_t scene_capacity
 );
 
+int sidechannel_session_export(
+  const sidechannel_session* session,
+  char* package_out,
+  size_t package_capacity,
+  char* error_out,
+  size_t error_capacity
+);
+
 int sidechannel_session_verify(
   const sidechannel_session* session,
   char* error_out,
