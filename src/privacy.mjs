@@ -31,6 +31,10 @@ function sensitiveFields(raw) {
   return fields;
 }
 
+export function listSensitiveFields(raw) {
+  return sensitiveFields(raw);
+}
+
 export function validatePrivacyAdmission(raw, source) {
   const fields = sensitiveFields(raw);
   const rawFields = fields.filter((field) => RAW_CONTENT_KEYS.includes(field) || field.startsWith('metadata.'))

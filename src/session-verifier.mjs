@@ -4,6 +4,7 @@ import { HashChainJournal } from './journal.mjs';
 import { validatePoseSample } from './spatial/pose-history.mjs';
 import { validateBackground } from './spatial/background.mjs';
 import { validateObservation } from './validation.mjs';
+import { listSensitiveFields } from './privacy.mjs';
 
 export const SESSION_PACKAGE_LIMITS = Object.freeze({
   maxSerializedBytes: 2_000_000,
@@ -69,6 +70,7 @@ export function verifySessionPackage(packageData) {
   let calibrationReferencesVerified = true;
   let provenanceReferencesVerified = true;
   let observationSchemaVerified = true;
+  let privacyRetentionVerified = true;
   let sceneBackgroundVerified = true;
   if (packageData?.sceneSnapshot?.background !== undefined) {
     const backgroundResult = validateBackground(packageData.sceneSnapshot.background, {
@@ -99,6 +101,11 @@ export function verifySessionPackage(packageData) {
     }
     if (Number.isInteger(observation.transformRevision) && observation.transformRevision < 0) {
       reasons.push('observation transform revision must be non-negative: ' + observation.id);
+    }
+    const retainedSensitiveFields = listSensitiveFields(observation);
+    if (retainedSensitiveFields.length) {
+      privacyRetentionVerified = false;
+      reasons.push('observation retains prohibited privacy fields: ' + observation.id + ': ' + retainedSensitiveFields.join(', '));
     }
     if (packageData?.formatVersion === '0.2' && observations.length <= SESSION_PACKAGE_LIMITS.maxObservations) {
       const validation = validateObservation(observation, {
@@ -211,6 +218,7 @@ export function verifySessionPackage(packageData) {
       calibrationReferencesVerified,
       provenanceReferencesVerified,
       observationSchemaVerified,
+      privacyRetentionVerified,
       sceneBackgroundVerified,
       uniqueObservationIds: ids.size === (observations?.length || 0),
       historicalSnapshotComplete: snapshotComplete,

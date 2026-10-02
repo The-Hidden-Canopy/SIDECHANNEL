@@ -128,6 +128,36 @@ test('session verifier rejects malformed v0.2 observation payloads', () => {
   assert.ok(report.reasons.some((reason) => reason.includes('unit')));
 });
 
+test('session verifier rejects retained sensitive fields even after explicit provider opt-in', () => {
+  const packaged = packageData();
+  packaged.sourceRegistrySnapshot = [{
+    id: 'source_1',
+    range: [0, 100],
+    providerManifest: {
+      rawContentPolicy: 'explicit',
+      sourceIdentityPolicy: 'explicit'
+    }
+  }];
+  packaged.snapshotDigest = computeSnapshotDigest({
+    sceneSnapshot: packaged.sceneSnapshot,
+    sourceRegistrySnapshot: packaged.sourceRegistrySnapshot,
+    calibrationRegistrySnapshot: packaged.calibrationRegistrySnapshot,
+    transformGraphSnapshot: packaged.transformGraphSnapshot,
+    runtimeBuildId: packaged.runtimeBuildId,
+    schemaSetDigest: packaged.schemaSetDigest
+  });
+  packaged.observations[0].privacyClass = 'raw_retained_explicit';
+  packaged.observations[0].metadata = {
+    scenario: 'tamper-test',
+    rawAudio: 'opaque-payload',
+    deviceId: 'persistent-id'
+  };
+  const report = verifySessionPackage(packaged);
+  assert.equal(report.ok, false);
+  assert.equal(report.checks.privacyRetentionVerified, false);
+  assert.ok(report.reasons.some((reason) => reason.includes('observation retains prohibited privacy fields')));
+});
+
 test('session verifier applies the local-only background contract to scene snapshots', () => {
   const packaged = packageData();
   packaged.sceneSnapshot = {
