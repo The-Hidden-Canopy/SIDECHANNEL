@@ -20,6 +20,8 @@ It syntax-checks every `src/*.mjs` file and the browser module, then runs the co
 
 After exporting a session, verify its independent receipt with `npm run verify:session -- path/to/exported-session.json`. The running server also exposes `/api/sessions/:id/verify` for the same structural and snapshot checks.
 
+Session exports include an append-only journal with per-session sequence numbers and a SHA-256 hash chain. Verification reports a journal-tail failure if any retained event payload, order, or digest has been altered.
+
 ## Local run
 
 ```text

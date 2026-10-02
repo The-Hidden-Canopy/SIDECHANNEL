@@ -1,4 +1,5 @@
 import { computeSnapshotDigest } from './sqlite-store.mjs';
+import { HashChainJournal } from './journal.mjs';
 
 export function verifySessionPackage(packageData) {
   const reasons = [];
@@ -49,6 +50,15 @@ export function verifySessionPackage(packageData) {
       reasons.push('privacy.classes must be an array');
     }
   }
+  let journalVerified = false;
+  if (Array.isArray(packageData?.journal)) {
+    const journal = new HashChainJournal({ sessionId: packageData.sessionId || packageData.journal[0]?.sessionId || 'session_unknown' });
+    const journalReport = journal.verify(packageData.journal);
+    journalVerified = journalReport.ok;
+    if (!journalReport.ok) reasons.push(journalReport.reason);
+  } else {
+    warnings.push('journal is absent; append-only tail integrity was not checked');
+  }
   return {
     ok: reasons.length === 0,
     reasons,
@@ -59,7 +69,9 @@ export function verifySessionPackage(packageData) {
       eventCount: events?.length || 0,
       uniqueObservationIds: ids.size === (observations?.length || 0),
       historicalSnapshotComplete: snapshotComplete,
-      snapshotDigestVerified: packageData?.formatVersion === '0.2' && snapshotComplete && reasons.every((reason) => reason !== 'snapshot digest mismatch')
+      snapshotDigestVerified: packageData?.formatVersion === '0.2' && snapshotComplete && reasons.every((reason) => reason !== 'snapshot digest mismatch'),
+      journalEventCount: Array.isArray(packageData?.journal) ? packageData.journal.length : 0,
+      journalVerified
     }
   };
 }

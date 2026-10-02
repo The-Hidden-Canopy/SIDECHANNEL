@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { computeJournalDigest } from './journal.mjs';
 
 async function exists(path) {
   try {
@@ -97,10 +98,25 @@ export class SqliteStore {
         PRIMARY KEY (session_id, id),
         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
       );
+      CREATE TABLE IF NOT EXISTS journal (
+        session_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        sequence INTEGER NOT NULL,
+        timestamp_ms INTEGER NOT NULL,
+        type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        previous_digest TEXT,
+        event_digest TEXT NOT NULL,
+        PRIMARY KEY (session_id, sequence),
+        UNIQUE (session_id, id),
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
       CREATE INDEX IF NOT EXISTS observations_by_session_time
         ON observations(session_id, timestamp_ms);
       CREATE INDEX IF NOT EXISTS events_by_session_start
         ON events(session_id, start_ms);
+      CREATE INDEX IF NOT EXISTS journal_by_session_sequence
+        ON journal(session_id, sequence);
     `);
     this.ensureSessionSnapshotColumns();
 
@@ -198,7 +214,20 @@ export class SqliteStore {
       `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean),
       events: this.db.prepare(`
         SELECT payload FROM events WHERE session_id = ? ORDER BY start_ms, rowid
-      `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean)
+      `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean),
+      journal: this.db.prepare(`
+        SELECT id, session_id, sequence, timestamp_ms, type, payload, previous_digest, event_digest
+        FROM journal WHERE session_id = ? ORDER BY sequence
+      `).all(sessionId).map((item) => ({
+        id: item.id,
+        sessionId: item.session_id,
+        sequence: item.sequence,
+        timestampMs: item.timestamp_ms,
+        type: item.type,
+        payload: decode(item.payload, null),
+        previousDigest: item.previous_digest,
+        eventDigest: item.event_digest
+      }))
     };
   }
 
@@ -260,19 +289,27 @@ export class SqliteStore {
       schemaSetDigest,
       snapshotDigest
     );
+    this.appendJournal(session.id, 'SessionOpened', { snapshotDigest });
     return session;
   }
 
   appendObservation(sessionId, observation) {
     const session = this.db.prepare('SELECT id FROM sessions WHERE id = ? AND ended_at_ms IS NULL').get(sessionId);
     if (!session) return;
-    this.insertObservation(sessionId, observation);
+    if (this.insertObservation(sessionId, observation)) {
+      this.appendJournal(sessionId, 'ObservationAdmitted', {
+        observationId: observation.id,
+        sequence: observation.sequence || null
+      }, observation.admittedAtMs || observation.receivedAtMs || Date.now());
+    }
   }
 
   appendEvent(sessionId, event) {
     const session = this.db.prepare('SELECT id FROM sessions WHERE id = ? AND ended_at_ms IS NULL').get(sessionId);
     if (!session) return;
-    this.insertEvent(sessionId, event);
+    if (this.insertEvent(sessionId, event)) {
+      this.appendJournal(sessionId, 'EventDerived', { eventId: event.id }, event.startMs || Date.now());
+    }
   }
 
   finishSession(sessionId) {
@@ -280,7 +317,9 @@ export class SqliteStore {
     const result = this.db.prepare(`
       UPDATE sessions SET ended_at_ms = COALESCE(ended_at_ms, ?) WHERE id = ?
     `).run(endedAtMs, sessionId);
-    return result.changes ? this.getSession(sessionId) : null;
+    if (!result.changes) return null;
+    this.appendJournal(sessionId, 'SessionClosed', { endedAtMs }, endedAtMs);
+    return this.getSession(sessionId);
   }
 
   deleteSession(sessionId) {
@@ -334,6 +373,10 @@ export class SqliteStore {
     );
     for (const observation of session.observations) this.insertObservation(session.id, observation);
     for (const event of session.events) this.insertEvent(session.id, event);
+    this.appendJournal(session.id, 'ImportAccepted', {
+      originalSessionId: packageData.sessionId || null,
+      sourcePackageDigest: packageData.snapshotDigest || null
+    }, session.startedAtMs);
     return session;
   }
 
@@ -384,8 +427,8 @@ export class SqliteStore {
   }
 
   insertObservation(sessionId, observation) {
-    if (!observation?.id) return;
-    this.db.prepare(`
+    if (!observation?.id) return false;
+    const result = this.db.prepare(`
       INSERT OR IGNORE INTO observations
         (session_id, id, timestamp_ms, source_id, channel, payload)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -397,11 +440,12 @@ export class SqliteStore {
       observation.channel || 'unknown',
       encode(observation)
     );
+    return result.changes > 0;
   }
 
   insertEvent(sessionId, event) {
-    if (!event?.id) return;
-    this.db.prepare(`
+    if (!event?.id) return false;
+    const result = this.db.prepare(`
       INSERT OR IGNORE INTO events
         (session_id, id, start_ms, end_ms, type, payload)
       VALUES (?, ?, ?, ?, ?, ?)
@@ -413,5 +457,22 @@ export class SqliteStore {
       event.type || 'event',
       encode(event)
     );
+    return result.changes > 0;
+  }
+
+  appendJournal(sessionId, type, payload = {}, timestampMs = Date.now()) {
+    const previous = this.db.prepare(`
+      SELECT sequence, event_digest FROM journal WHERE session_id = ? ORDER BY sequence DESC LIMIT 1
+    `).get(sessionId);
+    const sequence = (previous?.sequence || 0) + 1;
+    const id = 'journal_' + randomUUID();
+    const previousDigest = previous?.event_digest || null;
+    const eventDigest = computeJournalDigest({ sessionId, sequence, timestampMs, type, payload, previousDigest });
+    this.db.prepare(`
+      INSERT INTO journal
+        (session_id, id, sequence, timestamp_ms, type, payload, previous_digest, event_digest)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(sessionId, id, sequence, timestampMs, type, encode(payload), previousDigest, eventDigest);
+    return { id, sessionId, sequence, timestampMs, type, payload, previousDigest, eventDigest };
   }
 }

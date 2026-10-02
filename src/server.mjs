@@ -180,6 +180,7 @@ function sessionPackage(session) {
     schemaSetDigest: session.schemaSetDigest,
     snapshotDigest: session.snapshotDigest,
     historicalSnapshotComplete: session.snapshotComplete,
+    journal: session.journal,
     observations: session.observations,
     events: session.events,
     createdAtMs: session.startedAtMs,
