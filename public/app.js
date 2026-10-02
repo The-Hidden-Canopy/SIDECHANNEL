@@ -94,6 +94,8 @@ const state = {
   benchmarkBusy: false,
   burstReceipt: null,
   burstBusy: false,
+  sceneViewReceipt: null,
+  sceneViewBusy: false,
   faultReceipt: null,
   faultBusy: false,
   renderBudget: renderBudgetForObservationCount(0),
@@ -705,6 +707,25 @@ function renderFaultCampaign() {
     ['Evidence', receipt.evidenceLevel + ' software receipt'],
     ['Receipt', receipt.receiptDigest.slice(0, 12) + '… verified'],
     ['Boundary', 'no hardware or production claim']
+  ].map(([label, value]) => '<div class="benchmark-row"><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('');
+}
+
+function renderSceneViewBenchmark() {
+  const button = document.getElementById('sceneViewBenchmarkButton');
+  const result = document.getElementById('sceneViewBenchmarkResult');
+  if (!button || !result) return;
+  button.disabled = state.sceneViewBusy;
+  button.textContent = state.sceneViewBusy ? 'Measuring SceneView…' : 'Measure SceneView updates';
+  if (!state.sceneViewReceipt) {
+    result.innerHTML = '<span class="muted">No SceneView receipt yet.</span>';
+    return;
+  }
+  const receipt = state.sceneViewReceipt;
+  result.innerHTML = [
+    ['View', receipt.boundedSourceCount + ' sources · ' + receipt.boundedObservationCount + ' observations'],
+    ['Update', 'p50 ' + receipt.updateLatencyUs.p50 + ' µs · p95 ' + receipt.updateLatencyUs.p95 + ' µs'],
+    ['Payload', receipt.payloadBytes.p95 + ' bytes p95 · host-local'],
+    ['Receipt', receipt.receiptDigest.slice(0, 12) + '… verified']
   ].map(([label, value]) => '<div class="benchmark-row"><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('');
 }
 
@@ -1554,7 +1575,7 @@ function render() {
   }).length;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels' +
     (disconnectedCount ? ' · ' + disconnectedCount + ' disconnected' : '');
-  renderLayers(); renderFieldSettings(); renderActivityWeights(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderFaultCampaign(); renderCapabilities(); renderEvents(); renderInspector(); renderAccessibilitySummary(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderFieldSettings(); renderActivityWeights(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderSceneViewBenchmark(); renderFaultCampaign(); renderCapabilities(); renderEvents(); renderInspector(); renderAccessibilitySummary(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1839,6 +1860,24 @@ document.getElementById('burstBenchmarkButton').addEventListener('click', async 
   } finally {
     state.burstBusy = false;
     renderBurstBenchmark();
+  }
+});
+
+document.getElementById('sceneViewBenchmarkButton').addEventListener('click', async () => {
+  state.sceneViewBusy = true;
+  renderSceneViewBenchmark();
+  try {
+    const payload = await api('/api/benchmark/scene-view', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ iterations: 20, sourceCount: 9, seed: 1337 })
+    });
+    state.sceneViewReceipt = payload.receipt;
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'SceneView benchmark failed: ' + error.message;
+  } finally {
+    state.sceneViewBusy = false;
+    renderSceneViewBenchmark();
   }
 });
 

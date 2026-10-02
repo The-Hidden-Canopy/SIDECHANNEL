@@ -77,6 +77,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The live workspace consumes a versioned, bounded SceneView containing source projections, current observations, adapter health, events, diagnostics, and explicit truncation limits.'
   },
   {
+    id: 'scene-view-performance-receipt',
+    label: 'SceneView performance receipt',
+    status: 'implemented',
+    evidenceLevel: 'E2',
+    note: 'A bounded simulator benchmark records SceneView update latency and serialized payload percentiles with a tamper-detectable software receipt; it is not a production capacity claim.'
+  },
+  {
     id: 'bounded-websocket-controls',
     label: 'Bounded WebSocket controls',
     status: 'implemented',

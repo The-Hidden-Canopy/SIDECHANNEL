@@ -20,7 +20,7 @@ import { createRateLimiter, hasValidLaunchToken, isAllowedLoopbackHost, isAllowe
 import { AdapterSupervisor } from './adapters/supervisor.mjs';
 import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
 import { createReplayReceipt } from './verification/receipt.mjs';
-import { runBurstBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
+import { runBurstBenchmark, runSceneViewBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, verifySceneViewBenchmarkReceipt, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
 import { capabilitySnapshot } from './capabilities.mjs';
 import { securityPostureSnapshot } from './security-posture.mjs';
 import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/source-profile.mjs';
@@ -466,6 +466,20 @@ async function handleApi(request, response, pathname) {
         sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
       });
       return sendJson(response, 200, { receipt, verification: verifyBurstBenchmarkReceipt(receipt) });
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
+  }
+  if (request.method === 'POST' && pathname === '/api/benchmark/scene-view') {
+    const body = await bodyJson(request);
+    try {
+      const receipt = runSceneViewBenchmark({
+        iterations: body.iterations === undefined ? 20 : Number(body.iterations),
+        sourceCount: body.sourceCount === undefined ? 9 : Number(body.sourceCount),
+        seed: body.seed === undefined ? 1337 : Number(body.seed),
+        sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
+      });
+      return sendJson(response, 200, { receipt, verification: verifySceneViewBenchmarkReceipt(receipt) });
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
     }

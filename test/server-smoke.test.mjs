@@ -183,6 +183,14 @@ test('loopback server smoke covers live websocket reconnect, adapter ingress, se
     assert.equal(sceneView.payload.format, 'sidechannel.scene-view/1');
     assert.ok(Array.isArray(sceneView.payload.sourceProjections));
     assert.ok(sceneView.payload.sourceProjections.some((source) => source.health === 'live'));
+    const sceneViewBenchmark = await requestJson(baseUrl + '/api/benchmark/scene-view', {
+      method: 'POST',
+      headers: { 'x-sidechannel-launch-token': health.launchToken, 'content-type': 'application/json' },
+      body: JSON.stringify({ iterations: 2, sourceCount: 8, seed: 1337 })
+    });
+    assert.equal(sceneViewBenchmark.response.status, 200);
+    assert.equal(sceneViewBenchmark.payload.verification.ok, true);
+    assert.equal(sceneViewBenchmark.payload.receipt.sceneViewFormat, 'sidechannel.scene-view/1');
 
     const posture = await requestJson(baseUrl + '/api/security-posture');
     assert.equal(posture.response.status, 200);

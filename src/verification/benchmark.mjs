@@ -6,6 +6,7 @@ import { validateObservation } from '../validation.mjs';
 import { SCHEMA_SET_DIGEST } from '../schema.mjs';
 import { createIngressSequencer } from '../admission/sequencer.mjs';
 import { createReplayReceipt, verifyReplayReceipt } from './receipt.mjs';
+import { createSceneView } from '../scene-view.mjs';
 
 function percentile(values, fraction) {
   if (!values.length) return 0;
@@ -179,6 +180,133 @@ export function verifySoftwareBenchmarkReceipt(receipt) {
     const copy = { ...receipt };
     delete copy.receiptDigest;
     if (digest(copy) !== receipt.receiptDigest) reasons.push('benchmark receipt digest mismatch');
+  }
+  return { ok: reasons.length === 0, reasons, receiptDigest: receipt?.receiptDigest || null };
+}
+
+export function runSceneViewBenchmark({
+  iterations = 20,
+  sourceCount = DEFAULT_SOURCES.length,
+  seed = 1337,
+  runId = 'scene_view_' + Date.now(),
+  sourceCommit = 'unknown'
+} = {}) {
+  if (!Number.isInteger(iterations) || iterations < 1 || iterations > 1_000) throw new Error('iterations must be between 1 and 1000');
+  if (!Number.isInteger(sourceCount) || sourceCount < 1 || sourceCount > 512) throw new Error('sourceCount must be between 1 and 512');
+
+  const sceneBase = createDefaultScene();
+  const sources = benchmarkSources(sceneBase, sourceCount);
+  const scene = {
+    ...sceneBase,
+    sources,
+    placements: sources.map((source) => ({
+      sourceId: source.id,
+      position: { ...source.position },
+      calibrationState: 'calibrated',
+      calibratedAtMs: 0
+    }))
+  };
+  let timestampMs = 0;
+  const observations = [];
+  const simulator = createSimulator({
+    sources,
+    seed,
+    intervalMs: 60_000,
+    clock: () => timestampMs,
+    emit: (observation) => observations.push(observation)
+  });
+  simulator.step();
+  const adapterRuntime = [{
+    manifest: { providerId: 'builtin:simulator' },
+    state: 'RUNNING'
+  }];
+  const events = Array.from({ length: 40 }, (_, index) => ({ id: 'event_' + index, timestampMs: index }));
+  const diagnostics = Array.from({ length: 40 }, (_, index) => ({ id: 'diagnostic_' + index, receivedAtMs: index }));
+  const updateLatenciesUs = [];
+  const payloadBytes = [];
+  let lastView = null;
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    timestampMs = iteration * 250;
+    const startedAt = performance.now();
+    lastView = createSceneView({
+      scene,
+      observations,
+      events,
+      diagnostics,
+      adapterRuntime,
+      nowMs: timestampMs
+    });
+    const serialized = JSON.stringify(lastView);
+    updateLatenciesUs.push((performance.now() - startedAt) * 1000);
+    payloadBytes.push(Buffer.byteLength(serialized, 'utf8'));
+  }
+  const receipt = {
+    format: 'sidechannel-scene-view-benchmark-receipt',
+    formatVersion: '0.1',
+    evidenceLevel: 'E2',
+    tier: 'simulator-reference',
+    runId,
+    sourceCommit,
+    runtimeBuildId: 'sidechannel-node-reference',
+    schemaDigest: SCHEMA_SET_DIGEST,
+    seed,
+    iterations,
+    sourceCount,
+    sceneViewFormat: lastView.format,
+    boundedObservationCount: lastView.observations.length,
+    boundedSourceCount: lastView.sourceProjections.length,
+    updateLatencyUs: {
+      p50: percentile(updateLatenciesUs, 0.5),
+      p95: percentile(updateLatenciesUs, 0.95),
+      p99: percentile(updateLatenciesUs, 0.99)
+    },
+    payloadBytes: {
+      p50: percentile(payloadBytes, 0.5),
+      p95: percentile(payloadBytes, 0.95),
+      p99: percentile(payloadBytes, 0.99),
+      max: Math.max(...payloadBytes)
+    },
+    limitations: [
+      'E2 simulator SceneView receipt only; no physical source or third-party data was exercised.',
+      'Latency and payload size are host-local serialization measurements, not production capacity or deployment claims.'
+    ]
+  };
+  receipt.receiptDigest = digest(receipt);
+  return receipt;
+}
+
+export function verifySceneViewBenchmarkReceipt(receipt) {
+  const reasons = [];
+  if (!receipt || receipt.format !== 'sidechannel-scene-view-benchmark-receipt') reasons.push('invalid SceneView benchmark receipt format');
+  if (receipt?.formatVersion !== '0.1') reasons.push('unsupported SceneView benchmark receipt version');
+  if (receipt?.evidenceLevel !== 'E2') reasons.push('SceneView benchmark receipt must be E2');
+  if (receipt?.tier !== 'simulator-reference') reasons.push('SceneView benchmark receipt must be simulator-reference');
+  for (const field of ['runId', 'sourceCommit', 'runtimeBuildId', 'schemaDigest', 'sceneViewFormat']) {
+    if (typeof receipt?.[field] !== 'string' || receipt[field].length === 0) reasons.push('missing SceneView benchmark field: ' + field);
+  }
+  for (const field of ['iterations', 'sourceCount', 'boundedObservationCount', 'boundedSourceCount']) {
+    if (!Number.isInteger(receipt?.[field]) || receipt[field] < 0) reasons.push('invalid SceneView benchmark count: ' + field);
+  }
+  if (!Number.isInteger(receipt?.iterations) || receipt.iterations < 1 || receipt.iterations > 1_000) reasons.push('iterations outside SceneView benchmark bounds');
+  if (!Number.isInteger(receipt?.sourceCount) || receipt.sourceCount < 1 || receipt.sourceCount > 512) reasons.push('sourceCount outside SceneView benchmark bounds');
+  const latency = receipt?.updateLatencyUs;
+  if (!latency || !['p50', 'p95', 'p99'].every((field) => Number.isFinite(latency[field]) && latency[field] >= 0)) {
+    reasons.push('invalid SceneView update latency metrics');
+  } else if (!(latency.p50 <= latency.p95 && latency.p95 <= latency.p99)) {
+    reasons.push('SceneView update latency percentiles are not monotonic');
+  }
+  const bytes = receipt?.payloadBytes;
+  if (!bytes || !['p50', 'p95', 'p99', 'max'].every((field) => Number.isFinite(bytes[field]) && bytes[field] >= 0)) {
+    reasons.push('invalid SceneView payload metrics');
+  } else if (!(bytes.p50 <= bytes.p95 && bytes.p95 <= bytes.p99 && bytes.p99 <= bytes.max)) {
+    reasons.push('SceneView payload percentiles are not monotonic');
+  }
+  if (typeof receipt?.receiptDigest !== 'string' || receipt.receiptDigest.length !== 64) {
+    reasons.push('missing SceneView benchmark receipt digest');
+  } else {
+    const copy = { ...receipt };
+    delete copy.receiptDigest;
+    if (digest(copy) !== receipt.receiptDigest) reasons.push('SceneView benchmark receipt digest mismatch');
   }
   return { ok: reasons.length === 0, reasons, receiptDigest: receipt?.receiptDigest || null };
 }

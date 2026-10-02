@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runBurstBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, verifySoftwareBenchmarkReceipt } from '../src/verification/benchmark.mjs';
+import { runBurstBenchmark, runSceneViewBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, verifySceneViewBenchmarkReceipt, verifySoftwareBenchmarkReceipt } from '../src/verification/benchmark.mjs';
 
 test('software benchmark emits a bounded E2 receipt with deterministic replay', () => {
   const receipt = runSoftwareBenchmark({ ticks: 2, gridSize: 4, runId: 'benchmark_test', seed: 1337 });
@@ -35,4 +35,14 @@ test('bounded burst benchmark reconciles backpressure receipt counts', async () 
   assert.equal(receipt.requestedFrames, 200);
   assert.equal(receipt.admittedCount + receipt.rejectedCount + receipt.droppedCount, 200);
   assert.equal(verifyBurstBenchmarkReceipt(receipt).ok, true);
+});
+
+test('SceneView benchmark emits bounded latency and payload receipts', () => {
+  const receipt = runSceneViewBenchmark({ iterations: 3, sourceCount: 8, runId: 'scene_view_test', seed: 1337 });
+  assert.equal(receipt.evidenceLevel, 'E2');
+  assert.equal(receipt.sceneViewFormat, 'sidechannel.scene-view/1');
+  assert.equal(receipt.boundedSourceCount, 8);
+  assert.equal(verifySceneViewBenchmarkReceipt(receipt).ok, true);
+  receipt.payloadBytes.max += 1;
+  assert.equal(verifySceneViewBenchmarkReceipt(receipt).ok, false);
 });
