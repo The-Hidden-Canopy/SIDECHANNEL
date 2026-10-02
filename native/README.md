@@ -13,6 +13,7 @@ cmake --build build/native --config Debug
 ctest --test-dir build/native -C Debug --output-on-failure
 build/native/native/Debug/sidechannel-native.exe --ticks 2
 build/native/native/Debug/sidechannel-native.exe --ticks 2 --json
+build/native/native/Debug/sidechannel-native.exe --ticks 2 --session-json
 ```
 
 The same project also works with an NMake generator when the active developer environment exposes `cl.exe` and `nmake.exe`.
@@ -25,4 +26,6 @@ npm run verify:native-parity -- build/native/native/Debug/sidechannel-native.exe
 
 The native CLI supports both human-readable summary/CSV output and a dependency-free structured JSON fixture. The parity command compares that JSON fixture's canonical schema identifier, fixture IDs, source/channel identity, timestamps, values, quality scores, and simulated evidence state. It does not yet prove SQLite/export parity.
 
-This is not yet the native authority or a parity-complete export engine. SQLite persistence, local IPC, schema serialization, and semantic export equivalence remain explicit follow-on gates. No hardware adapter is included.
+`--session-json` emits a dependency-free `sidechannel-session/0.2` reference package with a frozen native scene/source snapshot, canonical observations, a SHA-256 snapshot digest, and bounded empty journal/pose/event sections. Run `npm run verify:native-session -- path/to/sidechannel-native.exe 2` to validate that package with the Node session verifier. This proves semantic package shape and digest compatibility for the reference fixture; it is not native SQLite persistence or a replacement for the Node runtime authority.
+
+This is not yet the native authority or a parity-complete export engine. SQLite persistence, local IPC, mutation-journal replay, and full session semantic equivalence remain explicit follow-on gates. No hardware adapter is included.

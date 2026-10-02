@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <string>
 
 int main() {
   sidechannel::DeterministicSimulator first(1337);
@@ -32,5 +33,16 @@ int main() {
   assert(sequencer.receipt().frames_dropped_backpressure == 1);
   assert(sequencer.receipt().max_depth == 2);
   assert(std::string(sidechannel::to_string(sidechannel::EvidenceState::simulated)) == "simulated");
+
+  sidechannel::SessionArchive archive("session_test");
+  archive.append(first_tick[0]);
+  archive.append(first_tick[1]);
+  assert(archive.observations().size() == 2);
+  assert(archive.observations()[0].sequence == 1);
+  assert(archive.observations()[1].sequence == 2);
+  const auto package = archive.to_json();
+  assert(package.find("\"format\":\"sidechannel-session\"") != std::string::npos);
+  assert(package.find("\"snapshotDigest\":\"") != std::string::npos);
+  assert(package.find("\"sequence\":1") != std::string::npos);
   return 0;
 }

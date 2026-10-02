@@ -25,6 +25,7 @@ int main(int argc, char** argv) {
   std::size_t ticks = 1;
   bool csv = false;
   bool json = false;
+  bool session_json = false;
   for (int index = 1; index < argc; ++index) {
     if (std::string(argv[index]) == "--ticks" && index + 1 < argc) {
       ticks = static_cast<std::size_t>(std::strtoul(argv[++index], nullptr, 10));
@@ -32,13 +33,15 @@ int main(int argc, char** argv) {
       csv = true;
     } else if (std::string(argv[index]) == "--json") {
       json = true;
+    } else if (std::string(argv[index]) == "--session-json") {
+      session_json = true;
     } else {
-      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json]\n";
+      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json]\n";
       return 2;
     }
   }
-  if (csv && json) {
-    std::cerr << "choose either --csv or --json\n";
+  if (static_cast<int>(csv) + static_cast<int>(json) + static_cast<int>(session_json) > 1) {
+    std::cerr << "choose one output format\n";
     return 2;
   }
   if (ticks == 0 || ticks > 10000) {
@@ -55,6 +58,12 @@ int main(int argc, char** argv) {
   }
   const auto observations = sequencer.drain();
   const auto& receipt = sequencer.receipt();
+  if (session_json) {
+    sidechannel::SessionArchive archive("session_native_reference");
+    for (const auto& observation : observations) archive.append(observation);
+    std::cout << archive.to_json() << '\n';
+    return 0;
+  }
   if (csv) {
     std::cout << "schema,id,source_id,channel,timestamp_ms,value,quality_score,evidence_state\n";
     std::cout << std::fixed << std::setprecision(4);

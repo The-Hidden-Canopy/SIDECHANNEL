@@ -95,7 +95,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Native reference parity',
     status: 'reference-only',
     evidenceLevel: 'E2',
-    note: 'C++23 simulator fixture is compared with the Node reference; native persistence is not claimed.'
+    note: 'C++23 simulator and dependency-free session package fixtures are checked against Node contracts; native SQLite authority is not claimed.'
   },
   {
     id: 'physical-adapters',

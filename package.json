@@ -10,6 +10,7 @@
     "receipt:session": "node scripts/replay-receipt.mjs",
     "verify:benchmark": "node scripts/verify-benchmark.mjs",
     "verify:native-parity": "node scripts/verify-native-parity.mjs",
+    "verify:native-session": "node scripts/verify-native-session.mjs",
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:matrix": "node scripts/benchmark-matrix.mjs",
     "benchmark:burst": "node scripts/benchmark-burst.mjs",

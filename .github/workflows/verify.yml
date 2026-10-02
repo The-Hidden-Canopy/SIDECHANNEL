@@ -47,6 +47,8 @@ jobs:
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             npm run verify:native-parity -- build/native/native/Release/sidechannel-native.exe 2
+            npm run verify:native-session -- build/native/native/Release/sidechannel-native.exe 2
           else
             npm run verify:native-parity -- build/native/native/sidechannel-native 2
+            npm run verify:native-session -- build/native/native/sidechannel-native 2
           fi

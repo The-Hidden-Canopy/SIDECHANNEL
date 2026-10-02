@@ -65,6 +65,19 @@ private:
   double random();
 };
 
+class SessionArchive {
+public:
+  explicit SessionArchive(std::string session_id = "session_native_reference");
+
+  void append(Observation observation);
+  [[nodiscard]] const std::vector<Observation>& observations() const noexcept;
+  [[nodiscard]] std::string to_json() const;
+
+private:
+  std::string session_id_;
+  std::vector<Observation> observations_;
+};
+
 const char* to_string(EvidenceState state) noexcept;
 
 } // namespace sidechannel
