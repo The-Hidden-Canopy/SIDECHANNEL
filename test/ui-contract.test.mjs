@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const appSource = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 const htmlSource = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+const serverSource = await readFile(new URL('../src/server.mjs', import.meta.url), 'utf8');
 
 test('evidence inspector exposes the bounded observation lineage contract', () => {
   for (const field of [
@@ -77,6 +78,7 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(htmlSource, /id="captureBaselineButton"/);
   assert.match(htmlSource, /id="clearBaselineButton"/);
   assert.match(htmlSource, /Start baseline window/);
+  assert.match(serverSource, /'\.mjs': 'text\/javascript; charset=utf-8'/);
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);
   assert.match(appSource, /sceneUnit/);
