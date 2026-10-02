@@ -93,6 +93,7 @@ std::vector<Observation> DeterministicSimulator::tick(std::uint64_t tick, std::i
     const double normalized = std::clamp(0.18 + 0.62 * wave + 0.18 * pulse + jitter, 0.02, 0.98);
     const double value = source.range_min + (source.range_max - source.range_min) * normalized;
     observations.push_back(Observation{
+      "sidechannel.observation/2",
       std::string(source.id) + "_" + std::to_string(tick),
       source.id,
       source.channel,

@@ -22,6 +22,6 @@ After building, compare the C++ fixture to the Node reference simulator:
 npm run verify:native-parity -- build/native/native/Debug/sidechannel-native.exe 2
 ```
 
-The parity command compares fixture IDs, source/channel identity, timestamps, values, quality scores, and simulated evidence state. It does not yet prove SQLite/export parity.
+The parity command compares the canonical schema identifier, fixture IDs, source/channel identity, timestamps, values, quality scores, and simulated evidence state. It does not yet prove SQLite/export parity.
 
 This is not yet the native authority or a parity-complete export engine. SQLite persistence, local IPC, schema serialization, and semantic export equivalence remain explicit follow-on gates. No hardware adapter is included.

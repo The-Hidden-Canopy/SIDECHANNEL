@@ -11,6 +11,7 @@ int main() {
   assert(first_tick.size() == 9);
   assert(first_tick.size() == second_tick.size());
   for (std::size_t index = 0; index < first_tick.size(); ++index) {
+    assert(first_tick[index].schema == "sidechannel.observation/2");
     assert(first_tick[index].id == second_tick[index].id);
     assert(first_tick[index].channel == second_tick[index].channel);
     assert(first_tick[index].value == second_tick[index].value);

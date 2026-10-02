@@ -20,7 +20,7 @@ It syntax-checks every `src/*.mjs` file and the browser module, then runs the co
 
 The hardware-independent C++23 reference slice has its own CTest gate. From a Visual Studio Developer Command Prompt, configure the root CMake project with a C++23 generator, then run `cmake --build <build-dir>` and `ctest --test-dir <build-dir> --output-on-failure`. It currently verifies deterministic simulation and bounded admission only; it is not yet native persistence or export parity.
 
-When the native executable is built, `npm run verify:native-parity -- path/to/sidechannel-native.exe 2` compares its deterministic fixture rows with the Node reference for identity, channel, timestamp, value, quality, and evidence state.
+When the native executable is built, `npm run verify:native-parity -- path/to/sidechannel-native.exe 2` compares its deterministic fixture rows with the Node reference for schema identifier, identity, channel, timestamp, value, quality, and evidence state.
 
 After exporting a session, verify its independent receipt with `npm run verify:session -- path/to/exported-session.json`. Generate a replay evidence receipt with `npm run receipt:session -- path/to/exported-session.json`. The running server also exposes `/api/sessions/:id/verify` and `/api/sessions/:id/receipt` for the same structural checks and software-only replay receipt.
 

@@ -28,14 +28,15 @@ if (!executable || !Number.isInteger(ticks) || ticks < 1 || ticks > 100) {
   });
 
   const rows = output.trim().split(/\r?\n/).slice(1).map((line) => {
-    const [id, sourceId, channel, timestampMs, value, qualityScore, evidenceState] = line.split(',');
-    return { id, sourceId, channel, timestampMs: Number(timestampMs), value: Number(value), qualityScore: Number(qualityScore), evidenceState };
+    const [schema, id, sourceId, channel, timestampMs, value, qualityScore, evidenceState] = line.split(',');
+    return { schema, id, sourceId, channel, timestampMs: Number(timestampMs), value: Number(value), qualityScore: Number(qualityScore), evidenceState };
   });
   const reasons = [];
   if (rows.length !== expected.length) reasons.push(`row count ${rows.length} != ${expected.length}`);
   for (let index = 0; index < Math.min(rows.length, expected.length); index += 1) {
     const actual = rows[index];
     const wanted = expected[index];
+    if (actual.schema !== wanted.schema) reasons.push(`schema mismatch at row ${index}`);
     for (const field of ['id', 'sourceId', 'channel']) {
       if (actual[field] !== wanted[field]) reasons.push(`${field} mismatch at row ${index}`);
     }
@@ -48,6 +49,6 @@ if (!executable || !Number.isInteger(ticks) || ticks < 1 || ticks > 100) {
     console.error(JSON.stringify({ ok: false, reasons }, null, 2));
     process.exitCode = 1;
   } else {
-    console.log(JSON.stringify({ ok: true, ticks, rows: rows.length, compared: ['id', 'sourceId', 'channel', 'timestampMs', 'value', 'qualityScore', 'evidenceState'] }, null, 2));
+    console.log(JSON.stringify({ ok: true, ticks, rows: rows.length, compared: ['schema', 'id', 'sourceId', 'channel', 'timestampMs', 'value', 'qualityScore', 'evidenceState'] }, null, 2));
   }
 }

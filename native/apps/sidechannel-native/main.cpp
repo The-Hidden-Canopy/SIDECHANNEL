@@ -33,10 +33,10 @@ int main(int argc, char** argv) {
   const auto observations = sequencer.drain();
   const auto& receipt = sequencer.receipt();
   if (csv) {
-    std::cout << "id,source_id,channel,timestamp_ms,value,quality_score,evidence_state\n";
+    std::cout << "schema,id,source_id,channel,timestamp_ms,value,quality_score,evidence_state\n";
     std::cout << std::fixed << std::setprecision(4);
     for (const auto& observation : observations) {
-      std::cout << observation.id << ',' << observation.source_id << ',' << observation.channel << ','
+      std::cout << observation.schema << ',' << observation.id << ',' << observation.source_id << ',' << observation.channel << ','
         << observation.timestamp_ms << ',' << observation.value << ',' << observation.quality_score << ','
         << sidechannel::to_string(observation.evidence_state) << '\n';
     }

@@ -164,6 +164,7 @@ export function createSimulator({ emit, sources = DEFAULT_SOURCES, clock = () =>
       const normalized = Math.min(0.98, Math.max(0.02, 0.18 + 0.62 * wave + 0.18 * pulse + jitter));
       const value = range[0] + (range[1] - range[0]) * normalized;
       const observation = {
+        schema: 'sidechannel.observation/2',
         schemaVersion: '0.1',
         id: source.id + '_' + tick,
         sourceId: source.id,

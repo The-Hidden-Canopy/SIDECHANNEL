@@ -19,6 +19,7 @@ enum class EvidenceState {
 };
 
 struct Observation {
+  std::string schema;
   std::string id;
   std::string source_id;
   std::string channel;
