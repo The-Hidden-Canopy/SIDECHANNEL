@@ -43,8 +43,13 @@
           <label>Width <input id="sceneWidth" type="number" min="1" step="0.1"></label>
           <label>Height <input id="sceneHeight" type="number" min="1" step="0.1"></label>
         </div>
+        <label class="scene-unit-label">Scene unit
+          <select id="sceneUnit"><option value="m">meters (m)</option><option value="ft">feet (ft)</option><option value="px">pixels (px)</option></select>
+        </label>
         <button id="saveSceneButton" class="button small ghost" type="button">Save frame</button>
         <p id="editHint" class="muted">Turn on Edit scene, then drag source markers to calibrate placement.</p>
+        <button id="measureButton" class="button small ghost" type="button">Measure distance</button>
+        <p id="measureReadout" class="muted">Ruler is idle.</p>
         <button id="addRegionButton" class="button small ghost" type="button">Add room / zone</button>
         <form id="regionForm" class="source-form" hidden>
           <label>Name <input id="regionName" type="text" placeholder="Workbench zone" required></label>

@@ -23,7 +23,7 @@ import { runBurstBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, v
 import { capabilitySnapshot } from './capabilities.mjs';
 import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/source-profile.mjs';
 import { PoseHistory } from './spatial/pose-history.mjs';
-import { validateRegion, validateRegions } from './spatial/regions.mjs';
+import { SCENE_UNITS, validateRegion, validateRegions } from './spatial/regions.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -558,6 +558,8 @@ async function handleApi(request, response, pathname) {
     const body = await bodyJson(request);
     const sceneWidth = Number(body.width ?? defaultScene.width);
     const sceneHeight = Number(body.height ?? defaultScene.height);
+    const sceneUnit = body.unit ?? defaultScene.unit;
+    if (!SCENE_UNITS.includes(sceneUnit)) return sendJson(response, 422, { error: 'unsupported scene unit' });
     const regionResult = validateRegions(Array.isArray(body.regions) ? body.regions : [], {
       width: sceneWidth,
       height: sceneHeight
@@ -569,6 +571,7 @@ async function handleApi(request, response, pathname) {
       id: 'scene_' + randomUUID(),
       width: sceneWidth,
       height: sceneHeight,
+      unit: sceneUnit,
       regions: regionResult.regions,
       sources: Array.isArray(body.sources) ? body.sources.map((source) => withSourceProfileDigest(source)) : [],
       placements: Array.isArray(body.placements) ? body.placements : []
@@ -586,6 +589,9 @@ async function handleApi(request, response, pathname) {
     if (request.method === 'PATCH' && parts.length === 3) {
       const body = await bodyJson(request);
       const updated = { ...scene, ...body, id: scene.id };
+      if (body.unit !== undefined && !SCENE_UNITS.includes(body.unit)) {
+        return sendJson(response, 422, { error: 'unsupported scene unit' });
+      }
       if (Object.prototype.hasOwnProperty.call(body, 'regions')) {
         const regionResult = validateRegions(body.regions, { width: updated.width, height: updated.height });
         if (!regionResult.ok) return sendJson(response, 422, { error: 'invalid scene regions', reasons: regionResult.reasons });

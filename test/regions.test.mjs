@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { validateRegion, validateRegions } from '../src/spatial/regions.mjs';
+import { SCENE_UNITS, validateRegion, validateRegions } from '../src/spatial/regions.mjs';
+
+test('scene units stay within the portable coordinate contract', () => {
+  assert.deepEqual(SCENE_UNITS, ['m', 'ft', 'px']);
+});
 
 test('scene regions accept bounded room polygons and normalize defaults', () => {
   const result = validateRegion({

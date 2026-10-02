@@ -70,6 +70,11 @@ const state = {
   selected: null,
   editMode: false,
   draggedSourceId: null,
+  measureMode: false,
+  measuring: false,
+  measureStart: null,
+  measureEnd: null,
+  suppressNextCanvasClick: false,
   visible: Object.fromEntries(DISPLAY_LAYERS.map((item) => [item[0], true]))
 };
 
@@ -133,8 +138,10 @@ function renderSceneTools() {
   if (!state.scene) return;
   const width = document.getElementById('sceneWidth');
   const height = document.getElementById('sceneHeight');
+  const unit = document.getElementById('sceneUnit');
   if (document.activeElement !== width) width.value = state.scene.width;
   if (document.activeElement !== height) height.value = state.scene.height;
+  if (document.activeElement !== unit) unit.value = state.scene.unit || 'm';
   const calibration = (state.scene.sources || []).every((source) => source.calibrationState !== 'uncalibrated');
   document.getElementById('calibrationState').textContent = calibration ? 'calibrated' : 'needs calibration';
   document.getElementById('editSceneButton').textContent = state.editMode ? 'Exit editor' : 'Edit scene';
@@ -143,6 +150,14 @@ function renderSceneTools() {
     ? 'Drag a source marker, then release to save its calibrated position.'
     : 'Turn on Edit scene, then drag source markers to calibrate placement.';
   canvas.classList.toggle('canvas-editing', state.editMode);
+  const measureButton = document.getElementById('measureButton');
+  measureButton.textContent = state.measureMode ? 'Cancel measurement' : 'Measure distance';
+  measureButton.classList.toggle('edit-active', state.measureMode);
+  const readout = document.getElementById('measureReadout');
+  if (!state.measureMode && !state.measureStart) readout.textContent = 'Ruler is idle.';
+  else if (state.measureStart && state.measureEnd) {
+    readout.textContent = 'Distance · ' + Math.hypot(state.measureEnd.x - state.measureStart.x, state.measureEnd.y - state.measureStart.y).toFixed(2) + ' ' + (state.scene.unit || 'm');
+  } else readout.textContent = 'Click and drag across the scene to measure.';
 }
 
 function renderRegions() {
@@ -657,6 +672,30 @@ function drawEventPulses(transform) {
   context.restore();
 }
 
+function drawMeasurement(transform) {
+  if (!state.measureStart) return;
+  const end = state.measureEnd || state.measureStart;
+  context.save();
+  context.strokeStyle = '#ffd166';
+  context.fillStyle = '#ffd166';
+  context.lineWidth = 2;
+  context.setLineDash([5, 4]);
+  context.beginPath();
+  context.moveTo(transform.x(state.measureStart.x), transform.y(state.measureStart.y));
+  context.lineTo(transform.x(end.x), transform.y(end.y));
+  context.stroke();
+  context.setLineDash([]);
+  [state.measureStart, end].forEach((point) => {
+    context.beginPath();
+    context.arc(transform.x(point.x), transform.y(point.y), 4, 0, Math.PI * 2);
+    context.fill();
+  });
+  const distance = Math.hypot(end.x - state.measureStart.x, end.y - state.measureStart.y);
+  context.font = '11px system-ui';
+  context.fillText(distance.toFixed(2) + ' ' + (state.scene.unit || 'm'), transform.x(end.x) + 8, transform.y(end.y) - 8);
+  context.restore();
+}
+
 function drawActivityField(valid, transform) {
   if (!state.visible.activity) return;
   const cols = 22;
@@ -828,6 +867,7 @@ function draw() {
     }
   });
   drawEventPulses(transform);
+  drawMeasurement(transform);
 }
 
 function hexToRgba(hex, alpha) {
@@ -1122,13 +1162,31 @@ document.getElementById('editSceneButton').addEventListener('click', () => {
 document.getElementById('saveSceneButton').addEventListener('click', async () => {
   const width = Number(document.getElementById('sceneWidth').value);
   const height = Number(document.getElementById('sceneHeight').value);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+  const unit = document.getElementById('sceneUnit').value;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || !['m', 'ft', 'px'].includes(unit)) return;
   const scene = await api('/api/scenes/' + state.scene.id, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ width, height })
+    body: JSON.stringify({ width, height, unit })
   });
   state.scene = scene;
+  render();
+});
+
+document.getElementById('measureButton').addEventListener('click', () => {
+  state.measureMode = !state.measureMode;
+  state.measuring = false;
+  state.measureStart = null;
+  state.measureEnd = null;
+  render();
+});
+
+document.addEventListener('keydown', (event) => {
+  if (event.key !== 'Escape' || !state.measureMode) return;
+  state.measureMode = false;
+  state.measuring = false;
+  state.measureStart = null;
+  state.measureEnd = null;
   render();
 });
 
@@ -1220,6 +1278,15 @@ document.getElementById('sourceForm').addEventListener('submit', async (event) =
 });
 
 canvas.addEventListener('pointerdown', (event) => {
+  if (state.measureMode) {
+    state.measuring = true;
+    state.measureStart = scenePointFromEvent(event);
+    state.measureEnd = state.measureStart;
+    state.suppressNextCanvasClick = true;
+    canvas.setPointerCapture(event.pointerId);
+    render();
+    return;
+  }
   if (!state.editMode || !state.scene) return;
   const source = nearestSource(scenePointFromEvent(event));
   if (!source) return;
@@ -1228,6 +1295,12 @@ canvas.addEventListener('pointerdown', (event) => {
 });
 
 canvas.addEventListener('pointermove', (event) => {
+  if (state.measuring) {
+    state.measureEnd = scenePointFromEvent(event);
+    draw();
+    renderSceneTools();
+    return;
+  }
   if (!state.draggedSourceId) return;
   const source = state.scene.sources.find((item) => item.id === state.draggedSourceId);
   if (!source) return;
@@ -1240,6 +1313,14 @@ canvas.addEventListener('pointermove', (event) => {
 });
 
 canvas.addEventListener('pointerup', async (event) => {
+  if (state.measuring) {
+    state.measureEnd = scenePointFromEvent(event);
+    state.measuring = false;
+    state.measureMode = false;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    render();
+    return;
+  }
   if (!state.draggedSourceId) return;
   const source = state.scene.sources.find((item) => item.id === state.draggedSourceId);
   state.draggedSourceId = null;
@@ -1263,6 +1344,10 @@ canvas.addEventListener('pointerup', async (event) => {
 });
 
 canvas.addEventListener('click', (event) => {
+  if (state.suppressNextCanvasClick) {
+    state.suppressNextCanvasClick = false;
+    return;
+  }
   if (!state.scene) return;
   if (state.editMode) return;
   const rect = canvas.getBoundingClientRect();

@@ -126,6 +126,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Bounded room/zone polygons are validated, persisted with scene snapshots, rendered as a layer, and removable through the loopback workspace.'
   },
   {
+    id: 'scene-measurement-ruler',
+    label: 'Scene measurement ruler',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The workspace reports bounded point-to-point distances in the scene unit without rewriting sensor observations or calibration records.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

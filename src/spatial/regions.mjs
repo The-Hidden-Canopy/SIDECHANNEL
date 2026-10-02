@@ -1,4 +1,5 @@
 export const REGION_KINDS = Object.freeze(['room', 'zone']);
+export const SCENE_UNITS = Object.freeze(['m', 'ft', 'px']);
 export const MAX_REGIONS = 128;
 export const MAX_REGION_POINTS = 64;
 

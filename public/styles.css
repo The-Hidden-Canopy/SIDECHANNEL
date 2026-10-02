@@ -109,6 +109,8 @@ button { cursor: pointer; }
 .scene-tools .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 10px; }
 .scene-tools label { color: var(--muted); font-size: 10px; }
 .scene-tools input { width: 100%; margin-top: 5px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 7px; background: #0b1119; color: var(--text); font-size: 11px; }
+.scene-unit-label { display: block; margin-top: 9px; color: var(--muted); font-size: 10px; }
+.scene-unit-label select { width: 100%; margin-top: 5px; max-width: none; }
 .scene-tools .button { width: 100%; }
 .scene-tools p { font-size: 10px; line-height: 1.45; margin: 9px 0 0; }
 .edit-active { border-color: rgba(108, 228, 219, .6) !important; color: var(--cyan) !important; background: rgba(108, 228, 219, .08) !important; }

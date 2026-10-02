@@ -83,6 +83,8 @@ The Layers panel independently toggles the unified activity field, each channel 
 
 Scenes also support bounded room/zone polygons. The workspace creates rectangle-backed polygons in scene coordinates, the loopback API validates that points stay inside the frame, and the region list can remove them. Regions are part of the scene snapshot, so historical session packages retain the floor-plan structure that was authoritative when recording began.
 
+The scene editor exposes the coordinate unit (`m`, `ft`, or `px`) and a one-shot measurement ruler. A measured segment is rendered and reported in the selected scene unit; it is a view aid only and does not rewrite observation values, provider identity, calibration lineage, or historical session data.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:
