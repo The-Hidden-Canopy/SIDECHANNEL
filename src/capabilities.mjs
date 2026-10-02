@@ -112,6 +112,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A vendored SQLite WAL backend transactionally stores native observations and journal events, recovers open sessions as interrupted, reopens completed sessions, and exports Node-verifiable packages; native desktop, deployment, and hardware claims remain separate.'
   },
   {
+    id: 'native-persistence-benchmark',
+    label: 'Native persistence benchmark receipt',
+    status: 'implemented',
+    evidenceLevel: 'E2',
+    note: 'A saved, tamper-detectable receipt measures bounded native file and SQLite/WAL create/reopen paths and independently verifies both exported packages; timings are host-local software evidence, not production capacity or hardware proof.'
+  },
+  {
     id: 'native-adapter-supervisor',
     label: 'Native adapter lifecycle supervisor',
     status: 'implemented',
