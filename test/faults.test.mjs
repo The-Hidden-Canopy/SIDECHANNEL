@@ -7,7 +7,7 @@ test('fault campaign produces a passing bounded E2 receipt', async () => {
   assert.equal(receipt.evidenceLevel, 'E2');
   assert.equal(receipt.passed, true);
   assert.equal(receipt.failedCaseCount, 0);
-  assert.equal(receipt.caseCount, 8);
+  assert.equal(receipt.caseCount, 9);
   assert.equal(verifyFaultCampaignReceipt(receipt).ok, true);
 });
 

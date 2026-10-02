@@ -123,7 +123,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Software fault campaign receipts',
     status: 'implemented',
     evidenceLevel: 'E2',
-    note: 'A bounded repeatable campaign exercises stale publication, ordering, adapter framing, range, permission, journal, and spatial rejection paths and emits a tamper-detectable software receipt.'
+    note: 'A bounded repeatable campaign exercises stale publication, ordering, adapter framing, range, permission, journal, spatial, and privacy rejection paths and emits a tamper-detectable software receipt.'
   },
   {
     id: 'adaptive-tile-evaluation',

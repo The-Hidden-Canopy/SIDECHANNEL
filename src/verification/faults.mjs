@@ -117,6 +117,20 @@ function invalidSpatialGeometryCase() {
   });
 }
 
+function privacySensitiveFieldCase() {
+  const sources = new Map([['fault_source', { id: 'fault_source', range: [0, 100] }]]);
+  const validation = validateObservation({
+    schema: 'sidechannel.observation/2', id: 'fault_privacy', sourceId: 'fault_source', channel: 'heat',
+    timestampMs: 1000, value: 20, unit: 'C', status: 'measured',
+    metadata: { rawAudio: 'opaque-payload', deviceId: 'persistent-id' }
+  }, { sources, now: 1000 });
+  return result('privacy-sensitive-field-rejection', validation.ok === false &&
+    validation.reasons.some((reason) => reason.id === 'privacy.raw_content') &&
+    validation.reasons.some((reason) => reason.id === 'privacy.persistent_identity'), {
+    reasonIds: validation.reasons.map((reason) => reason.id)
+  });
+}
+
 export async function runFaultCampaign({ runId = 'faults_' + Date.now(), sourceCommit = 'unknown' } = {}) {
   const cases = [
     staleCandidateCase(),
@@ -126,7 +140,8 @@ export async function runFaultCampaign({ runId = 'faults_' + Date.now(), sourceC
     outOfRangeObservationCase(),
     await permissionRevocationCase(),
     journalTamperCase(),
-    invalidSpatialGeometryCase()
+    invalidSpatialGeometryCase(),
+    privacySensitiveFieldCase()
   ];
   const receipt = {
     format: 'sidechannel-fault-campaign-receipt',
