@@ -44,6 +44,11 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /\/api\/transforms/);
   assert.match(htmlSource, /id="transformForm"/);
   assert.match(htmlSource, /Publish revision/);
+  assert.match(appSource, /syncBackgroundImage/);
+  assert.match(appSource, /drawBackground/);
+  assert.match(appSource, /backgroundForm/);
+  assert.match(htmlSource, /id="backgroundFile"/);
+  assert.match(htmlSource, /Remove background/);
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);
   assert.match(appSource, /sceneUnit/);

@@ -89,6 +89,8 @@ Scenes also support bounded door/portal segments. The workspace validates endpoi
 
 The spatial-frame panel also publishes explicit transform revisions through the loopback API. Each edge records its source and destination frames, translation, rotation, scale, and revision; direct frame cycles and invalid numeric values fail closed. The workspace lists the current graph so an operator can see which software frame relationship was used. These edges are versioned runtime metadata and do not establish physical calibration accuracy; hardware adapters, external calibration instruments, and invertibility beyond the bounded graph contract remain separate gates.
 
+The same panel can import one bounded local PNG, JPEG, or WebP data URL as a scene background. Its scene-space rectangle, rotation, and opacity are validated and persisted with the scene snapshot, then rendered beneath the grid and evidence layers. Remote URLs are rejected, and the background is presentation context only; it does not become an observation, provider, calibration, or hardware claim.
+
 Optional encrypted portability is available through the `Encrypted export` workspace action and the `POST /api/sessions/:id/export` route. The envelope uses bounded scrypt parameters and AES-256-GCM; the passphrase is not stored. Import decrypts only after authentication and sends the resulting package through the same independent session verifier as plaintext import. Encryption protects the exported file in transit/storage; it does not prove hardware accuracy, regulate deployment, or replace user-controlled passphrase retention.
 
 ## Portable packaging boundary

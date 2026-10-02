@@ -102,6 +102,25 @@
         </form>
         <div id="transformList" class="region-list"></div>
         <p class="muted transform-note">Transforms are explicit software frame revisions; they do not certify physical calibration.</p>
+        <button id="addBackgroundButton" class="button small ghost" type="button">Import background</button>
+        <form id="backgroundForm" class="source-form" hidden>
+          <label>Image <input id="backgroundFile" type="file" accept="image/png,image/jpeg,image/webp" required></label>
+          <div class="field-grid">
+            <label>X <input id="backgroundX" type="number" min="0" step="0.1" value="0"></label>
+            <label>Y <input id="backgroundY" type="number" min="0" step="0.1" value="0"></label>
+          </div>
+          <div class="field-grid">
+            <label>Width <input id="backgroundWidth" type="number" min="0.1" step="0.1" value="5"></label>
+            <label>Height <input id="backgroundHeight" type="number" min="0.1" step="0.1" value="4"></label>
+          </div>
+          <div class="field-grid">
+            <label>Rotation ° <input id="backgroundRotation" type="number" step="any" value="0"></label>
+            <label>Opacity <input id="backgroundOpacity" type="number" min="0" max="1" step="0.05" value="0.35"></label>
+          </div>
+          <button class="button small accent" type="submit">Save background</button>
+        </form>
+        <div id="backgroundState" class="region-list"></div>
+        <button id="clearBackgroundButton" class="button small ghost" type="button" disabled>Remove background</button>
       </section>
       <section class="panel">
         <div class="panel-heading">

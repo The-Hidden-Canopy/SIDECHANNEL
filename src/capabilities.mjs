@@ -154,6 +154,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace publishes bounded revisioned frame edges and shows their translation and scale; this is software frame metadata, not physical calibration proof.'
   },
   {
+    id: 'local-background-layer',
+    label: 'Local imported background layer',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A bounded PNG, JPEG, or WebP data URL can be placed in scene coordinates and rendered beneath evidence layers; remote assets are not admitted.'
+  },
+  {
     id: 'encrypted-session-portability',
     label: 'Encrypted session portability',
     status: 'implemented',

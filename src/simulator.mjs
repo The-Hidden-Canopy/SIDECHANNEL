@@ -133,6 +133,7 @@ export function createDefaultScene() {
     width: 5,
     height: 4,
     unit: 'm',
+    background: null,
     regions: [{
       id: 'region_main_room',
       name: 'Main room',

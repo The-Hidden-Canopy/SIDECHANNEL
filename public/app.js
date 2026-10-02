@@ -16,6 +16,7 @@ const DISPLAY_LAYERS = [
   ['uncertainty', 'Uncertainty geometry', '#ffb47b', 0],
   ['trails', 'Temporal trails', '#79a7ff', 0],
   ['events', 'Activity event pulses', '#ff8f97', 0],
+  ['background', 'Imported background', '#79a7ff', 0],
   ['zones', 'Rooms / zones', '#a9e88b', 0],
   ['portals', 'Doors / portals', '#ffd166', 0]
 ];
@@ -56,6 +57,8 @@ const state = {
   recording: null,
   sessions: [],
   transforms: { revision: 0, edges: [] },
+  backgroundImageKey: null,
+  backgroundImage: null,
   replay: null,
   replayArtifact: null,
   replayReport: null,
@@ -148,6 +151,7 @@ function hydrate(payload) {
   state.transforms = payload.transforms || state.transforms;
   state.capabilities = payload.capabilities || state.capabilities;
   launchToken = payload.server?.launchToken || launchToken;
+  syncBackgroundImage();
   render();
 }
 
@@ -243,6 +247,47 @@ function renderTransforms() {
     Number(edge.translation?.x || 0).toFixed(2) + ', ' + Number(edge.translation?.y || 0).toFixed(2) + ', ' +
     Number(edge.translation?.z || 0).toFixed(2) + ') · scale ' + Number(edge.scale || 1).toFixed(3) + '</span></div>'
   ).join('');
+}
+
+function syncBackgroundImage() {
+  const dataUrl = state.scene?.background?.dataUrl || null;
+  if (dataUrl === state.backgroundImageKey) return;
+  state.backgroundImageKey = dataUrl;
+  state.backgroundImage = null;
+  if (!dataUrl) return;
+  const image = new Image();
+  image.onload = () => {
+    if (state.backgroundImageKey !== dataUrl) return;
+    state.backgroundImage = image;
+    draw();
+  };
+  image.onerror = () => {
+    if (state.backgroundImageKey === dataUrl) {
+      document.getElementById('freshnessLabel').textContent = 'Imported background could not be rendered.';
+    }
+  };
+  image.src = dataUrl;
+}
+
+function renderBackground() {
+  const list = document.getElementById('backgroundState');
+  const clear = document.getElementById('clearBackgroundButton');
+  if (!list || !clear) return;
+  const background = state.scene?.background;
+  clear.disabled = !background;
+  list.innerHTML = background
+    ? '<div class="region-entry"><span><strong>' + escapeHtml(background.name || 'local image') + '</strong> · ' +
+      background.width.toFixed(2) + ' × ' + background.height.toFixed(2) + ' ' + escapeHtml(state.scene.unit || 'm') +
+      ' · ' + Math.round(background.opacity * 100) + '% opacity</span></div>'
+    : '<span class="muted">No local background imported.</span>';
+  const fields = [
+    ['backgroundX', background?.x], ['backgroundY', background?.y], ['backgroundWidth', background?.width],
+    ['backgroundHeight', background?.height], ['backgroundRotation', background?.rotationDeg], ['backgroundOpacity', background?.opacity]
+  ];
+  fields.forEach(([id, value]) => {
+    const input = document.getElementById(id);
+    if (input && document.activeElement !== input && value !== undefined) input.value = value;
+  });
 }
 
 function updateObservation(observation) {
@@ -755,6 +800,26 @@ function drawMeasurement(transform) {
   context.restore();
 }
 
+function drawBackground(transform) {
+  const background = state.scene?.background;
+  if (!state.visible.background || !background || !state.backgroundImage) return;
+  context.save();
+  context.globalAlpha = background.opacity;
+  context.translate(
+    transform.x(background.x + background.width / 2),
+    transform.y(background.y + background.height / 2)
+  );
+  context.rotate((background.rotationDeg * Math.PI) / 180);
+  context.drawImage(
+    state.backgroundImage,
+    -transform.sx * background.width / 2,
+    -transform.sy * background.height / 2,
+    transform.sx * background.width,
+    transform.sy * background.height
+  );
+  context.restore();
+}
+
 function drawActivityField(valid, transform) {
   if (!state.visible.activity) return;
   const cols = 22;
@@ -828,6 +893,8 @@ function draw() {
   gradient.addColorStop(1, '#0a1017');
   context.fillStyle = gradient;
   context.fillRect(0, 0, rect.width, rect.height);
+
+  drawBackground(transform);
 
   context.strokeStyle = 'rgba(154, 188, 208, .08)';
   context.lineWidth = 1;
@@ -1107,7 +1174,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1198,6 +1265,7 @@ document.getElementById('replayButton').addEventListener('click', async () => {
   state.temporalPins = { a: null, b: null };
   state.temporalComparison = null;
   state.scene = state.replay.sceneSnapshot || state.scene;
+  syncBackgroundImage();
   state.replayTime = state.replay.observations[state.replay.observations.length - 1]?.timestampMs || Date.now();
   state.events = state.replay.events || [];
   state.selected = null;
@@ -1360,6 +1428,7 @@ document.getElementById('saveSceneButton').addEventListener('click', async () =>
     body: JSON.stringify({ width, height, unit })
   });
   state.scene = scene;
+  syncBackgroundImage();
   render();
 });
 
@@ -1495,6 +1564,63 @@ document.getElementById('transformForm').addEventListener('submit', async (event
     hydrate(await api('/api/state'));
   } catch (error) {
     document.getElementById('freshnessLabel').textContent = 'Could not publish transform: ' + error.message;
+  }
+});
+
+document.getElementById('addBackgroundButton').addEventListener('click', () => {
+  const form = document.getElementById('backgroundForm');
+  form.hidden = !form.hidden;
+  if (!form.hidden) document.getElementById('backgroundFile').focus();
+});
+
+document.getElementById('backgroundForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const file = document.getElementById('backgroundFile').files?.[0];
+  const x = Number(document.getElementById('backgroundX').value);
+  const y = Number(document.getElementById('backgroundY').value);
+  const width = Number(document.getElementById('backgroundWidth').value);
+  const height = Number(document.getElementById('backgroundHeight').value);
+  const rotationDeg = Number(document.getElementById('backgroundRotation').value);
+  const opacity = Number(document.getElementById('backgroundOpacity').value);
+  const acceptedTypes = new Set(['image/png', 'image/jpeg', 'image/webp']);
+  if (!file || !acceptedTypes.has(file.type) || file.size > 1_300_000 ||
+      ![x, y, width, height, rotationDeg, opacity].every(Number.isFinite) || width <= 0 || height <= 0 ||
+      x < 0 || y < 0 || x + width > state.scene.width || y + height > state.scene.height ||
+      opacity < 0 || opacity > 1) {
+    document.getElementById('freshnessLabel').textContent = 'Choose a PNG, JPEG, or WebP under 1.3 MB with a rectangle inside the scene frame.';
+    return;
+  }
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('could not read the local image'));
+      reader.readAsDataURL(file);
+    });
+    await api('/api/scenes/' + state.scene.id, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ background: { dataUrl, mimeType: file.type, name: file.name, x, y, width, height, rotationDeg, opacity } })
+    });
+    document.getElementById('backgroundForm').reset();
+    document.getElementById('backgroundForm').hidden = true;
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Could not import background: ' + error.message;
+  }
+});
+
+document.getElementById('clearBackgroundButton').addEventListener('click', async () => {
+  if (!state.scene?.background) return;
+  try {
+    await api('/api/scenes/' + state.scene.id, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ background: null })
+    });
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Could not remove background: ' + error.message;
   }
 });
 
@@ -1657,7 +1783,7 @@ function connect() {
       state.events = [...state.events, message.event].slice(-40);
       renderEvents();
     }
-    if (message.type === 'scene.updated') { state.scene = message.scene; render(); }
+    if (message.type === 'scene.updated') { state.scene = message.scene; syncBackgroundImage(); render(); }
     if (message.type === 'session.state') api('/api/state').then(hydrate);
   };
   socket.onclose = () => {

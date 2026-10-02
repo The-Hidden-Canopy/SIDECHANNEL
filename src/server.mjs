@@ -25,6 +25,7 @@ import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/
 import { PoseHistory } from './spatial/pose-history.mjs';
 import { SCENE_UNITS, validateRegion, validateRegions } from './spatial/regions.mjs';
 import { validatePortal, validatePortals } from './spatial/portals.mjs';
+import { validateBackground } from './spatial/background.mjs';
 import { decryptSessionPackage, encryptSessionPackage } from './session-crypto.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -572,6 +573,11 @@ async function handleApi(request, response, pathname) {
       height: sceneHeight
     });
     if (!portalResult.ok) return sendJson(response, 422, { error: 'invalid scene portals', reasons: portalResult.reasons });
+    const backgroundResult = validateBackground(body.background ?? defaultScene.background, {
+      width: sceneWidth,
+      height: sceneHeight
+    });
+    if (!backgroundResult.ok) return sendJson(response, 422, { error: 'invalid scene background', reasons: backgroundResult.reasons });
     const scene = {
       ...defaultScene,
       ...body,
@@ -579,6 +585,7 @@ async function handleApi(request, response, pathname) {
       width: sceneWidth,
       height: sceneHeight,
       unit: sceneUnit,
+      background: backgroundResult.background,
       regions: regionResult.regions,
       portals: portalResult.portals,
       sources: Array.isArray(body.sources) ? body.sources.map((source) => withSourceProfileDigest(source)) : [],
@@ -610,6 +617,9 @@ async function handleApi(request, response, pathname) {
         if (!portalResult.ok) return sendJson(response, 422, { error: 'invalid scene portals', reasons: portalResult.reasons });
         updated.portals = portalResult.portals;
       }
+      const backgroundResult = validateBackground(updated.background, { width: updated.width, height: updated.height });
+      if (!backgroundResult.ok) return sendJson(response, 422, { error: 'invalid scene background', reasons: backgroundResult.reasons });
+      updated.background = backgroundResult.background;
       await store.upsertScene(updated);
       if (activeScene.id === updated.id) activeScene = updated;
       appendRuntimeEvent('SceneRevisionPublished', {
