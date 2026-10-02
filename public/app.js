@@ -353,7 +353,7 @@ function renderLayers() {
     const row = document.createElement('label');
     row.className = 'layer-row';
     row.innerHTML = '<input type="checkbox" data-channel="' + id + '" ' +
-      (state.visible[id] ? 'checked' : '') + '><span class="layer-swatch" style="color:' +
+      (state.visible[id] ? 'checked' : '') + '><span class="layer-swatch pattern-' + id.replace(/_/g, '-') + '" aria-hidden="true" style="color:' +
       color + ';background:' + color + '"></span><span>' + escapeHtml(label) + '</span>';
     row.querySelector('input').addEventListener('change', (event) => {
       state.visible[id] = event.target.checked;
@@ -375,6 +375,20 @@ function renderLayers() {
     group.layers.forEach(renderLayer);
   });
   document.getElementById('layerCount').textContent = DISPLAY_LAYERS.filter((item) => state.visible[item[0]]).length;
+  renderAccessibilitySummary();
+}
+
+function renderAccessibilitySummary() {
+  const visibleLabels = DISPLAY_LAYERS.filter(([id]) => state.visible[id]).map(([, label]) => label);
+  const activeCount = activeObservations().filter((observation) => observation.status !== 'rejected').length;
+  const visibleText = visibleLabels.length ? visibleLabels.join(', ') : 'none';
+  const selectedText = state.selected
+    ? ' Selected ' + state.selected.channel + ' observation from ' + state.selected.sourceId + ' at ' + String(state.selected.value) + ' ' + state.selected.unit + '.'
+    : ' No observation selected.';
+  const layerSummary = document.getElementById('layerSummary');
+  if (layerSummary) layerSummary.textContent = 'Visible layers: ' + visibleText + '. ' + activeCount + ' active observations.';
+  const canvasSummary = document.getElementById('canvasSummary');
+  if (canvasSummary) canvasSummary.textContent = (state.scene?.name || 'Current scene') + '. ' + activeCount + ' active observations. Visible layers: ' + visibleText + '.' + selectedText;
 }
 
 function renderFieldSettings() {
@@ -441,10 +455,25 @@ function renderSources() {
     wrapper.className = 'source-entry';
     const row = document.createElement('div');
     row.className = 'source-row ' + (stale ? '' : 'live');
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
+    row.setAttribute('aria-label', source.name + ', ' + (observation ? 'observation available' : 'no observation') + ', privacy mode ' + privacyMode);
     row.innerHTML = '<span class="layer-swatch" style="color:' + colorFor(source.channels[0]) +
       ';background:' + colorFor(source.channels[0]) + '"></span><span>' +
       escapeHtml(source.name) + '</span><span class="source-meta">' +
       (stale ? 'stale' : observation ? 'live' : '—') + ' · ' + escapeHtml(privacyMode) + '</span>';
+    const selectSourceObservation = () => {
+      if (!observation) return;
+      state.selected = observation;
+      renderInspector();
+      renderAccessibilitySummary();
+    };
+    row.addEventListener('click', selectSourceObservation);
+    row.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      selectSourceObservation();
+    });
     wrapper.appendChild(row);
     if (source.adapterType === 'manual') {
       const control = document.createElement('form');
@@ -1493,7 +1522,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderFieldSettings(); renderActivityWeights(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderFaultCampaign(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderFieldSettings(); renderActivityWeights(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderFaultCampaign(); renderCapabilities(); renderEvents(); renderInspector(); renderAccessibilitySummary(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {

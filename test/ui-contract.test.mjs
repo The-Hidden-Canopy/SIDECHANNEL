@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 const appSource = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
 const htmlSource = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+const stylesSource = await readFile(new URL('../public/styles.css', import.meta.url), 'utf8');
 const serverSource = await readFile(new URL('../src/server.mjs', import.meta.url), 'utf8');
 
 test('evidence inspector exposes the bounded observation lineage contract', () => {
@@ -25,6 +26,9 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /detail\('Raw content policy'/);
   assert.match(appSource, /detail\('Source identity policy'/);
   assert.match(appSource, /privacyOmittedFields/);
+  assert.match(appSource, /renderAccessibilitySummary/);
+  assert.match(appSource, /row\.tabIndex = 0/);
+  assert.match(appSource, /pattern-' \+ id\.replace/);
   assert.match(serverSource, /validateSourcePrivacyPolicy/);
   assert.match(appSource, /\/api\/sessions\/.*\/verify/);
   assert.match(appSource, /sessionVerification/);
@@ -81,6 +85,13 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /\/api\/transforms/);
   assert.match(htmlSource, /id="transformForm"/);
   assert.match(htmlSource, /id="sourcePrivacyMode"/);
+  assert.match(htmlSource, /id="layerSummary"/);
+  assert.match(htmlSource, /id="canvasSummary"/);
+  assert.match(htmlSource, /aria-describedby="canvasSummary"/);
+  assert.match(htmlSource, /aria-live="polite"/);
+  assert.match(htmlSource, /tabindex="0"/);
+  assert.match(htmlSource, /role="region"/);
+  assert.match(stylesSource, /prefers-reduced-motion/);
   assert.match(htmlSource, /Publish revision/);
   assert.match(appSource, /syncBackgroundImage/);
   assert.match(appSource, /drawBackground/);

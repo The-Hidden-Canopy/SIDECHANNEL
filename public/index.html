@@ -17,7 +17,7 @@
       </div>
     </div>
     <div class="top-actions">
-      <span id="connectionBadge" class="status-pill"><span class="status-dot"></span>Connecting</span>
+      <span id="connectionBadge" class="status-pill" role="status" aria-live="polite"><span class="status-dot"></span>Connecting</span>
       <button id="liveButton" class="button ghost" type="button">Live view</button>
       <button id="pauseViewButton" class="button ghost" type="button">Pause view</button>
       <button id="recordButton" class="button accent" type="button">Start recording</button>
@@ -146,6 +146,7 @@
           <span id="layerCount" class="count">0</span>
         </div>
         <div id="layerPanel" class="layer-list"></div>
+        <p id="layerSummary" class="accessibility-summary muted" role="status" aria-live="polite">Loading visible layer summary.</p>
         <form id="fieldSettingsForm" class="source-form field-settings">
           <div class="eyebrow">FIELD ESTIMATOR</div>
           <div class="field-grid">
@@ -241,7 +242,7 @@
       <div class="stage-toolbar">
         <div>
           <span id="modeLabel" class="mode-label">LIVE / SIMULATOR</span>
-          <span id="freshnessLabel" class="muted">Waiting for observations</span>
+          <span id="freshnessLabel" class="muted" role="status" aria-live="polite">Waiting for observations</span>
         </div>
         <div class="toolbar-actions">
           <label class="select-wrap" for="sessionSelect">Replay</label>
@@ -264,7 +265,8 @@
         </div>
       </div>
       <div class="canvas-frame">
-        <canvas id="sceneCanvas" aria-label="SIDECHANNEL spatial activity canvas"></canvas>
+        <canvas id="sceneCanvas" aria-label="SIDECHANNEL spatial activity canvas" aria-describedby="canvasSummary" tabindex="0"></canvas>
+        <p id="canvasSummary" class="sr-only" role="status" aria-live="polite">Loading spatial scene summary.</p>
         <div id="canvasEmpty" class="canvas-empty">
           <div class="empty-orbit"></div>
           <strong>Waiting for valid observations</strong>
@@ -307,7 +309,7 @@
         <div class="eyebrow">INSPECTOR</div>
         <h2 id="inspectorTitle">Select an observation</h2>
         <p id="inspectorHint" class="muted">Click a point in the scene to inspect its provenance.</p>
-        <div id="inspectorBody" class="inspector-body empty-inspector"></div>
+        <div id="inspectorBody" class="inspector-body empty-inspector" role="region" aria-live="polite" aria-label="Selected observation details"></div>
       </section>
       <section class="panel diagnostics">
         <div class="panel-heading">
