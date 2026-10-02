@@ -158,7 +158,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Baseline anomaly overlay',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'A local normalized baseline can be captured from valid source channels and compared as a signed derived overlay; it is not added to session exports.'
+    note: 'A bounded local baseline window computes normalized mean and standard deviation per source channel and renders a capped signed z-score overlay; it is not added to session exports.'
   },
   {
     id: 'scene-regions-and-zones',

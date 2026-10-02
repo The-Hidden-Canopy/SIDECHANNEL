@@ -53,7 +53,9 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /createBaselineSnapshot/);
   assert.match(appSource, /drawBaselineField/);
   assert.match(appSource, /Baseline delta/);
-  assert.match(appSource, /not part of session export/);
+  assert.match(appSource, /capped z-score/);
+  assert.match(appSource, /baselineCapture/);
+  assert.match(appSource, /Stop & save baseline/);
   assert.match(appSource, /viewPaused/);
   assert.match(appSource, /Pause view/);
   assert.match(appSource, /Resume view/);
@@ -74,7 +76,7 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(htmlSource, /Apply field settings/);
   assert.match(htmlSource, /id="captureBaselineButton"/);
   assert.match(htmlSource, /id="clearBaselineButton"/);
-  assert.match(htmlSource, /Capture baseline/);
+  assert.match(htmlSource, /Start baseline window/);
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);
   assert.match(appSource, /sceneUnit/);

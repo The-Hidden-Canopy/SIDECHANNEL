@@ -21,16 +21,22 @@ test('baseline keeps the latest valid observation per source channel', () => {
   const snapshot = createBaselineSnapshot({ sceneId: 'scene_1', capturedAtMs: 999, observations, normalize });
   assert.equal(snapshot.schemaVersion, 'sidechannel.baseline/1');
   assert.equal(snapshot.observationCount, 1);
-  assert.equal(snapshot.observations[0].intensity, 0.4);
+  assert.equal(snapshot.sampleCount, 1);
+  assert.equal(snapshot.observations[0].mean, 0.4);
+  assert.equal(snapshot.observations[0].stdDev, 0.05);
 });
 
-test('baseline delta is signed and absent references fail closed', () => {
+test('baseline computes a bounded signed z-score and absent references fail closed', () => {
   const snapshot = createBaselineSnapshot({
     sceneId: 'scene_1',
-    observations: [{ sourceId: 's1', channel: 'heat', timestampMs: 100, value: 0.25 }],
+    samples: [
+      { sourceId: 's1', channel: 'heat', timestampMs: 100, value: 0.25 },
+      { sourceId: 's1', channel: 'heat', timestampMs: 200, value: 0.35 }
+    ],
     normalize
   });
   const index = createBaselineIndex(snapshot);
-  assert.equal(baselineDelta({ sourceId: 's1', channel: 'heat', value: 0.75 }, index, normalize), 0.5);
+  assert.equal(baselineDelta({ sourceId: 's1', channel: 'heat', value: 0.75 }, index, normalize), 4);
+  assert.ok(Math.abs(baselineDelta({ sourceId: 's1', channel: 'heat', value: 0.25 }, index, normalize) + 1) < 1e-9);
   assert.equal(baselineDelta({ sourceId: 'missing', channel: 'heat', value: 0.75 }, index, normalize), null);
 });

@@ -83,6 +83,7 @@ const state = {
   viewPaused: false,
   fieldSettings: { power: 2, radius: 0 },
   baseline: null,
+  baselineCapture: null,
   capabilities: null,
   benchmarkReceipt: null,
   benchmarkBusy: false,
@@ -308,6 +309,16 @@ function updateObservation(observation) {
   const next = state.observations.filter((item) => item.sourceId + ':' + item.channel !== key);
   next.push(observation);
   state.observations = next;
+  if (state.baselineCapture && observation.status !== 'stale' && observation.status !== 'rejected') {
+    state.baselineCapture.samples.push({
+      sourceId: observation.sourceId,
+      channel: observation.channel,
+      value: observation.value,
+      timestampMs: observation.timestampMs,
+      status: observation.status
+    });
+    if (state.baselineCapture.samples.length > 1024) state.baselineCapture.samples.shift();
+  }
   if (state.viewPaused) return;
   render();
 }
@@ -365,8 +376,11 @@ function renderBaseline() {
   capture.disabled = available === 0;
   clear.disabled = !state.baseline;
   hint.textContent = state.baseline
-    ? 'Captured ' + state.baseline.observationCount + ' source channels at ' + new Date(state.baseline.capturedAtMs).toLocaleTimeString() + '. Red is above baseline; blue is below.'
-    : 'No baseline captured. The overlay is local, derived, and not part of session export.';
+    ? 'Captured ' + state.baseline.sampleCount + ' samples across ' + state.baseline.observationCount + ' channels at ' + new Date(state.baseline.capturedAtMs).toLocaleTimeString() + '. Red is above baseline; blue is below (capped z-score).'
+    : state.baselineCapture
+      ? 'Collecting bounded baseline samples. Let the scene settle, then stop and save the window.'
+      : 'No baseline captured. The overlay is local, derived, and not part of session export.';
+  capture.textContent = state.baselineCapture ? 'Stop & save baseline' : 'Start baseline window';
 }
 
 function fieldWeight(distance) {
@@ -963,7 +977,7 @@ function drawBaselineField(valid, transform) {
       });
       if (!spatialWeightTotal) continue;
       const delta = Math.max(-1, Math.min(1, total / spatialWeightTotal));
-      const magnitude = Math.min(1, Math.abs(delta) * 1.6);
+      const magnitude = Math.min(1, Math.abs(delta) / 3);
       const color = delta >= 0 ? '#ff8f97' : '#79a7ff';
       context.fillStyle = hexToRgba(color, (.035 + magnitude * .2) * (state.visible.support ? .85 : 1));
       context.fillRect(
@@ -1322,7 +1336,7 @@ document.getElementById('recordButton').addEventListener('click', async () => {
 });
 
 document.getElementById('liveButton').addEventListener('click', () => {
-  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null; state.viewPaused = false; state.baseline = null;
+  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null; state.viewPaused = false; state.baseline = null; state.baselineCapture = null;
   state.temporalPins = { a: null, b: null }; state.temporalComparison = null; api('/api/state').then(hydrate);
 });
 
@@ -1344,18 +1358,32 @@ document.getElementById('fieldSettingsForm').addEventListener('submit', (event) 
 });
 
 document.getElementById('captureBaselineButton').addEventListener('click', () => {
+  if (!state.scene) return;
+  if (!state.baselineCapture) {
+    if (!latestValidObservations(activeObservations()).length) return;
+    state.baselineCapture = { startedAtMs: Date.now(), samples: [] };
+    render();
+    return;
+  }
   const observations = latestValidObservations(activeObservations());
-  if (!observations.length || !state.scene) return;
+  const samples = state.baselineCapture.samples.length
+    ? state.baselineCapture.samples
+    : observations.map((observation) => ({ ...observation }));
+  if (!samples.length) return;
   state.baseline = createBaselineSnapshot({
     sceneId: state.scene.id,
+    capturedAtMs: Date.now(),
     observations,
+    samples,
     normalize
   });
+  state.baselineCapture = null;
   render();
 });
 
 document.getElementById('clearBaselineButton').addEventListener('click', () => {
   state.baseline = null;
+  state.baselineCapture = null;
   render();
 });
 
@@ -1429,6 +1457,7 @@ document.getElementById('replayButton').addEventListener('click', async () => {
   }
   state.replayMode = mode;
   state.baseline = null;
+  state.baselineCapture = null;
   state.temporalPins = { a: null, b: null };
   state.temporalComparison = null;
   state.scene = state.replay.sceneSnapshot || state.scene;
