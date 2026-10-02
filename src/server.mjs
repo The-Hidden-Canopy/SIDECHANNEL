@@ -21,6 +21,7 @@ import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, v
 import { createReplayReceipt } from './verification/receipt.mjs';
 import { runBurstBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
 import { capabilitySnapshot } from './capabilities.mjs';
+import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/source-profile.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -33,7 +34,11 @@ const defaultScene = createDefaultScene();
 
 await store.init(defaultScene);
 
-let activeScene = store.getScene(defaultScene.id) || defaultScene;
+const storedScene = store.getScene(defaultScene.id) || defaultScene;
+let activeScene = {
+  ...storedScene,
+  sources: storedScene.sources.map((source) => withSourceProfileDigest(source))
+};
 let recordingSessionId = null;
 const latest = new Map();
 const diagnostics = [];
@@ -58,7 +63,7 @@ for (const adapter of listAdapters()) {
 }
 
 function sourceMap() {
-  return new Map(activeScene.sources.map((source) => [source.id, source]));
+  return new Map(activeScene.sources.map((source) => [source.id, withSourceProfileDigest(source)]));
 }
 
 function currentObservations() {
@@ -179,7 +184,7 @@ async function processObservation(raw) {
     const source = sourceMap().get(result.observation.sourceId);
     const compatibility = calibrationRegistry.assess(raw.calibrationRef, {
       providerDigest: result.observation.provider.digest,
-      sourceProfileDigest: raw.sourceProfileDigest || source?.sourceProfileDigest || null
+      sourceProfileDigest: source ? computeSourceProfileDigest(source) : null
     });
     if (!compatibility.ok) {
       return recordDiagnostic({
@@ -203,7 +208,12 @@ async function processObservation(raw) {
 
   admittedIds.add(result.observation.id);
   if (admittedIds.size > 4096) admittedIds.delete(admittedIds.values().next().value);
-  const observation = { ...result.observation, sequence: ++admissionSequence };
+  const source = sourceMap().get(result.observation.sourceId);
+  const observation = {
+    ...result.observation,
+    ...(source ? { sourceProfileDigest: computeSourceProfileDigest(source) } : {}),
+    sequence: ++admissionSequence
+  };
   latest.set(observation.sourceId + ':' + observation.channel, observation);
   if (recordingSessionId) await store.appendObservation(recordingSessionId, observation);
   broadcast({ type: 'observation.accepted', observation });
@@ -357,7 +367,26 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'POST' && pathname === '/api/calibrations') {
     const body = await bodyJson(request);
     try {
-      const calibration = calibrationRegistry.publish(body);
+      const source = typeof body.sourceId === 'string' ? sourceMap().get(body.sourceId) : null;
+      const runtimeSourceProfileDigest = source ? computeSourceProfileDigest(source) : null;
+      const runtimeProviderDigest = source?.providerManifest?.providerDigest || null;
+      if (source && body.sourceProfileDigest && body.sourceProfileDigest !== runtimeSourceProfileDigest) {
+        return sendJson(response, 422, {
+          error: 'sourceProfileDigest does not match the current source profile',
+          sourceProfileDigest: runtimeSourceProfileDigest
+        });
+      }
+      if (source && body.providerDigest && runtimeProviderDigest && body.providerDigest !== runtimeProviderDigest) {
+        return sendJson(response, 422, {
+          error: 'providerDigest does not match the current provider manifest',
+          providerDigest: runtimeProviderDigest
+        });
+      }
+      const calibration = calibrationRegistry.publish({
+        ...body,
+        ...(runtimeSourceProfileDigest ? { sourceProfileDigest: runtimeSourceProfileDigest } : {}),
+        ...(runtimeProviderDigest ? { providerDigest: runtimeProviderDigest } : {})
+      });
       return sendJson(response, 201, calibration);
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
@@ -388,7 +417,7 @@ async function handleApi(request, response, pathname) {
       ...defaultScene,
       ...body,
       id: 'scene_' + randomUUID(),
-      sources: Array.isArray(body.sources) ? body.sources : [],
+      sources: Array.isArray(body.sources) ? body.sources.map((source) => withSourceProfileDigest(source)) : [],
       placements: Array.isArray(body.placements) ? body.placements : []
     };
     await store.upsertScene(scene);
@@ -436,11 +465,12 @@ async function handleApi(request, response, pathname) {
         calibrationState: body.calibrationState || 'uncalibrated',
         providerManifest: manifestResult.manifest
       };
-      const updated = { ...scene, sources: [...scene.sources, source] };
+      const persistedSource = withSourceProfileDigest(source);
+      const updated = { ...scene, sources: [...scene.sources, persistedSource] };
       await store.upsertScene(updated);
       if (activeScene.id === updated.id) activeScene = updated;
       broadcast({ type: 'scene.updated', scene: updated });
-      return sendJson(response, 201, source);
+      return sendJson(response, 201, persistedSource);
     }
     if (request.method === 'PATCH' && parts[3] === 'sources' && parts[4]) {
       const sourceId = parts[4];
@@ -462,6 +492,7 @@ async function handleApi(request, response, pathname) {
         calibrationState: body.calibrationState || 'calibrated',
         calibratedAtMs: body.calibratedAtMs || Date.now()
       };
+      source.sourceProfileDigest = computeSourceProfileDigest(source);
       const updated = {
         ...scene,
         sources: scene.sources.map((item) => item.id === sourceId ? source : item),

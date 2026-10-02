@@ -28,6 +28,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Calibration reuse fails closed unless provider and source-profile digests match and the record is valid and unexpired.'
   },
   {
+    id: 'runtime-source-profile-identity',
+    label: 'Runtime source-profile identity',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Source profile digests are derived from measurement identity and policy fields; placement changes do not silently change the profile.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

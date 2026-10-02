@@ -1,4 +1,5 @@
 import { CHANNELS } from './contracts.mjs';
+import { withSourceProfileDigest } from './identity/source-profile.mjs';
 
 export const DEFAULT_SOURCES = Object.freeze([
   {
@@ -121,6 +122,10 @@ export const DEFAULT_SOURCES = Object.freeze([
 ]);
 
 export function createDefaultScene() {
+  const sources = DEFAULT_SOURCES.map((source) => withSourceProfileDigest({
+    ...source,
+    position: { ...source.position }
+  }));
   return {
     id: 'scene_main',
     name: 'Main room',
@@ -128,8 +133,8 @@ export function createDefaultScene() {
     width: 5,
     height: 4,
     unit: 'm',
-    sources: DEFAULT_SOURCES.map((source) => ({ ...source, position: { ...source.position } })),
-    placements: DEFAULT_SOURCES.map((source) => ({
+    sources,
+    placements: sources.map((source) => ({
       sourceId: source.id,
       position: { ...source.position },
       calibrationState: 'calibrated',
