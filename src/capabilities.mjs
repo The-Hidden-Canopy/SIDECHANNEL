@@ -161,6 +161,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A bounded local baseline window computes normalized mean and standard deviation per source channel and renders a capped signed z-score overlay; it is not added to session exports.'
   },
   {
+    id: 'scene-camera-tilt',
+    label: 'Scene camera tilt',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The canvas offers bounded pseudo-3D camera tilt while pointer mapping, measurements, and evidence remain authoritative in the 2D scene frame.'
+  },
+  {
     id: 'scene-regions-and-zones',
     label: 'Scene rooms and zones',
     status: 'implemented',

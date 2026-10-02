@@ -84,6 +84,7 @@ const state = {
   fieldSettings: { power: 2, radius: 0 },
   baseline: null,
   baselineCapture: null,
+  cameraTiltDeg: 0,
   capabilities: null,
   benchmarkReceipt: null,
   benchmarkBusy: false,
@@ -365,6 +366,16 @@ function renderFieldSettings() {
   hint.textContent = 'Power ' + state.fieldSettings.power + ' · ' +
     (state.fieldSettings.radius > 0 ? 'search radius ' + state.fieldSettings.radius + ' ' + (state.scene?.unit || 'm') + '.' : 'unlimited search radius.') +
     ' Cells outside the radius show insufficient data.';
+}
+
+function renderPresentationSettings() {
+  const select = document.getElementById('cameraTilt');
+  const hint = document.getElementById('cameraTiltHint');
+  if (!select || !hint) return;
+  if (document.activeElement !== select) select.value = String(state.cameraTiltDeg);
+  hint.textContent = state.cameraTiltDeg === 0
+    ? 'Authoritative 2D scene view.'
+    : 'Presentation tilt only; measurements and evidence remain in x/y scene coordinates.';
 }
 
 function renderBaseline() {
@@ -689,6 +700,7 @@ function colorFor(channel) {
 function sceneTransform() {
   const rect = canvas.getBoundingClientRect();
   const pad = 32;
+  const projectionShear = Math.tan((state.cameraTiltDeg * Math.PI) / 180) * .24;
   return {
     width: rect.width,
     height: rect.height,
@@ -696,6 +708,8 @@ function sceneTransform() {
     y: (value) => pad + value / state.scene.height * (rect.height - pad * 2),
     sx: (rect.width - pad * 2) / state.scene.width,
     sy: (rect.height - pad * 2) / state.scene.height,
+    projectionShear,
+    projectionOffset: -projectionShear * rect.height / 2,
     pad
   };
 }
@@ -703,9 +717,12 @@ function sceneTransform() {
 function scenePointFromEvent(event) {
   const rect = canvas.getBoundingClientRect();
   const transform = sceneTransform();
+  const projectedX = event.clientX - rect.left;
+  const projectedY = event.clientY - rect.top;
+  const localX = projectedX - transform.projectionOffset - transform.projectionShear * projectedY;
   return {
-    x: Math.max(0, Math.min(state.scene.width, (event.clientX - rect.left - transform.pad) / transform.sx)),
-    y: Math.max(0, Math.min(state.scene.height, (event.clientY - rect.top - transform.pad) / transform.sy))
+    x: Math.max(0, Math.min(state.scene.width, (localX - transform.pad) / transform.sx)),
+    y: Math.max(0, Math.min(state.scene.height, (projectedY - transform.pad) / transform.sy))
   };
 }
 
@@ -1009,6 +1026,10 @@ function draw() {
   context.fillStyle = gradient;
   context.fillRect(0, 0, rect.width, rect.height);
 
+  context.save();
+  context.translate(-transformProjectionOffset(rect), 0);
+  context.transform(1, 0, transformProjectionShear(), 1, 0, 0);
+
   drawBackground(transform);
 
   context.strokeStyle = 'rgba(154, 188, 208, .08)';
@@ -1157,6 +1178,15 @@ function draw() {
   });
   drawEventPulses(transform);
   drawMeasurement(transform);
+  context.restore();
+}
+
+function transformProjectionShear() {
+  return Math.tan((state.cameraTiltDeg * Math.PI) / 180) * .24;
+}
+
+function transformProjectionOffset(rect) {
+  return transformProjectionShear() * rect.height / 2;
 }
 
 function hexToRgba(hex, alpha) {
@@ -1321,7 +1351,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderFieldSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderFieldSettings(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1354,6 +1384,13 @@ document.getElementById('fieldSettingsForm').addEventListener('submit', (event) 
     return;
   }
   state.fieldSettings = { power, radius };
+  render();
+});
+
+document.getElementById('cameraTilt').addEventListener('change', (event) => {
+  const value = Number(event.target.value);
+  if (!Number.isFinite(value) || ![0, 12, 24].includes(value)) return;
+  state.cameraTiltDeg = value;
   render();
 });
 
@@ -1943,10 +1980,9 @@ canvas.addEventListener('click', (event) => {
   }
   if (!state.scene) return;
   if (state.editMode) return;
-  const rect = canvas.getBoundingClientRect();
-  const transform = sceneTransform();
-  const x = (event.clientX - rect.left - transform.pad) / transform.sx;
-  const y = (event.clientY - rect.top - transform.pad) / transform.sy;
+  const point = scenePointFromEvent(event);
+  const x = point.x;
+  const y = point.y;
   let nearest = null; let distance = Infinity;
   activeObservations().forEach((observation) => {
     const source = sourceById(observation.sourceId);
