@@ -60,6 +60,8 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /cameraTiltDeg/);
   assert.match(appSource, /projectionShear/);
   assert.match(appSource, /scenePointFromEvent/);
+  assert.match(appSource, /\/activate/);
+  assert.match(appSource, /state\.scenes/);
   assert.match(appSource, /viewPaused/);
   assert.match(appSource, /Pause view/);
   assert.match(appSource, /Resume view/);
@@ -83,6 +85,10 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(htmlSource, /Start baseline window/);
   assert.match(htmlSource, /id="cameraTilt"/);
   assert.match(htmlSource, /2D authoritative/);
+  assert.match(htmlSource, /id="sceneSelect"/);
+  assert.match(htmlSource, /id="activateSceneButton"/);
+  assert.match(htmlSource, /id="sceneForm"/);
+  assert.match(htmlSource, /Create and activate/);
   assert.match(serverSource, /'\.mjs': 'text\/javascript; charset=utf-8'/);
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);

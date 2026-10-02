@@ -41,6 +41,23 @@
           <h3>Spatial frame</h3>
           <span id="calibrationState" class="badge">calibrated</span>
         </div>
+        <label class="scene-unit-label">Active scene
+          <select id="sceneSelect" aria-label="Choose active scene"><option value="">Loading scenes</option></select>
+        </label>
+        <button id="activateSceneButton" class="button small ghost" type="button" disabled>Activate selected scene</button>
+        <p id="sceneSwitchHint" class="muted">Create another local scene to move between rooms without changing recorded sessions.</p>
+        <button id="addSceneButton" class="button small ghost" type="button">Create scene</button>
+        <form id="sceneForm" class="source-form" hidden>
+          <label>Name <input id="newSceneName" type="text" placeholder="Upper room" required></label>
+          <div class="field-grid">
+            <label>Width <input id="newSceneWidth" type="number" min="1" step="0.1" value="5"></label>
+            <label>Height <input id="newSceneHeight" type="number" min="1" step="0.1" value="4"></label>
+          </div>
+          <label>Unit
+            <select id="newSceneUnit"><option value="m">meters (m)</option><option value="ft">feet (ft)</option><option value="px">pixels (px)</option></select>
+          </label>
+          <button class="button small accent" type="submit">Create and activate</button>
+        </form>
         <div class="field-grid">
           <label>Width <input id="sceneWidth" type="number" min="1" step="0.1"></label>
           <label>Height <input id="sceneHeight" type="number" min="1" step="0.1"></label>

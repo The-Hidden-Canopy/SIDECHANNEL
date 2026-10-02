@@ -44,6 +44,7 @@ let activeScene = {
   ...storedScene,
   sources: storedScene.sources.map((source) => withSourceProfileDigest(source))
 };
+let simulator = null;
 let recordingSessionId = null;
 const latest = new Map();
 const diagnostics = [];
@@ -79,6 +80,32 @@ function currentObservations() {
   );
 }
 
+function activateScene(scene) {
+  activeScene = {
+    ...scene,
+    sources: (scene.sources || []).map((source) => withSourceProfileDigest(source))
+  };
+  latest.clear();
+  diagnostics.length = 0;
+  recentEvents.length = 0;
+  admittedIds.clear();
+  admissionSequence = 0;
+  if (simulator) simulator.stop();
+  simulator = createSimulator({
+    sources: activeScene.sources.filter((source) => source.adapterType === 'simulator'),
+    emit: (observation) => {
+      ingest(observation).catch((error) => diagnostics.push({
+        type: 'simulator.error',
+        message: error.message,
+        receivedAtMs: Date.now()
+      }));
+    }
+  });
+  simulator.start();
+  broadcast({ type: 'scene.updated', scene: activeScene });
+  return activeScene;
+}
+
 function snapshot() {
   return {
     scene: activeScene,
@@ -94,6 +121,7 @@ function snapshot() {
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
       : null,
+    scenes: store.listScenes(),
     sessions: store.listSessions(),
     server: {
       nowMs: Date.now(),
@@ -558,6 +586,7 @@ async function handleApi(request, response, pathname) {
     return sendJson(response, 200, { scenes: store.listScenes() });
   }
   if (request.method === 'POST' && pathname === '/api/scenes') {
+    if (recordingSessionId) return sendJson(response, 409, { error: 'stop the active recording before switching scenes' });
     const body = await bodyJson(request);
     const sceneWidth = Number(body.width ?? defaultScene.width);
     const sceneHeight = Number(body.height ?? defaultScene.height);
@@ -592,14 +621,16 @@ async function handleApi(request, response, pathname) {
       placements: Array.isArray(body.placements) ? body.placements : []
     };
     await store.upsertScene(scene);
-    activeScene = scene;
-    broadcast({ type: 'scene.updated', scene });
-    return sendJson(response, 201, scene);
+    return sendJson(response, 201, activateScene(scene));
   }
   if (parts[0] === 'api' && parts[1] === 'scenes' && parts[2]) {
     const sceneId = parts[2];
     const scene = store.getScene(sceneId);
     if (!scene) return sendJson(response, 404, { error: 'scene not found' });
+    if (request.method === 'POST' && parts[3] === 'activate' && parts.length === 4) {
+      if (recordingSessionId) return sendJson(response, 409, { error: 'stop the active recording before switching scenes' });
+      return sendJson(response, 200, { scene: activateScene(scene) });
+    }
     if (request.method === 'GET' && parts.length === 3) return sendJson(response, 200, scene);
     if (request.method === 'PATCH' && parts.length === 3) {
       const body = await bodyJson(request);
@@ -1108,18 +1139,8 @@ server.on('upgrade', (request, socket) => {
   socket.on('error', () => clients.delete(socket));
 });
 
-const simulator = createSimulator({
-  sources: activeScene.sources.filter((source) => source.adapterType === 'simulator'),
-  emit: (observation) => {
-    ingest(observation).catch((error) => diagnostics.push({
-      type: 'simulator.error',
-      message: error.message,
-      receivedAtMs: Date.now()
-    }));
-  }
-});
+activateScene(activeScene);
 adapterSupervisor.start('builtin:simulator');
-simulator.start();
 
 server.listen(port, '127.0.0.1', () => {
   console.log('SIDECHANNEL listening on http://127.0.0.1:' + port);

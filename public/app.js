@@ -65,6 +65,7 @@ const state = {
   diagnostics: [],
   events: [],
   recording: null,
+  scenes: [],
   sessions: [],
   transforms: { revision: 0, edges: [] },
   backgroundImageKey: null,
@@ -162,6 +163,7 @@ function hydrate(payload) {
   state.diagnostics = payload.diagnostics || [];
   state.events = payload.events || [];
   state.recording = payload.recording;
+  state.scenes = payload.scenes || state.scenes;
   state.sessions = payload.sessions || [];
   state.transforms = payload.transforms || state.transforms;
   state.capabilities = payload.capabilities || state.capabilities;
@@ -172,6 +174,18 @@ function hydrate(payload) {
 
 function renderSceneTools() {
   if (!state.scene) return;
+  const sceneSelect = document.getElementById('sceneSelect');
+  const activateSceneButton = document.getElementById('activateSceneButton');
+  const sceneSwitchHint = document.getElementById('sceneSwitchHint');
+  if (sceneSelect && activateSceneButton && sceneSwitchHint) {
+    const scenes = state.scenes.length ? state.scenes : [state.scene];
+    sceneSelect.innerHTML = scenes.map((scene) => '<option value="' + escapeHtml(scene.id) + '">' + escapeHtml(scene.name || scene.id) + '</option>').join('');
+    sceneSelect.value = state.scene.id;
+    activateSceneButton.disabled = true;
+    sceneSwitchHint.textContent = scenes.length > 1
+      ? scenes.length + ' local scenes available. Switching clears only the live view; recorded sessions remain intact.'
+      : 'Create another local scene to move between rooms without changing recorded sessions.';
+  }
   const width = document.getElementById('sceneWidth');
   const height = document.getElementById('sceneHeight');
   const unit = document.getElementById('sceneUnit');
@@ -1663,6 +1677,62 @@ document.getElementById('saveSceneButton').addEventListener('click', async () =>
   state.scene = scene;
   syncBackgroundImage();
   render();
+});
+
+document.getElementById('sceneSelect').addEventListener('change', () => {
+  document.getElementById('activateSceneButton').disabled = document.getElementById('sceneSelect').value === state.scene?.id;
+});
+
+document.getElementById('activateSceneButton').addEventListener('click', async () => {
+  const sceneId = document.getElementById('sceneSelect').value;
+  if (!sceneId || sceneId === state.scene?.id) return;
+  try {
+    await api('/api/scenes/' + encodeURIComponent(sceneId) + '/activate', { method: 'POST' });
+    state.replay = null;
+    state.replayArtifact = null;
+    state.replayReport = null;
+    state.baseline = null;
+    state.baselineCapture = null;
+    state.selected = null;
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('sceneSwitchHint').textContent = 'Could not activate scene: ' + error.message;
+  }
+});
+
+document.getElementById('addSceneButton').addEventListener('click', () => {
+  const form = document.getElementById('sceneForm');
+  form.hidden = !form.hidden;
+  if (!form.hidden) document.getElementById('newSceneName').focus();
+});
+
+document.getElementById('sceneForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const name = document.getElementById('newSceneName').value.trim();
+  const width = Number(document.getElementById('newSceneWidth').value);
+  const height = Number(document.getElementById('newSceneHeight').value);
+  const unit = document.getElementById('newSceneUnit').value;
+  if (!name || !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0 || !['m', 'ft', 'px'].includes(unit)) {
+    document.getElementById('sceneSwitchHint').textContent = 'New scene needs a name and positive bounded dimensions.';
+    return;
+  }
+  try {
+    await api('/api/scenes', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name, width, height, unit, sources: [], placements: [] })
+    });
+    document.getElementById('sceneForm').reset();
+    document.getElementById('sceneForm').hidden = true;
+    state.replay = null;
+    state.replayArtifact = null;
+    state.replayReport = null;
+    state.baseline = null;
+    state.baselineCapture = null;
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('sceneSwitchHint').textContent = 'Could not create scene: ' + error.message;
+  }
 });
 
 document.getElementById('measureButton').addEventListener('click', () => {

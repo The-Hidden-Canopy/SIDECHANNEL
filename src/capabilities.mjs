@@ -168,6 +168,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The canvas offers bounded pseudo-3D camera tilt while pointer mapping, measurements, and evidence remain authoritative in the 2D scene frame.'
   },
   {
+    id: 'local-scene-directory',
+    label: 'Local multi-scene directory',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The workspace can create and activate bounded local scenes; activation restarts only the software simulator and never rewrites recorded sessions.'
+  },
+  {
     id: 'scene-regions-and-zones',
     label: 'Scene rooms and zones',
     status: 'implemented',

@@ -89,6 +89,8 @@ The workspace can collect a bounded local baseline window from valid source chan
 
 The canvas also offers bounded 2D/12°/24° camera-tilt presentation modes. Tilt is a rendering transform only: source placement, pointer hit-testing, ruler measurements, and evidence coordinates remain authoritative in the unprojected 2D scene frame. It is pseudo-3D presentation, not depth sensing, camera calibration, or physical localization.
 
+The spatial frame panel can create and activate multiple bounded local scenes. Activation restarts only the hardware-independent simulator for the selected scene, clears the live observation view, and leaves recorded session packages unchanged. Scene switching is an explicit local workspace transition; it does not imply physical room detection, automatic localization, or multi-room hardware coverage.
+
 Layer controls are also grouped into Signals, Evidence overlays, and Scene context. Group actions change only the child visibility flags; the individual layer checkboxes remain authoritative and can be changed afterward. Grouping is a presentation convenience and does not alter admitted observations, field values, support, or historical session packages.
 
 Source marks expose calibration and age semantics as separate toggles. Uncalibrated or expired source placement uses a dashed amber ring, stale observations retain their value but receive an explicit stale ring and age label, and inferred or derived observations use a diamond marker. These are visual evidence-state cues only; they do not upgrade measurement quality or turn inference into a physical measurement.
