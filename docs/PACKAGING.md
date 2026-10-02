@@ -18,7 +18,7 @@ npm run verify
 
 It syntax-checks every `src/*.mjs` file and the browser module, then runs the complete Node test suite.
 
-The complete suite includes an isolated loopback process smoke test. It starts the server on a temporary port with `SIDECHANNEL_DATA_DIR` pointed at a temporary directory, confirms the browser render-budget module is served from the public asset boundary, exercises launch-token admission, source creation, observation ingestion, recording, export, and independent package verification, then removes the temporary data. Normal runs continue to use the local `data/` directory.
+The complete suite includes an isolated loopback process smoke test. It starts the server on a temporary port with `SIDECHANNEL_DATA_DIR` pointed at a temporary directory, confirms the live WebSocket's initial and reconnect snapshots plus a simulator observation broadcast, confirms the browser render-budget module is served from the public asset boundary, exercises launch-token admission, source creation, observation ingestion, recording, export, and independent package verification, then removes the temporary data. Normal runs continue to use the local `data/` directory.
 
 `npm run package:audit` emits a deterministic `sidechannel-runtime-manifest/1` JSON manifest for the future desktop bundle. It hashes the Node loopback entrypoint, all `src/*.mjs` runtime modules, all public browser assets, and the operator-facing package notes. The manifest explicitly excludes mutable runtime state (`data/`), build/deployment output, dependency caches, Git metadata, and the native reference tree. This is a packaging boundary audit, not an installer, signing result, deployment approval, or hardware claim.
 
