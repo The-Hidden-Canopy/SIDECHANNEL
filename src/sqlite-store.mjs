@@ -70,6 +70,8 @@ export class SqliteStore {
         scene_id TEXT NOT NULL,
         started_at_ms INTEGER NOT NULL,
         ended_at_ms INTEGER,
+        state TEXT NOT NULL DEFAULT 'recording',
+        interruption_reason TEXT,
         scene_snapshot TEXT,
         source_registry_snapshot TEXT,
         calibration_registry_snapshot TEXT,
@@ -119,6 +121,7 @@ export class SqliteStore {
         ON journal(session_id, sequence);
     `);
     this.ensureSessionSnapshotColumns();
+    this.markOpenSessionsInterrupted();
 
     if (!databaseExisted && this.legacyJsonPath && await exists(this.legacyJsonPath)) {
       await this.migrateJson(await readFile(this.legacyJsonPath, 'utf8'));
@@ -128,6 +131,8 @@ export class SqliteStore {
 
   ensureSessionSnapshotColumns() {
     const columns = [
+      ['state', "TEXT NOT NULL DEFAULT 'recording'"],
+      ['interruption_reason', 'TEXT'],
       ['scene_snapshot', 'TEXT'],
       ['source_registry_snapshot', 'TEXT'],
       ['calibration_registry_snapshot', 'TEXT'],
@@ -143,6 +148,14 @@ export class SqliteStore {
         if (!String(error.message).toLowerCase().includes('duplicate column')) throw error;
       }
     }
+  }
+
+  markOpenSessionsInterrupted() {
+    this.db.prepare(`
+      UPDATE sessions
+      SET state = 'interrupted', interruption_reason = 'process_restart'
+      WHERE ended_at_ms IS NULL AND COALESCE(state, 'recording') = 'recording'
+    `).run();
   }
 
   close() {
@@ -172,6 +185,7 @@ export class SqliteStore {
   listSessions() {
     return this.db.prepare(`
       SELECT sessions.id, sessions.scene_id, sessions.started_at_ms, sessions.ended_at_ms,
+        sessions.state, sessions.interruption_reason,
         COUNT(observations.id) AS observation_count
       FROM sessions
       LEFT JOIN observations ON observations.session_id = sessions.id
@@ -182,13 +196,15 @@ export class SqliteStore {
       sceneId: row.scene_id,
       startedAtMs: row.started_at_ms,
       endedAtMs: row.ended_at_ms,
+      state: row.state || (row.ended_at_ms ? 'completed' : 'recording'),
+      interruptionReason: row.interruption_reason || null,
       observationCount: Number(row.observation_count)
     }));
   }
 
   getSession(sessionId) {
     const row = this.db.prepare(`
-      SELECT id, scene_id, started_at_ms, ended_at_ms,
+      SELECT id, scene_id, started_at_ms, ended_at_ms, state, interruption_reason,
         scene_snapshot, source_registry_snapshot, calibration_registry_snapshot,
         transform_graph_snapshot, runtime_build_id, schema_set_digest, snapshot_digest
       FROM sessions WHERE id = ?
@@ -199,6 +215,8 @@ export class SqliteStore {
       sceneId: row.scene_id,
       startedAtMs: row.started_at_ms,
       endedAtMs: row.ended_at_ms,
+      state: row.state || (row.ended_at_ms ? 'completed' : 'recording'),
+      interruptionReason: row.interruption_reason || null,
       sceneSnapshot: decode(row.scene_snapshot, null),
       sourceRegistrySnapshot: decode(row.source_registry_snapshot, null),
       calibrationRegistrySnapshot: decode(row.calibration_registry_snapshot, null),
@@ -210,10 +228,10 @@ export class SqliteStore {
         row.scene_snapshot && row.source_registry_snapshot && row.transform_graph_snapshot
       ),
       observations: this.db.prepare(`
-        SELECT payload FROM observations WHERE session_id = ? ORDER BY timestamp_ms, rowid
+        SELECT payload FROM observations WHERE session_id = ? ORDER BY rowid
       `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean),
       events: this.db.prepare(`
-        SELECT payload FROM events WHERE session_id = ? ORDER BY start_ms, rowid
+        SELECT payload FROM events WHERE session_id = ? ORDER BY rowid
       `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean),
       journal: this.db.prepare(`
         SELECT id, session_id, sequence, timestamp_ms, type, payload, previous_digest, event_digest
@@ -260,6 +278,8 @@ export class SqliteStore {
       sceneId,
       startedAtMs: Date.now(),
       endedAtMs: null,
+      state: 'recording',
+      interruptionReason: null,
       sceneSnapshot,
       sourceRegistrySnapshot,
       calibrationRegistrySnapshot,
@@ -273,14 +293,16 @@ export class SqliteStore {
     };
     this.db.prepare(`
       INSERT INTO sessions (
-        id, scene_id, started_at_ms, ended_at_ms, scene_snapshot,
+        id, scene_id, started_at_ms, ended_at_ms, state, interruption_reason, scene_snapshot,
         source_registry_snapshot, calibration_registry_snapshot, transform_graph_snapshot,
         runtime_build_id, schema_set_digest, snapshot_digest
-      ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       session.id,
       session.sceneId,
       session.startedAtMs,
+      session.state,
+      session.interruptionReason,
       encode(sceneSnapshot),
       encode(sourceRegistrySnapshot),
       encode(calibrationRegistrySnapshot),
@@ -294,7 +316,7 @@ export class SqliteStore {
   }
 
   appendObservation(sessionId, observation) {
-    const session = this.db.prepare('SELECT id FROM sessions WHERE id = ? AND ended_at_ms IS NULL').get(sessionId);
+    const session = this.db.prepare("SELECT id FROM sessions WHERE id = ? AND ended_at_ms IS NULL AND state = 'recording'").get(sessionId);
     if (!session) return;
     if (this.insertObservation(sessionId, observation)) {
       this.appendJournal(sessionId, 'ObservationAdmitted', {
@@ -305,7 +327,7 @@ export class SqliteStore {
   }
 
   appendEvent(sessionId, event) {
-    const session = this.db.prepare('SELECT id FROM sessions WHERE id = ? AND ended_at_ms IS NULL').get(sessionId);
+    const session = this.db.prepare("SELECT id FROM sessions WHERE id = ? AND ended_at_ms IS NULL AND state = 'recording'").get(sessionId);
     if (!session) return;
     if (this.insertEvent(sessionId, event)) {
       this.appendJournal(sessionId, 'EventDerived', { eventId: event.id }, event.startMs || Date.now());
@@ -315,7 +337,9 @@ export class SqliteStore {
   finishSession(sessionId) {
     const endedAtMs = Date.now();
     const result = this.db.prepare(`
-      UPDATE sessions SET ended_at_ms = COALESCE(ended_at_ms, ?) WHERE id = ?
+      UPDATE sessions
+      SET ended_at_ms = ?, state = 'completed', interruption_reason = NULL
+      WHERE id = ? AND ended_at_ms IS NULL AND state = 'recording'
     `).run(endedAtMs, sessionId);
     if (!result.changes) return null;
     this.appendJournal(sessionId, 'SessionClosed', { endedAtMs }, endedAtMs);
@@ -340,6 +364,8 @@ export class SqliteStore {
       sceneId: sceneSnapshot?.id || 'scene_main',
       startedAtMs: packageData.createdAtMs || Date.now(),
       endedAtMs: Date.now(),
+      state: 'completed',
+      interruptionReason: null,
       sceneSnapshot,
       sourceRegistrySnapshot,
       calibrationRegistrySnapshot,
@@ -354,15 +380,17 @@ export class SqliteStore {
     if (sceneSnapshot) this.upsertScene(sceneSnapshot);
     this.db.prepare(`
       INSERT INTO sessions (
-        id, scene_id, started_at_ms, ended_at_ms, scene_snapshot,
+        id, scene_id, started_at_ms, ended_at_ms, state, interruption_reason, scene_snapshot,
         source_registry_snapshot, calibration_registry_snapshot, transform_graph_snapshot,
         runtime_build_id, schema_set_digest, snapshot_digest
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       session.id,
       session.sceneId,
       session.startedAtMs,
       session.endedAtMs,
+      session.state,
+      session.interruptionReason,
       encode(sceneSnapshot),
       encode(sourceRegistrySnapshot),
       encode(calibrationRegistrySnapshot),
@@ -400,15 +428,17 @@ export class SqliteStore {
       };
       this.db.prepare(`
         INSERT OR IGNORE INTO sessions (
-          id, scene_id, started_at_ms, ended_at_ms, scene_snapshot,
+          id, scene_id, started_at_ms, ended_at_ms, state, interruption_reason, scene_snapshot,
           source_registry_snapshot, calibration_registry_snapshot, transform_graph_snapshot,
           runtime_build_id, schema_set_digest, snapshot_digest
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         session.id,
         session.sceneId || 'scene_main',
         session.startedAtMs || Date.now(),
         session.endedAtMs ?? null,
+        session.endedAtMs ? 'completed' : 'interrupted',
+        session.endedAtMs ? null : 'legacy-json-migration',
         encode(sceneSnapshot),
         encode(sourceRegistrySnapshot),
         encode([]),

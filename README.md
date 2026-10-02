@@ -28,11 +28,13 @@ npm start
 
 Open http://127.0.0.1:4173/.
 
-The server is loopback-only by default. It starts a deterministic simulator with nine positioned channel sources and exposes `/api/health`, `/api/state`, `/api/adapters`, `/api/adapter-runtime`, `/api/calibrations`, `/api/transforms`, scene/source authoring, HTTP observation ingestion, `/ws/live` live updates, `/ws/ingest` normalized observation input, session recording, replay data, and privacy-labelled JSON export.
+The server is loopback-only by default. It starts a deterministic simulator with nine positioned channel sources and exposes `/api/health`, `/api/state`, `/api/adapters`, `/api/adapter-runtime`, `/api/calibrations`, `/api/transforms`, scene/source authoring, HTTP observation ingestion, `/ws/live` live updates, `/ws/ingest` normalized observation input, session recording, historical/recomputed/determinism replay, session comparison, and privacy-labelled JSON export.
 
 ## Implemented v0.1 slice
 
 The current engineering tranche is runnable now: deterministic simulator, normalized observation contracts, provider-manifest admission, explicit evidence/privacy classes, provenance edges, versioned calibration records, explicit spatial support geometry, revisioned transforms, separate field value/support outputs, revision-gated field candidates, append-only hash-chain session journal, versioned adapter frames, permission-gated adapter lifecycle and quarantine, loopback Host/Origin and bounded WebSocket checks, loopback API/WebSocket live updates, bounded ordered ingress, duplicate admission rejection, inbound WebSocket and JSON-lines adapter modules, adapter discovery, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, bounded activity-change events, quality/freshness gates, diagnostics, scene-frame editing, draggable source calibration, manual source creation and numeric observation injection, immutable per-session scene/source/calibration/transform snapshots, historical session export, independent session verification, SQLite recording/replay data, JSON export/import controls, local session deletion, and automated tests.
+
+Replay is explicit about truth: `/api/sessions/:id/replay?mode=historical` returns retained recorded artifacts from the frozen session snapshot, `mode=recompute` returns a derived activity field, and `mode=determinism` compares two recomputations. `POST /api/sessions/compare` produces a derived difference artifact between two self-contained sessions. Open sessions are marked `interrupted` after a process restart and are never resumed or silently completed.
 
 Native hardware adapters, richer calibration, optional encrypted export, and desktop packaging remain follow-on work described in the build specification. The SQLite store is local and dependency-free on supported Node.js releases; it migrates an existing `data/sidechannel.json` file on first startup.
 

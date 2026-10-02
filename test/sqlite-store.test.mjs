@@ -46,6 +46,7 @@ test('SQLite store persists sessions, observations, events, and deletion', async
     assert.equal(finished.observations.length, 1);
     assert.equal(finished.events.length, 1);
     assert.equal(finished.snapshotComplete, true);
+    assert.equal(finished.state, 'completed');
     assert.equal(finished.sceneSnapshot.name, 'Frozen test room');
     assert.equal(store.listSessions()[0].observationCount, 1);
     store.close();
@@ -59,7 +60,7 @@ test('SQLite store persists sessions, observations, events, and deletion', async
     assert.equal(reopened.getSession(session.id), undefined);
     reopened.close();
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 
@@ -78,6 +79,45 @@ test('session snapshots remain historical after the live scene changes', async (
   } finally {
     store.close();
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('session observations replay in admitted order rather than timestamp order', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sidechannel-order-'));
+  const path = join(directory, 'sidechannel.sqlite');
+  const store = new SqliteStore(path);
+  try {
+    await store.init(scene);
+    const session = store.createSession(scene.id);
+    store.appendObservation(session.id, { ...observation('observation_first', 2000), sequence: 1 });
+    store.appendObservation(session.id, { ...observation('observation_second', 1000), sequence: 2 });
+    const restored = store.getSession(session.id);
+    assert.deepEqual(restored.observations.map((item) => item.id), [
+      'observation_first',
+      'observation_second'
+    ]);
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('open sessions become interrupted after a store restart', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sidechannel-interrupted-'));
+  const path = join(directory, 'sidechannel.sqlite');
+  try {
+    const first = new SqliteStore(path);
+    await first.init(scene);
+    const session = first.createSession(scene.id);
+    first.close();
+    const reopened = new SqliteStore(path);
+    await reopened.init(scene);
+    assert.equal(reopened.getSession(session.id).state, 'interrupted');
+    assert.equal(reopened.getSession(session.id).interruptionReason, 'process_restart');
+    assert.equal(reopened.finishSession(session.id), null);
+    reopened.close();
+  } finally {
+    await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
   }
 });
 

@@ -20,7 +20,7 @@ It syntax-checks every `src/*.mjs` file and the browser module, then runs the co
 
 After exporting a session, verify its independent receipt with `npm run verify:session -- path/to/exported-session.json`. The running server also exposes `/api/sessions/:id/verify` for the same structural and snapshot checks.
 
-Session exports include an append-only journal with per-session sequence numbers and a SHA-256 hash chain. Verification reports a journal-tail failure if any retained event payload, order, or digest has been altered.
+Session exports include an append-only journal with per-session sequence numbers and a SHA-256 hash chain. Verification reports a journal-tail failure if any retained event payload, order, or digest has been altered. Replay is split into historical view, recompute, and determinism verification: recorded artifacts are never labelled as current estimator output, and derived comparison fields retain their source session IDs and estimator configuration.
 
 ## Local run
 
@@ -32,7 +32,7 @@ Open `http://127.0.0.1:4173/`. The application starts with deterministic simulat
 
 ## Runtime data
 
-The server creates `data/sidechannel.sqlite` plus SQLite WAL files. `data/` is ignored by Git. If a legacy `data/sidechannel.json` exists and the SQLite file does not, the first startup migrates scenes, sessions, observations, and events without deleting the legacy file. New sessions freeze their scene, source registry, calibration summary, and transform snapshot so later live edits do not rewrite historical export meaning.
+The server creates `data/sidechannel.sqlite` plus SQLite WAL files. `data/` is ignored by Git. If a legacy `data/sidechannel.json` exists and the SQLite file does not, the first startup migrates scenes, sessions, observations, and events without deleting the legacy file. New sessions freeze their scene, source registry, calibration summary, and transform snapshot so later live edits do not rewrite historical export meaning. Observations are returned in admitted row order, not timestamp order. A session left open by a process restart is retained as `interrupted` with a `process_restart` reason; it is not eligible for new observations or normal completion.
 
 ## Portable packaging boundary
 

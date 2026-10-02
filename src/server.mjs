@@ -17,6 +17,7 @@ import { TransformGraph } from './spatial/transform-graph.mjs';
 import { verifySessionPackage } from './session-verifier.mjs';
 import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from './security.mjs';
 import { AdapterSupervisor } from './adapters/supervisor.mjs';
+import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -195,6 +196,8 @@ function sessionPackage(session) {
     schemaSetDigest: session.schemaSetDigest,
     snapshotDigest: session.snapshotDigest,
     historicalSnapshotComplete: session.snapshotComplete,
+    sessionState: session.state,
+    interruptionReason: session.interruptionReason,
     journal: session.journal,
     observations: session.observations,
     events: session.events,
@@ -374,6 +377,27 @@ async function handleApi(request, response, pathname) {
     broadcast({ type: 'session.state', state: 'recording', id: session.id });
     return sendJson(response, 201, { session });
   }
+  if (request.method === 'POST' && pathname === '/api/sessions/compare') {
+    const body = await bodyJson(request);
+    const leftSession = store.getSession(body.leftSessionId);
+    const rightSession = store.getSession(body.rightSessionId);
+    if (!leftSession || !rightSession) return sendJson(response, 404, { error: 'comparison session not found' });
+    try {
+      const options = {
+        estimatorVersion: body.estimatorVersion || 'activity-field/1',
+        gridSize: Number(body.gridSize || 28),
+        power: Number(body.power || 2),
+        weights: body.weights || {}
+      };
+      const comparison = compareRecomputedArtifacts(
+        recomputeSession(leftSession, options),
+        recomputeSession(rightSession, options)
+      );
+      return sendJson(response, 200, { comparison });
+    } catch (error) {
+      return sendJson(response, error.code === 'INCOMPLETE_SNAPSHOT' ? 409 : 422, { error: error.message });
+    }
+  }
   if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'sessions' && parts[3] === 'stop') {
     const session = await store.finishSession(parts[2]);
     if (recordingSessionId === parts[2]) recordingSessionId = null;
@@ -393,6 +417,19 @@ async function handleApi(request, response, pathname) {
     const session = store.getSession(parts[2]);
     if (!session) return sendJson(response, 404, { error: 'session not found' });
     return sendJson(response, 200, verifySessionPackage(sessionPackage(session)));
+  }
+  if (request.method === 'GET' && parts[0] === 'api' && parts[1] === 'sessions' && parts[2] && parts[3] === 'replay') {
+    const session = store.getSession(parts[2]);
+    if (!session) return sendJson(response, 404, { error: 'session not found' });
+    const mode = new URL(request.url, 'http://127.0.0.1').searchParams.get('mode') || 'historical';
+    try {
+      if (mode === 'historical') return sendJson(response, 200, { replay: createHistoricalReplay(session) });
+      if (mode === 'recompute') return sendJson(response, 200, { replay: recomputeSession(session) });
+      if (mode === 'determinism') return sendJson(response, 200, { report: verifyDeterminism(session) });
+      return sendJson(response, 400, { error: 'unsupported replay mode' });
+    } catch (error) {
+      return sendJson(response, error.code === 'INCOMPLETE_SNAPSHOT' ? 409 : 422, { error: error.message });
+    }
   }
   if (request.method === 'POST' && pathname === '/api/sessions/import') {
     const body = await bodyJson(request);
@@ -543,7 +580,7 @@ server.on('upgrade', (request, socket) => {
 });
 
 const simulator = createSimulator({
-  sources: activeScene.sources,
+  sources: activeScene.sources.filter((source) => source.adapterType === 'simulator'),
   emit: (observation) => {
     ingest(observation).catch((error) => diagnostics.push({
       type: 'simulator.error',
