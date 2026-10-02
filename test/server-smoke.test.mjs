@@ -178,6 +178,12 @@ test('loopback server smoke covers live websocket reconnect, adapter ingress, se
     assert.equal(health.loopbackOnly, true);
     assert.equal(typeof health.launchToken, 'string');
 
+    const sceneView = await requestJson(baseUrl + '/api/scene-view');
+    assert.equal(sceneView.response.status, 200);
+    assert.equal(sceneView.payload.format, 'sidechannel.scene-view/1');
+    assert.ok(Array.isArray(sceneView.payload.sourceProjections));
+    assert.ok(sceneView.payload.sourceProjections.some((source) => source.health === 'live'));
+
     const posture = await requestJson(baseUrl + '/api/security-posture');
     assert.equal(posture.response.status, 200);
     assert.equal(posture.payload.format, 'sidechannel-security-posture');

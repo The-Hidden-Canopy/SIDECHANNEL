@@ -119,6 +119,8 @@ The spatial frame panel can create and activate multiple bounded local scenes. A
 
 The live client requests `/api/state?view=compact` whenever the loopback WebSocket opens, including after a disconnect/reconnect. The compact snapshot carries the active scene, bounded current observations, diagnostics/events, scene directory, sessions, recording state, and fresh launch token without requiring a browser refresh. This is local reconnect behavior, not a claim of adapter transport continuity or hardware availability.
 
+The explicit `sidechannel.scene-view/1` contract is available at `/api/scene-view` and is also used for live reconnect refreshes. It bounds source projections, current observations, events, diagnostics, and adapter runtime entries for presentation; the response carries truncation limits and summary counts so a renderer can distinguish a bounded view from a complete session package. Historical detail remains available through session/replay routes.
+
 Source rows consume runtime adapter events and expose explicit `live`, `stale`, `waiting`, `disconnected`, or `quarantined` health states. A disconnected simulator is not presented as live solely because a previous observation remains fresh; adapter state is an independent runtime signal.
 
 Layer controls are also grouped into Signals, Evidence overlays, and Scene context. Group actions change only the child visibility flags; the individual layer checkboxes remain authoritative and can be changed afterward. Grouping is a presentation convenience and does not alter admitted observations, field values, support, or historical session packages.

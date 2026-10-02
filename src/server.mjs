@@ -33,6 +33,7 @@ import { createCoOccurrenceArtifact } from './evaluation/cooccurrence.mjs';
 import { runFaultCampaign, verifyFaultCampaignReceipt } from './verification/faults.mjs';
 import { interpolateAdaptiveActivityField } from './spatial/adaptive.mjs';
 import { evaluateFieldGraph } from './evaluation/graph.mjs';
+import { createSceneView } from './scene-view.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -115,14 +116,18 @@ function activateScene(scene) {
 }
 
 function snapshot({ compact = false } = {}) {
-  const base = {
+  const view = createSceneView({
     scene: activeScene,
     observations: currentObservations(),
-    events: recentEvents.slice(-40),
-    diagnostics: diagnostics.slice(-40),
+    events: recentEvents,
+    diagnostics,
+    adapterRuntime: adapterSupervisor.list(),
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
-      : null,
+      : null
+  });
+  const base = {
+    ...view,
     scenes: store.listScenes(),
     sessions: store.listSessions(),
     server: {
@@ -422,6 +427,9 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/state') {
     const view = new URL(request.url, 'http://127.0.0.1').searchParams.get('view');
     return sendJson(response, 200, snapshot({ compact: view === 'compact' }));
+  }
+  if (request.method === 'GET' && pathname === '/api/scene-view') {
+    return sendJson(response, 200, snapshot({ compact: true }));
   }
   if (request.method === 'GET' && pathname === '/api/adapters') {
     return sendJson(response, 200, { adapters: listAdapters() });

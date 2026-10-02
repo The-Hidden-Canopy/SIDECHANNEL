@@ -129,7 +129,7 @@ function api(path, options) {
 }
 
 function refreshLiveState() {
-  return api('/api/state?view=compact').then(hydrate);
+  return api('/api/scene-view').then(hydrate);
 }
 
 function downloadJson(filename, payload) {

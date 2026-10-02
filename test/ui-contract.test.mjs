@@ -30,6 +30,7 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /state\.adapterRuntime/);
   assert.match(appSource, /adapter\.state !== 'RUNNING'/);
   assert.match(appSource, /adapter\.runtime/);
+  assert.match(appSource, /\/api\/scene-view/);
   assert.match(appSource, /renderBudgetForObservationCount/);
   assert.match(appSource, /state\.renderBudget/);
   assert.match(appSource, /budget\.trailLimit/);
@@ -78,7 +79,7 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /scenePointFromEvent/);
   assert.match(appSource, /\/activate/);
   assert.match(appSource, /state\.scenes/);
-  assert.match(appSource, /api\('\/api\/state\?view=compact'/);
+  assert.match(appSource, /api\('\/api\/scene-view'/);
   assert.match(appSource, /refreshLiveState/);
   assert.match(appSource, /activityWeights/);
   assert.match(appSource, /Activity weights must be between 0 and 2/);

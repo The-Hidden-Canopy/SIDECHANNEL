@@ -70,6 +70,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Runtime adapter events drive explicit live, stale, waiting, disconnected, and quarantined source states in the local workspace.'
   },
   {
+    id: 'bounded-scene-view',
+    label: 'Bounded live SceneView contract',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The live workspace consumes a versioned, bounded SceneView containing source projections, current observations, adapter health, events, diagnostics, and explicit truncation limits.'
+  },
+  {
     id: 'bounded-websocket-controls',
     label: 'Bounded WebSocket controls',
     status: 'implemented',
