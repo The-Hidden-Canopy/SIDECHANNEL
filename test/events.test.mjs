@@ -34,3 +34,12 @@ test('event detector emits bounded change events and respects cooldown', () => {
   assert.equal(detector.observe(item('four', 2200, 10), source), null);
   assert.equal(detector.observe(item('five', 3300, 80), source).magnitude, 0.7);
 });
+
+test('out-of-order observations do not replace the detector baseline', () => {
+  const detector = createEventDetector({ threshold: 0.2, cooldownMs: 0, idFactory: () => 'ordered' });
+  assert.equal(detector.observe(item('one', 1000, 20), source), null);
+  assert.equal(detector.observe(item('late', 900, 90), source), null);
+  const event = detector.observe(item('two', 1100, 60), source);
+  assert.equal(event.from, 0.2);
+  assert.equal(event.to, 0.6);
+});

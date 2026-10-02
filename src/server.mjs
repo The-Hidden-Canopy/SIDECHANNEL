@@ -10,6 +10,7 @@ import { SqliteStore } from './sqlite-store.mjs';
 import { consumeTextFrames, encodeTextFrame } from './websocket.mjs';
 import { listAdapters } from './adapters/registry.mjs';
 import { createEventDetector } from './events.mjs';
+import { createIngressSequencer } from './admission/sequencer.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -28,6 +29,8 @@ const diagnostics = [];
 const recentEvents = [];
 const clients = new Set();
 const eventDetector = createEventDetector();
+let admissionSequence = 0;
+const admittedIds = new Set();
 
 function sourceMap() {
   return new Map(activeScene.sources.map((source) => [source.id, source]));
@@ -94,21 +97,35 @@ function broadcast(event) {
   }
 }
 
-async function ingest(raw) {
+function recordDiagnostic(diagnostic) {
+  diagnostics.push(diagnostic);
+  broadcast(diagnostic);
+  return { ok: false, diagnostic };
+}
+
+async function processObservation(raw) {
   const result = validateObservation(raw, { sources: sourceMap() });
   if (!result.ok) {
-    const diagnostic = {
+    return recordDiagnostic({
       type: 'observation.rejected',
       id: result.id,
       reasons: result.reasons,
       receivedAtMs: Date.now()
-    };
-    diagnostics.push(diagnostic);
-    broadcast(diagnostic);
-    return { ok: false, diagnostic };
+    });
   }
 
-  const observation = result.observation;
+  if (admittedIds.has(result.observation.id)) {
+    return recordDiagnostic({
+      type: 'observation.rejected',
+      id: result.observation.id,
+      reasons: [{ id: 'id.duplicate', message: 'observation id was already admitted' }],
+      receivedAtMs: Date.now()
+    });
+  }
+
+  admittedIds.add(result.observation.id);
+  if (admittedIds.size > 4096) admittedIds.delete(admittedIds.values().next().value);
+  const observation = { ...result.observation, sequence: ++admissionSequence };
   latest.set(observation.sourceId + ':' + observation.channel, observation);
   if (recordingSessionId) await store.appendObservation(recordingSessionId, observation);
   broadcast({ type: 'observation.accepted', observation });
@@ -119,6 +136,23 @@ async function ingest(raw) {
     broadcast({ type: 'event.detected', event });
   }
   return { ok: true, observation };
+}
+
+const ingressSequencer = createIngressSequencer({
+  maxQueue: 512,
+  process: processObservation,
+  onDrop(raw, depth) {
+    return recordDiagnostic({
+      type: 'observation.rejected',
+      id: raw?.id || 'unknown',
+      reasons: [{ id: 'ingress.queue_full', message: 'bounded ingress queue is full at depth ' + depth }],
+      receivedAtMs: Date.now()
+    });
+  }
+});
+
+function ingest(raw) {
+  return ingressSequencer.enqueue(raw);
 }
 
 function sessionPackage(session) {

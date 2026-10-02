@@ -11,6 +11,7 @@ export function createEventDetector({ threshold = 0.18, cooldownMs = 1000, idFac
       const key = observation.sourceId + ':' + observation.channel;
       const prior = previous.get(key);
       const currentIntensity = normalizeIntensity(observation.channel, observation.value, source);
+      if (prior && observation.timestampMs < prior.observation.timestampMs) return null;
       previous.set(key, { observation, intensity: currentIntensity });
       if (!prior) return null;
 
