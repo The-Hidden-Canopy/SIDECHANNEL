@@ -22,3 +22,10 @@ test('benchmark receipt verification detects tampering', () => {
   assert.equal(verification.ok, false);
   assert.ok(verification.reasons.includes('benchmark receipt digest mismatch'));
 });
+
+test('benchmark scales generated sources within bounded software tiers', () => {
+  const receipt = runSoftwareBenchmark({ ticks: 2, gridSize: 4, sourceCount: 8, runId: 'benchmark_scale', seed: 1337 });
+  assert.equal(receipt.sourceCount, 8);
+  assert.equal(receipt.admittedCount, 16);
+  assert.equal(verifySoftwareBenchmarkReceipt(receipt).ok, true);
+});

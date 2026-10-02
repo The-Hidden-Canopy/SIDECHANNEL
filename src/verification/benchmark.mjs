@@ -17,18 +17,51 @@ function digest(value) {
   return createHash('sha256').update(JSON.stringify(value ?? null)).digest('hex');
 }
 
+function benchmarkSources(scene, sourceCount) {
+  if (sourceCount === DEFAULT_SOURCES.length) {
+    return DEFAULT_SOURCES.map((source) => ({ ...source, position: { ...source.position } }));
+  }
+  const columns = Math.max(1, Math.ceil(Math.sqrt(sourceCount * scene.width / scene.height)));
+  const rows = Math.ceil(sourceCount / columns);
+  return Array.from({ length: sourceCount }, (_, index) => {
+    const base = DEFAULT_SOURCES[index % DEFAULT_SOURCES.length];
+    return {
+      ...base,
+      id: base.id + '_' + index,
+      name: base.name + ' ' + (index + 1),
+      position: {
+        x: ((index % columns) + 0.5) * scene.width / columns,
+        y: (Math.floor(index / columns) + 0.5) * scene.height / rows,
+        uncertaintyRadius: base.position.uncertaintyRadius
+      }
+    };
+  });
+}
+
 export function runSoftwareBenchmark({
   ticks = 8,
   gridSize = 14,
+  sourceCount = DEFAULT_SOURCES.length,
   seed = 1337,
   runId = 'benchmark_' + Date.now(),
   sourceCommit = 'unknown'
 } = {}) {
   if (!Number.isInteger(ticks) || ticks < 1 || ticks > 10000) throw new Error('ticks must be between 1 and 10000');
   if (!Number.isInteger(gridSize) || gridSize < 2 || gridSize > 256) throw new Error('gridSize must be between 2 and 256');
+  if (!Number.isInteger(sourceCount) || sourceCount < 1 || sourceCount > 512) throw new Error('sourceCount must be between 1 and 512');
 
-  const scene = createDefaultScene();
-  const sources = DEFAULT_SOURCES.map((source) => ({ ...source, position: { ...source.position } }));
+  const sceneBase = createDefaultScene();
+  const sources = benchmarkSources(sceneBase, sourceCount);
+  const scene = {
+    ...sceneBase,
+    sources,
+    placements: sources.map((source) => ({
+      sourceId: source.id,
+      position: { ...source.position },
+      calibrationState: 'calibrated',
+      calibratedAtMs: 0
+    }))
+  };
   const sourceMap = new Map(sources.map((source) => [source.id, source]));
   const admitted = [];
   const rejected = [];
@@ -87,6 +120,7 @@ export function runSoftwareBenchmark({
     seed,
     ticks,
     gridSize,
+    sourceCount,
     admittedCount: admitted.length,
     rejectedCount: rejected.length,
     publishedArtifactCount: 1,
@@ -118,11 +152,12 @@ export function verifySoftwareBenchmarkReceipt(receipt) {
   for (const field of ['runId', 'sourceCommit', 'runtimeBuildId', 'schemaDigest']) {
     if (typeof receipt?.[field] !== 'string' || receipt[field].length === 0) reasons.push('missing benchmark field: ' + field);
   }
-  for (const field of ['ticks', 'gridSize', 'admittedCount', 'rejectedCount', 'publishedArtifactCount', 'fieldCellCount']) {
+  for (const field of ['ticks', 'gridSize', 'sourceCount', 'admittedCount', 'rejectedCount', 'publishedArtifactCount', 'fieldCellCount']) {
     if (!Number.isInteger(receipt?.[field]) || receipt[field] < 0) reasons.push('invalid benchmark count: ' + field);
   }
   if (!Number.isInteger(receipt?.ticks) || receipt.ticks < 1 || receipt.ticks > 10000) reasons.push('ticks outside benchmark bounds');
   if (!Number.isInteger(receipt?.gridSize) || receipt.gridSize < 2 || receipt.gridSize > 256) reasons.push('gridSize outside benchmark bounds');
+  if (!Number.isInteger(receipt?.sourceCount) || receipt.sourceCount < 1 || receipt.sourceCount > 512) reasons.push('sourceCount outside benchmark bounds');
   for (const field of ['durationMs', 'framesPerSecond', 'fieldEvaluationMs']) {
     if (!Number.isFinite(receipt?.[field]) || receipt[field] < 0) reasons.push('invalid benchmark metric: ' + field);
   }

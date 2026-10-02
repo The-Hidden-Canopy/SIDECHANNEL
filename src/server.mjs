@@ -274,6 +274,7 @@ async function handleApi(request, response, pathname) {
       const receipt = runSoftwareBenchmark({
         ticks: body.ticks === undefined ? 8 : Number(body.ticks),
         gridSize: body.gridSize === undefined ? 14 : Number(body.gridSize),
+        sourceCount: body.sourceCount === undefined ? 9 : Number(body.sourceCount),
         seed: body.seed === undefined ? 1337 : Number(body.seed),
         sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
       });
