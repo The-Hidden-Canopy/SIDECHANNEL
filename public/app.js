@@ -77,6 +77,7 @@ const state = {
   temporalComparison: null,
   temporalComparisonBusy: false,
   replayMode: 'historical',
+  viewPaused: false,
   capabilities: null,
   benchmarkReceipt: null,
   benchmarkBusy: false,
@@ -302,6 +303,7 @@ function updateObservation(observation) {
   const next = state.observations.filter((item) => item.sourceId + ':' + item.channel !== key);
   next.push(observation);
   state.observations = next;
+  if (state.viewPaused) return;
   render();
 }
 
@@ -1216,6 +1218,9 @@ function render() {
   document.getElementById('recordButton').textContent = state.recording ? 'Stop recording' : 'Start recording';
   document.getElementById('recordButton').classList.toggle('accent', !state.recording);
   document.getElementById('recordButton').classList.toggle('ghost', Boolean(state.recording));
+  const pauseViewButton = document.getElementById('pauseViewButton');
+  pauseViewButton.textContent = state.viewPaused ? 'Resume view' : 'Pause view';
+  pauseViewButton.classList.toggle('edit-active', state.viewPaused);
   const selectedSessionId = document.getElementById('sessionSelect').value;
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
@@ -1236,8 +1241,13 @@ document.getElementById('recordButton').addEventListener('click', async () => {
 });
 
 document.getElementById('liveButton').addEventListener('click', () => {
-  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null;
+  state.replay = null; state.replayArtifact = null; state.replayReport = null; state.replayMode = 'historical'; state.selected = null; state.viewPaused = false;
   state.temporalPins = { a: null, b: null }; state.temporalComparison = null; api('/api/state').then(hydrate);
+});
+
+document.getElementById('pauseViewButton').addEventListener('click', () => {
+  state.viewPaused = !state.viewPaused;
+  render();
 });
 
 document.getElementById('exportButton').addEventListener('click', () => {
@@ -1828,7 +1838,7 @@ function connect() {
     }
     if (message.type === 'event.detected') {
       state.events = [...state.events, message.event].slice(-40);
-      renderEvents();
+      if (!state.viewPaused) renderEvents();
     }
     if (message.type === 'scene.updated') { state.scene = message.scene; syncBackgroundImage(); render(); }
     if (message.type === 'session.state') api('/api/state').then(hydrate);

@@ -79,6 +79,8 @@ The workspace exposes two derived comparison paths. The two-session `Compare` ac
 
 Replay also exposes bounded temporal evidence markers. Activity-change events use the activity marker style; retained runtime-journal mutations such as calibration, transform, provider, permission, rejection, and session-boundary entries use the journal marker style. Selecting a marker moves the replay cursor to that retained timestamp. This is historical navigation over the session package, not a new measurement or proof that a physical mutation occurred outside the recorded runtime.
 
+The live workspace can pause its presentation without stopping ingestion or recording. While `Pause view` is active, accepted observations and detected events continue updating client state and the server-side session; the canvas and event presentation resume from the latest retained state when the operator chooses `Resume view`. This is a view-control behavior, not a backpressure or acquisition pause guarantee.
+
 The Layers panel independently toggles the unified activity field, each channel field, support/confidence rendering, uncertainty geometry, replay trails, and activity-event pulses. Support changes visual opacity only; it never changes the underlying field value. Geometry and trail overlays are bounded to the retained observation/session data and remain software-derived evidence.
 
 Layer controls are also grouped into Signals, Evidence overlays, and Scene context. Group actions change only the child visibility flags; the individual layer checkboxes remain authoritative and can be changed afterward. Grouping is a presentation convenience and does not alter admitted observations, field values, support, or historical session packages.

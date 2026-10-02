@@ -47,6 +47,10 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /Data age/);
   assert.match(appSource, /evidenceState === 'inferred'/);
   assert.match(appSource, /state\.visible\.age/);
+  assert.match(appSource, /viewPaused/);
+  assert.match(appSource, /Pause view/);
+  assert.match(appSource, /Resume view/);
+  assert.match(appSource, /if \(state\.viewPaused\) return/);
   assert.match(appSource, /renderTransforms/);
   assert.match(appSource, /transformForm/);
   assert.match(appSource, /\/api\/transforms/);
@@ -57,6 +61,7 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /backgroundForm/);
   assert.match(htmlSource, /id="backgroundFile"/);
   assert.match(htmlSource, /Remove background/);
+  assert.match(htmlSource, /id="pauseViewButton"/);
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);
   assert.match(appSource, /sceneUnit/);

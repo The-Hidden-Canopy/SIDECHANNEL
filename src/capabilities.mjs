@@ -140,6 +140,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Source marks expose stale age, uncalibrated state, and inferred/derived shape semantics without changing admitted values or status.'
   },
   {
+    id: 'paused-live-view',
+    label: 'Paused live view',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The workspace can freeze presentation updates while the loopback stream, admission, and active recording continue receiving data.'
+  },
+  {
     id: 'scene-regions-and-zones',
     label: 'Scene rooms and zones',
     status: 'implemented',
