@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
@@ -79,7 +80,7 @@ std::int64_t now_ms() {
 int run_ipc_stdio(const std::string& token, const std::string& session_file) {
   std::unique_ptr<sidechannel::NativeSessionStore> session;
   if (!session_file.empty()) {
-    session = std::make_unique<sidechannel::NativeSessionStore>(session_file, "session_native_ipc");
+    session = std::make_unique<sidechannel::NativeSessionStore>(session_file, "session_native_cli");
     if (!session->open()) {
       std::cerr << "could not open native IPC session file\n";
       return 1;
@@ -167,6 +168,7 @@ int main(int argc, char** argv) {
   bool json = false;
   bool session_json = false;
   std::string session_file;
+  std::string export_file;
   std::string ipc_token;
   for (int index = 1; index < argc; ++index) {
     if (std::string(argv[index]) == "--ticks" && index + 1 < argc) {
@@ -179,16 +181,23 @@ int main(int argc, char** argv) {
       session_json = true;
     } else if (std::string(argv[index]) == "--session-file" && index + 1 < argc) {
       session_file = argv[++index];
+    } else if (std::string(argv[index]) == "--export-json" && index + 1 < argc) {
+      export_file = argv[++index];
     } else if (std::string(argv[index]) == "--ipc-stdio" && index + 1 < argc) {
       ipc_token = argv[++index];
     } else {
-      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH|--ipc-stdio TOKEN [--session-file PATH]]\n";
+      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH [--export-json PATH]|--ipc-stdio TOKEN [--session-file PATH]]\n";
       return 2;
     }
   }
   if (!ipc_token.empty()) {
-    if (csv || json || session_json) {
+    if (csv || json || session_json || !export_file.empty()) {
       std::cerr << "ipc mode cannot be combined with a fixture output format\n";
+      return 2;
+    }
+  } else if (!export_file.empty()) {
+    if (session_file.empty() || csv || json || session_json) {
+      std::cerr << "--export-json requires --session-file and cannot be combined with another output format\n";
       return 2;
     }
   } else if (static_cast<int>(csv) + static_cast<int>(json) + static_cast<int>(session_json) +
@@ -237,11 +246,31 @@ int main(int argc, char** argv) {
       std::cerr << "native session verification failed: " << verification.error << '\n';
       return 1;
     }
+    bool exported = false;
+    if (!export_file.empty()) {
+      if (store.state() != "completed") {
+        std::cerr << "native session export requires a completed session\n";
+        return 1;
+      }
+      std::ofstream export_output(export_file, std::ios::binary | std::ios::trunc);
+      if (!export_output) {
+        std::cerr << "could not open native session export path\n";
+        return 1;
+      }
+      export_output << store.export_json() << '\n';
+      export_output.flush();
+      if (!export_output) {
+        std::cerr << "could not write native session export\n";
+        return 1;
+      }
+      exported = true;
+    }
     std::cout << "{\"format\":\"sidechannel-native-session-receipt/1\",\"state\":";
     write_json_string(store.state());
     std::cout << ",\"persisted\":" << (persisted ? "true" : "false")
       << ",\"observations\":" << store.observations().size()
       << ",\"journalEvents\":" << store.journal().entries().size()
+      << ",\"exported\":" << (exported ? "true" : "false")
       << ",\"verified\":true}\n";
     return 0;
   }

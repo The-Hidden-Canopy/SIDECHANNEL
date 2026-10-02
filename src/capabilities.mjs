@@ -95,7 +95,14 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Native durable session journal and replay foundation',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'The native reference core persists hash-chained events and encoded observation rows, recovers unclosed files as interrupted, and verifies replay parity; it is not yet native SQLite, IPC, desktop, or hardware authority.'
+    note: 'The native reference core persists hash-chained events and encoded observation rows, recovers unclosed files as interrupted, and verifies replay parity; it is not native SQLite authority, a desktop shell, or hardware authority.'
+  },
+  {
+    id: 'native-session-export',
+    label: 'Native persisted-session export',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A completed native file-backed session can be materialized as a sidechannel-session/0.2 package and independently verified by the Node session verifier; interrupted sessions are refused and native SQLite authority remains separate.'
   },
   {
     id: 'native-local-ipc-contract',

@@ -11,6 +11,7 @@
     "verify:benchmark": "node scripts/verify-benchmark.mjs",
     "verify:native-parity": "node scripts/verify-native-parity.mjs",
     "verify:native-session": "node scripts/verify-native-session.mjs",
+    "verify:native-export": "node scripts/verify-native-export.mjs",
     "package:audit": "node scripts/package-audit.mjs",
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:scene-view": "node scripts/benchmark-scene-view.mjs",
