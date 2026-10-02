@@ -58,6 +58,8 @@ Provider identity is authoritative when a source has a registered provider manif
 
 Permission revocation is an active boundary: `POST /api/adapter-runtime/:providerId/revoke` removes the selected grants (or all grants when omitted), records a bounded cancellation reason, and asks a supervised subprocess to stop. The provider remains disabled until permissions are explicitly granted again; this is local process supervision, not a claim that an external hardware device has been powered down.
 
+While a session is recording, calibration publication/invalidation, transform publication, provider start/stop, and permission grant/revocation are appended as hash-chained runtime events. A live API mutation without an active recording session changes current state only; it is not retroactively inserted into a historical session.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

@@ -56,6 +56,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Calibration reuse is bound to the current transform revision so spatial-anchor changes invalidate new use.'
   },
   {
+    id: 'authoritative-mutation-journal',
+    label: 'Authoritative mutation journal',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Recorded sessions retain hash-chained calibration, transform, provider, and permission mutation events.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

@@ -139,6 +139,11 @@ function recordDiagnostic(diagnostic) {
   return { ok: false, diagnostic };
 }
 
+function appendRuntimeEvent(type, payload = {}, timestampMs = Date.now()) {
+  if (!recordingSessionId) return null;
+  return store.appendRuntimeEvent(recordingSessionId, type, payload, timestampMs);
+}
+
 function recordAdapterFailure(providerId, reason) {
   const adapter = adapterSupervisor.recordFailure(providerId, reason);
   const diagnostic = {
@@ -151,14 +156,14 @@ function recordAdapterFailure(providerId, reason) {
   };
   recordDiagnostic(diagnostic);
   if (recordingSessionId) {
-    store.appendRuntimeEvent(recordingSessionId, 'AdapterFailure', {
+    appendRuntimeEvent('AdapterFailure', {
       providerId,
       reason,
       state: adapter.state,
       failureCount: adapter.failureCount
     }, diagnostic.receivedAtMs);
     if (adapter.state === 'QUARANTINED') {
-      store.appendRuntimeEvent(recordingSessionId, 'AdapterQuarantined', {
+      appendRuntimeEvent('AdapterQuarantined', {
         providerId,
         reason,
         failureCount: adapter.failureCount
@@ -343,14 +348,28 @@ async function handleApi(request, response, pathname) {
       const body = parts[3] === 'grant' || parts[3] === 'revoke' || parts[3] === 'failure' ? await bodyJson(request) : {};
       let adapter;
       let cancellation = null;
-      if (parts[3] === 'grant') adapter = adapterSupervisor.grantPermissions(providerId, body.permissions || []);
+      if (parts[3] === 'grant') {
+        adapter = adapterSupervisor.grantPermissions(providerId, body.permissions || []);
+        appendRuntimeEvent('PermissionGranted', { providerId, permissions: adapter.grantedPermissions });
+      }
       else if (parts[3] === 'revoke') {
         const result = await adapterSupervisor.revokePermissions(providerId, body.permissions || []);
         adapter = result.adapter;
         cancellation = result.cancellation;
+        appendRuntimeEvent('PermissionRevoked', {
+          providerId,
+          permissions: adapter.lastCancellation?.permissions || body.permissions || [],
+          cancellation: adapter.lastCancellation?.reason || 'permission_revoked'
+        });
       }
-      else if (parts[3] === 'start') adapter = adapterSupervisor.start(providerId);
-      else if (parts[3] === 'stop') adapter = adapterSupervisor.stop(providerId);
+      else if (parts[3] === 'start') {
+        adapter = adapterSupervisor.start(providerId);
+        appendRuntimeEvent('ProviderStarted', { providerId });
+      }
+      else if (parts[3] === 'stop') {
+        adapter = adapterSupervisor.stop(providerId);
+        appendRuntimeEvent('ProviderStopped', { providerId });
+      }
       else if (parts[3] === 'success') adapter = adapterSupervisor.recordSuccess(providerId);
       else if (parts[3] === 'failure') adapter = recordAdapterFailure(providerId, body.reason || 'operator-reported failure');
       else if (parts[3] === 'clear-quarantine') adapter = adapterSupervisor.clearQuarantine(providerId);
@@ -404,6 +423,14 @@ async function handleApi(request, response, pathname) {
         ...(runtimeProviderDigest ? { providerDigest: runtimeProviderDigest } : {}),
         transformRevision: runtimeTransformRevision
       });
+      appendRuntimeEvent('CalibrationPublished', {
+        calibrationId: calibration.calibrationId,
+        revision: calibration.revision,
+        sourceId: calibration.sourceId,
+        providerDigest: calibration.providerDigest,
+        sourceProfileDigest: calibration.sourceProfileDigest,
+        transformRevision: calibration.transformRevision
+      }, calibration.createdAtMs);
       return sendJson(response, 201, calibration);
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
@@ -415,7 +442,15 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'POST' && pathname === '/api/transforms') {
     const body = await bodyJson(request);
     try {
-      return sendJson(response, 201, transformGraph.publish(body));
+      const transform = transformGraph.publish(body);
+      appendRuntimeEvent('TransformRevisionPublished', {
+        transformId: transform.transformId,
+        revision: transform.revision,
+        fromFrame: transform.fromFrame,
+        toFrame: transform.toFrame,
+        calibrationRef: transform.calibrationRef
+      }, transform.validFrom);
+      return sendJson(response, 201, transform);
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
     }
@@ -423,6 +458,13 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'calibrations' && parts[2] && parts[3] === 'invalidate') {
     const body = await bodyJson(request);
     const calibration = calibrationRegistry.invalidate(parts[2], body.reason || 'operator invalidation');
+    if (calibration) {
+      appendRuntimeEvent('CalibrationInvalidated', {
+        calibrationId: calibration.calibrationId,
+        revision: calibration.revision,
+        reason: calibration.invalidationReason
+      });
+    }
     return sendJson(response, calibration ? 200 : 404, calibration || { error: 'calibration not found' });
   }
   if (request.method === 'GET' && pathname === '/api/scenes') {
