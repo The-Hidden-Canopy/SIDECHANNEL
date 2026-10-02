@@ -178,6 +178,12 @@ test('loopback server smoke covers live websocket reconnect, source admission, s
     assert.equal(health.loopbackOnly, true);
     assert.equal(typeof health.launchToken, 'string');
 
+    const posture = await requestJson(baseUrl + '/api/security-posture');
+    assert.equal(posture.response.status, 200);
+    assert.equal(posture.payload.format, 'sidechannel-security-posture');
+    assert.ok(posture.payload.claims.some((claim) => claim.id === 'privacy-admission' && claim.status === 'enforced'));
+    assert.ok(posture.payload.claims.some((claim) => claim.id === 'deployment-hardening' && claim.status === 'external-gate'));
+
     const live = await withTimeout(openLiveSocket(port), 3000, 'live websocket handshake');
     liveSocket = live.socket;
     const initialSnapshot = await withTimeout(live.nextFrame(), 3000, 'initial live snapshot');

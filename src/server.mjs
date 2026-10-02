@@ -22,6 +22,7 @@ import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, v
 import { createReplayReceipt } from './verification/receipt.mjs';
 import { runBurstBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
 import { capabilitySnapshot } from './capabilities.mjs';
+import { securityPostureSnapshot } from './security-posture.mjs';
 import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/source-profile.mjs';
 import { PoseHistory } from './spatial/pose-history.mjs';
 import { SCENE_UNITS, validateRegion, validateRegions } from './spatial/regions.mjs';
@@ -406,6 +407,9 @@ async function handleApi(request, response, pathname) {
   }
   if (request.method === 'GET' && pathname === '/api/capabilities') {
     return sendJson(response, 200, capabilitySnapshot());
+  }
+  if (request.method === 'GET' && pathname === '/api/security-posture') {
+    return sendJson(response, 200, securityPostureSnapshot());
   }
   if (request.method === 'GET' && pathname === '/api/state') {
     const view = new URL(request.url, 'http://127.0.0.1').searchParams.get('view');

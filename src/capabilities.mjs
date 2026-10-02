@@ -49,6 +49,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Source privacy modes and classes are validated; raw content and persistent device identity fields are rejected by default, explicit provider and privacy opt-in is required, sensitive values are omitted from normalized metadata, and imported packages reject retained sensitive fields.'
   },
   {
+    id: 'security-posture',
+    label: 'Threat and privacy posture',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A read-only local-software posture matrix exposes enforced transport/privacy controls and keeps deployment, consent, regulatory, and hardware-accuracy gates separate.'
+  },
+  {
     id: 'permission-revocation-cancellation',
     label: 'Permission revocation cancellation',
     status: 'implemented',

@@ -7,6 +7,7 @@ export const RUNTIME_REQUIRED_FILES = Object.freeze([
   'package.json',
   'README.md',
   'docs/PACKAGING.md',
+  'docs/THREAT_MODEL.md',
   'src/server.mjs',
   'public/index.html',
   'public/app.js',
@@ -47,7 +48,7 @@ export function createRuntimeManifest(root) {
   const absoluteRoot = root;
   const sourceFiles = walkFiles(absoluteRoot, 'src').filter((file) => file.endsWith('.mjs'));
   const publicFiles = walkFiles(absoluteRoot, 'public');
-  const fixedFiles = ['package.json', 'README.md', 'docs/PACKAGING.md'];
+  const fixedFiles = ['package.json', 'README.md', 'docs/PACKAGING.md', 'docs/THREAT_MODEL.md'];
   const files = [...new Set([...fixedFiles, ...sourceFiles, ...publicFiles])].sort();
 
   const missing = RUNTIME_REQUIRED_FILES.filter((file) => !files.includes(file) || !statSync(join(absoluteRoot, file), { throwIfNoEntry: false }));
