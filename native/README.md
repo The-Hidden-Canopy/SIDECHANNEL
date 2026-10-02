@@ -32,4 +32,6 @@ The native core also exposes a file-backed `NativeSessionStore` and the CLI's `-
 
 The CLI's `--ipc-stdio TOKEN` mode provides a bounded local process boundary using `sidechannel.native-ipc/1` tab-delimited, hex-encoded frames. It authenticates every frame with the supplied process token, rejects malformed, oversized, or mismatched frames, and supports `ping`, `status`, and `shutdown` responses. This is a local transport/contract receipt, not a network listener, privileged authorization system, or deployment security result.
 
+`sidechannel/c_api.h` exposes the native control surface as an opaque-handle C ABI: open/append/close/verify/state for a native session and bounded IPC-frame encoding. The ABI copies caller data into the native store, validates finite values and bounded quality, and never exposes internal pointers. It is a software interoperability boundary, not a hardware driver API or a security/permission grant.
+
 This is not yet the native authority or a parity-complete export engine. SQLite persistence, local IPC, and native desktop shell integration remain explicit follow-on gates. No hardware adapter is included.

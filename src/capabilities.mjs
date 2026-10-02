@@ -105,6 +105,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The native reference exposes a token-authenticated sidechannel.native-ipc/1 stdio boundary with bounded frames and ping/status/shutdown commands; it is not a network, OS permission, deployment, or hardware claim.'
   },
   {
+    id: 'native-c-api-control-surface',
+    label: 'Opaque native C ABI control surface',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'sidechannel/c_api.h exposes bounded opaque-handle session control and IPC encoding with finite-value admission; it is an interoperability contract, not SQLite, deployment permission, or hardware authority.'
+  },
+  {
     id: 'bounded-websocket-controls',
     label: 'Bounded WebSocket controls',
     status: 'implemented',
