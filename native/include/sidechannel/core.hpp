@@ -32,6 +32,21 @@ struct Observation {
   EvidenceState evidence_state = EvidenceState::unknown;
 };
 
+struct JournalEntry {
+  std::uint64_t sequence = 0;
+  std::int64_t timestamp_ms = 0;
+  std::string type;
+  std::string payload;
+  std::string previous_digest;
+  std::string event_digest;
+};
+
+struct JournalVerification {
+  bool ok = false;
+  std::size_t event_count = 0;
+  std::string error;
+};
+
 struct IngressReceipt {
   std::size_t frames_received = 0;
   std::size_t frames_admitted = 0;
@@ -117,27 +132,14 @@ public:
   explicit SessionArchive(std::string session_id = "session_native_reference");
 
   void append(Observation observation);
+  void set_journal(std::vector<JournalEntry> entries);
   [[nodiscard]] const std::vector<Observation>& observations() const noexcept;
   [[nodiscard]] std::string to_json() const;
 
 private:
   std::string session_id_;
   std::vector<Observation> observations_;
-};
-
-struct JournalEntry {
-  std::uint64_t sequence = 0;
-  std::int64_t timestamp_ms = 0;
-  std::string type;
-  std::string payload;
-  std::string previous_digest;
-  std::string event_digest;
-};
-
-struct JournalVerification {
-  bool ok = false;
-  std::size_t event_count = 0;
-  std::string error;
+  std::vector<JournalEntry> journal_entries_;
 };
 
 struct IpcFrame {
@@ -219,6 +221,7 @@ public:
 
   bool open();
   bool append(Observation observation);
+  bool record_event(std::string type, std::int64_t timestamp_ms, std::string payload);
   bool close(std::int64_t ended_at_ms);
   [[nodiscard]] const std::string& state() const noexcept;
   [[nodiscard]] const std::vector<Observation>& observations() const noexcept;

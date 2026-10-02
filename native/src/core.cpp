@@ -585,6 +585,10 @@ void SessionArchive::append(Observation observation) {
   observations_.push_back(std::move(observation));
 }
 
+void SessionArchive::set_journal(std::vector<JournalEntry> entries) {
+  journal_entries_ = std::move(entries);
+}
+
 const std::vector<Observation>& SessionArchive::observations() const noexcept {
   return observations_;
 }
@@ -612,29 +616,37 @@ std::string SessionArchive::to_json() const {
     << "\",\"historicalSnapshotComplete\":true,\"sessionState\":\"completed\",\"interruptionReason\":null"
     << ",\"poses\":[],\"journal\":[";
   std::ostringstream journal;
-  std::string previous_digest;
   std::size_t journal_sequence = 1;
-  const auto append_journal = [&](std::string_view type, std::int64_t timestamp_ms, const std::string& payload) {
-    const std::string digest = journal_digest(session_id_, journal_sequence, timestamp_ms, type, payload, previous_digest);
-    if (journal_sequence > 1) journal << ',';
-    journal << "{\"id\":\"journal_native_" << journal_sequence << "\",\"sessionId\":"
-      << quote_json(session_id_) << ",\"sequence\":" << journal_sequence
-      << ",\"timestampMs\":" << timestamp_ms << ",\"type\":" << quote_json(type)
-      << ",\"payload\":" << payload << ",\"previousDigest\":"
-      << (previous_digest.empty() ? "null" : quote_json(previous_digest))
-      << ",\"eventDigest\":\"" << digest << "\"}";
-    previous_digest = digest;
-    ++journal_sequence;
+  const auto write_journal_entry = [&journal, this](const JournalEntry& entry) {
+    if (entry.sequence > 1) journal << ',';
+    journal << "{\"id\":\"journal_native_" << entry.sequence << "\",\"sessionId\":"
+      << quote_json(session_id_) << ",\"sequence\":" << entry.sequence
+      << ",\"timestampMs\":" << entry.timestamp_ms << ",\"type\":" << quote_json(entry.type)
+      << ",\"payload\":" << entry.payload << ",\"previousDigest\":"
+      << (entry.previous_digest.empty() ? "null" : quote_json(entry.previous_digest))
+      << ",\"eventDigest\":\"" << entry.event_digest << "\"}";
   };
-  const std::string snapshot_digest = sha256(snapshot_canonical);
-  append_journal("SessionOpened", 0, "{\"snapshotDigest\":\"" + snapshot_digest + "\"}");
-  for (std::size_t index = 0; index < observations_.size(); ++index) {
-    append_journal("ObservationAdmitted", observations_[index].timestamp_ms,
-      "{\"observationId\":" + quote_json(observations_[index].id) +
-      ",\"sequence\":" + std::to_string(observations_[index].sequence) + "}");
+  if (!journal_entries_.empty()) {
+    for (const auto& entry : journal_entries_) write_journal_entry(entry);
+  } else {
+    std::string previous_digest;
+    const auto append_journal = [&](std::string_view type, std::int64_t timestamp_ms, const std::string& payload) {
+      const auto sequence = journal_sequence++;
+      const std::string digest = journal_digest(session_id_, sequence, timestamp_ms, type, payload, previous_digest);
+      JournalEntry entry{sequence, timestamp_ms, std::string(type), payload, previous_digest, digest};
+      write_journal_entry(entry);
+      previous_digest = digest;
+    };
+    const std::string snapshot_digest = sha256(snapshot_canonical);
+    append_journal("SessionOpened", 0, "{\"snapshotDigest\":\"" + snapshot_digest + "\"}");
+    for (std::size_t index = 0; index < observations_.size(); ++index) {
+      append_journal("ObservationAdmitted", observations_[index].timestamp_ms,
+        "{\"observationId\":" + quote_json(observations_[index].id) +
+        ",\"sequence\":" + std::to_string(observations_[index].sequence) + "}");
+    }
+    const auto ended_at_ms = observations_.empty() ? std::int64_t{0} : observations_.back().timestamp_ms;
+    append_journal("SessionClosed", ended_at_ms, "{\"endedAtMs\":" + std::to_string(ended_at_ms) + "}");
   }
-  const auto ended_at_ms = observations_.empty() ? std::int64_t{0} : observations_.back().timestamp_ms;
-  append_journal("SessionClosed", ended_at_ms, "{\"endedAtMs\":" + std::to_string(ended_at_ms) + "}");
   output << journal.str() << "],\"observations\":[";
   for (std::size_t index = 0; index < observations_.size(); ++index) {
     if (index > 0) output << ',';
@@ -981,6 +993,12 @@ bool NativeSessionStore::append(Observation observation) {
   return true;
 }
 
+bool NativeSessionStore::record_event(std::string type, std::int64_t timestamp_ms, std::string payload) {
+  if (state_ != "recording") return false;
+  const auto event = journal_.append(std::move(type), timestamp_ms, std::move(payload));
+  return event.sequence != 0;
+}
+
 bool NativeSessionStore::close(std::int64_t ended_at_ms) {
   if (state_ != "recording") return false;
   const auto closed = journal_.append("SessionClosed", ended_at_ms,
@@ -1027,6 +1045,7 @@ JournalVerification NativeSessionStore::verify() const {
 std::string NativeSessionStore::export_json() const {
   SessionArchive archive(session_id_);
   for (const auto& observation : observations_) archive.append(observation);
+  archive.set_journal(journal_.entries());
   return archive.to_json();
 }
 

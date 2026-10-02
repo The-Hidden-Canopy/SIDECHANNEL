@@ -125,6 +125,8 @@ int main() {
     sidechannel::NativeSessionStore store(journal_path, "session_native_test");
     assert(store.open());
     assert(store.state() == "recording");
+    assert(store.record_event("ProviderRegistered", 100,
+      "{\"providerId\":\"fixture-provider\"}"));
     assert(store.append(first_tick[0]));
     assert(store.close(1250));
     assert(store.state() == "completed");
@@ -136,8 +138,12 @@ int main() {
     assert(reopened.state() == "completed");
     assert(reopened.observations().size() == 1);
     assert(reopened.observations()[0].id == first_tick[0].id);
+    assert(reopened.journal().entries().size() == 4);
+    assert(reopened.journal().entries()[1].type == "ProviderRegistered");
     assert(reopened.verify().ok);
-    assert(reopened.export_json().find("\"packageDigest\":\"") != std::string::npos);
+    const auto exported = reopened.export_json();
+    assert(exported.find("\"packageDigest\":\"") != std::string::npos);
+    assert(exported.find("\"type\":\"ProviderRegistered\"") != std::string::npos);
   }
 
   std::filesystem::remove(journal_path, cleanup_error);

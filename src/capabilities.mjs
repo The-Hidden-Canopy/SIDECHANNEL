@@ -109,7 +109,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Native adapter lifecycle supervisor',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'The native reference admits versioned provider manifests, gates required permissions, bounds lifecycle transitions, quarantines repeated failures, and permits explicit recovery; physical provider processes and hardware accuracy remain separate gates.'
+    note: 'The native reference admits versioned provider manifests, gates required permissions, bounds lifecycle transitions, quarantines repeated failures, permits explicit recovery, and journals successful IPC mutations when a session is attached; physical provider processes and hardware accuracy remain separate gates.'
   },
   {
     id: 'native-local-ipc-contract',

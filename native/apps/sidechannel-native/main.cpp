@@ -30,6 +30,8 @@ void write_json_string(const std::string& value) {
   std::cout << quote_json(value);
 }
 
+std::int64_t now_ms();
+
 std::vector<std::string> split_pipe(const std::string& value) {
   std::vector<std::string> fields;
   std::size_t start = 0;
@@ -89,6 +91,16 @@ std::string adapter_record_json(const sidechannel::NativeAdapterRecord& record) 
   return output.str();
 }
 
+bool journal_adapter_event(sidechannel::NativeSessionStore* session, const std::string& type,
+  const sidechannel::NativeAdapterRecord& record, const std::string& detail = {}) {
+  if (!session) return true;
+  std::string payload = "{\"providerId\":" + quote_json(record.manifest.provider_id) +
+    ",\"state\":" + quote_json(record.state);
+  if (!detail.empty()) payload += ",\"detail\":" + quote_json(detail);
+  payload += '}';
+  return session->record_event(type, now_ms(), payload);
+}
+
 bool parse_observation_payload(const std::string& payload, sidechannel::Observation& observation) {
   const auto fields = split_pipe(payload);
   if (fields.size() != 7 || fields[0].empty() || fields[1].empty() || fields[2].empty()) return false;
@@ -131,6 +143,9 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
       return 1;
     }
   }
+  const auto adapter_events_allowed = [&session]() {
+    return !session || session->state() == "recording";
+  };
 
   std::string line;
   while (std::getline(std::cin, line)) {
@@ -210,17 +225,27 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
         }
       }
       std::string adapter_error;
-      if (!valid || !adapters.register_provider(std::move(manifest), now_ms(), adapter_error)) {
+      if (!adapter_events_allowed()) {
+        response.payload = "{\"error\":\"session is not recording\"}";
+      } else if (!valid || !adapters.register_provider(std::move(manifest), now_ms(), adapter_error)) {
         response.payload = "{\"error\":" + quote_json(valid ? adapter_error : "invalid adapter manifest payload") + '}';
       } else {
-        response.type = "adapter.updated";
-        response.payload = "{\"adapter\":" + adapter_record_json(*adapters.get(fields[0])) + '}';
+        const auto* record = adapters.get(fields[0]);
+        if (!record || !journal_adapter_event(session.get(), "ProviderRegistered", *record)) {
+          response.payload = "{\"error\":\"could not journal adapter registration\"}";
+        } else {
+          response.type = "adapter.updated";
+          response.payload = "{\"adapter\":" + adapter_record_json(*record) + '}';
+        }
       }
     } else if (decoded.frame.type == "adapter.grant" || decoded.frame.type == "adapter.revoke") {
       const auto fields = split_pipe(decoded.frame.payload);
       std::string adapter_error;
       bool ok = fields.size() == 1 || fields.size() == 2;
-      if (ok) {
+      if (!adapter_events_allowed()) {
+        response.payload = "{\"error\":\"session is not recording\"}";
+        ok = false;
+      } else if (ok) {
         const auto permissions = fields.size() == 2 ? split_csv(fields[1]) : std::vector<std::string>{};
         if (decoded.frame.type == "adapter.grant") {
           ok = adapters.grant_permissions(fields[0], permissions, now_ms(), adapter_error);
@@ -232,15 +257,24 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
       }
       if (!ok) response.payload = "{\"error\":" + quote_json(adapter_error) + '}';
       else {
-        response.type = "adapter.updated";
-        response.payload = "{\"adapter\":" + adapter_record_json(*adapters.get(fields[0])) + '}';
+        const auto* record = adapters.get(fields[0]);
+        const auto event_type = decoded.frame.type == "adapter.grant" ? "PermissionGranted" : "PermissionRevoked";
+        if (!record || !journal_adapter_event(session.get(), event_type, *record)) {
+          response.payload = "{\"error\":\"could not journal adapter permission change\"}";
+        } else {
+          response.type = "adapter.updated";
+          response.payload = "{\"adapter\":" + adapter_record_json(*record) + '}';
+        }
       }
     } else if (decoded.frame.type == "adapter.start" || decoded.frame.type == "adapter.stop" ||
         decoded.frame.type == "adapter.clear") {
       const auto fields = split_pipe(decoded.frame.payload);
       std::string adapter_error;
       bool ok = fields.size() == 1;
-      if (ok) {
+      if (!adapter_events_allowed()) {
+        response.payload = "{\"error\":\"session is not recording\"}";
+        ok = false;
+      } else if (ok) {
         if (decoded.frame.type == "adapter.start") ok = adapters.start(fields[0], now_ms(), adapter_error);
         else if (decoded.frame.type == "adapter.stop") ok = adapters.stop(fields[0], now_ms(), adapter_error);
         else ok = adapters.clear_quarantine(fields[0], now_ms(), adapter_error);
@@ -249,17 +283,36 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
       }
       if (!ok) response.payload = "{\"error\":" + quote_json(adapter_error) + '}';
       else {
-        response.type = "adapter.updated";
-        response.payload = "{\"adapter\":" + adapter_record_json(*adapters.get(fields[0])) + '}';
+        const auto* record = adapters.get(fields[0]);
+        const auto event_type = decoded.frame.type == "adapter.start" ? "ProviderStarted" :
+          decoded.frame.type == "adapter.stop" ? "ProviderStopped" : "ProviderQuarantineCleared";
+        if (!record || !journal_adapter_event(session.get(), event_type, *record)) {
+          response.payload = "{\"error\":\"could not journal adapter lifecycle change\"}";
+        } else {
+          response.type = "adapter.updated";
+          response.payload = "{\"adapter\":" + adapter_record_json(*record) + '}';
+        }
       }
     } else if (decoded.frame.type == "adapter.fail") {
       const auto fields = split_pipe(decoded.frame.payload);
       std::string adapter_error;
-      const bool ok = fields.size() == 2 && adapters.record_failure(fields[0], fields[1], now_ms(), adapter_error);
+      bool ok = fields.size() == 2;
+      if (!adapter_events_allowed()) {
+        response.payload = "{\"error\":\"session is not recording\"}";
+        ok = false;
+      } else if (ok) {
+        ok = adapters.record_failure(fields[0], fields[1], now_ms(), adapter_error);
+      }
       if (!ok) response.payload = "{\"error\":" + quote_json(adapter_error.empty() ? "invalid adapter failure payload" : adapter_error) + '}';
       else {
-        response.type = "adapter.updated";
-        response.payload = "{\"adapter\":" + adapter_record_json(*adapters.get(fields[0])) + '}';
+        const auto* record = adapters.get(fields[0]);
+        const auto event_type = record && record->state == "QUARANTINED" ? "ProviderQuarantined" : "ProviderFailureObserved";
+        if (!record || !journal_adapter_event(session.get(), event_type, *record, fields[1])) {
+          response.payload = "{\"error\":\"could not journal adapter failure\"}";
+        } else {
+          response.type = "adapter.updated";
+          response.payload = "{\"adapter\":" + adapter_record_json(*record) + '}';
+        }
       }
     } else if (decoded.frame.type == "adapter.list") {
       if (!decoded.frame.payload.empty()) response.payload = "{\"error\":\"adapter.list does not accept a payload\"}";

@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const executable = process.argv[2];
 
@@ -14,9 +17,11 @@ function frame(id, type, payload = '') {
   return `sidechannel.native-ipc/1\t${hex(String(id))}\t${hex('launch-token')}\t${hex(type)}\t${hex(payload)}\n`;
 }
 
-function runNative(frames) {
+function runNative(frames, sessionPath = null) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, ['--ipc-stdio', 'launch-token'], { windowsHide: true });
+    const args = ['--ipc-stdio', 'launch-token'];
+    if (sessionPath) args.push('--session-file', sessionPath);
+    const child = spawn(executable, args, { windowsHide: true });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => { stdout += chunk; });
@@ -52,7 +57,7 @@ if (!executable) {
   process.exitCode = 2;
 } else {
   try {
-    const responses = decodeResponses(await runNative([
+    const lifecycleFrames = [
       frame(1, 'adapter.register', 'fixture-provider|0.1.0|fixture-digest|normalized_observation|fixture.read|4096'),
       frame(2, 'adapter.start', 'fixture-provider'),
       frame(3, 'adapter.grant', 'fixture-provider|fixture.read'),
@@ -64,7 +69,8 @@ if (!executable) {
       frame(9, 'adapter.clear', 'fixture-provider'),
       frame(10, 'adapter.list'),
       frame(11, 'shutdown')
-    ]));
+    ];
+    const responses = decodeResponses(await runNative(lifecycleFrames));
     const registered = requireResponse(responses, 0, 'adapter.updated');
     if (registered.payload.adapter.state !== 'VALIDATED') throw new Error('registered adapter was not validated');
     const missingPermission = requireResponse(responses, 1, 'error');
@@ -90,11 +96,44 @@ if (!executable) {
       throw new Error('adapter list was not bounded and complete');
     }
     requireResponse(responses, 10, 'stopped');
+    const directory = await mkdtemp(join(tmpdir(), 'sidechannel-native-adapter-journal-'));
+    const sessionPath = join(directory, 'session.scj');
+    try {
+      const sessionResponses = decodeResponses(await runNative([
+        ...lifecycleFrames.slice(0, -1),
+        frame(12, 'session.status'),
+        frame(13, 'session.verify'),
+        frame(14, 'session.close'),
+        frame(15, 'shutdown')
+      ], sessionPath));
+      const sessionQuarantined = requireResponse(sessionResponses, 6, 'adapter.updated');
+      if (sessionQuarantined.payload.adapter.state !== 'QUARANTINED') throw new Error('journaled adapter was not quarantined');
+      const sessionSummary = requireResponse(sessionResponses, 10, 'session.status');
+      if (sessionSummary.payload.journalEvents < 8) throw new Error('adapter lifecycle was not journaled');
+      requireResponse(sessionResponses, 11, 'session.verified');
+      const closed = requireResponse(sessionResponses, 12, 'session.closed');
+      if (closed.payload.state !== 'completed') throw new Error('journaled session did not close');
+      requireResponse(sessionResponses, 13, 'stopped');
+      const reopened = decodeResponses(await runNative([
+        frame(16, 'session.status'),
+        frame(17, 'session.verify'),
+        frame(18, 'shutdown')
+      ], sessionPath));
+      const reopenedStatus = requireResponse(reopened, 0, 'session.status');
+      if (reopenedStatus.payload.journalEvents < 8 || reopenedStatus.payload.state !== 'completed') {
+        throw new Error('journaled adapter session did not reopen with durable state');
+      }
+      requireResponse(reopened, 1, 'session.verified');
+      requireResponse(reopened, 2, 'stopped');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
     console.log(JSON.stringify({
       ok: true,
       protocol: 'sidechannel.native-ipc/1',
       transitions: ['register', 'permission-reject', 'grant', 'start', 'failure', 'quarantine', 'clear', 'list'],
       quarantineRecoveryVerified: true,
+      adapterJournalAndReopenVerified: true,
       hardwareAdaptersExercised: false
     }, null, 2));
   } catch (error) {
