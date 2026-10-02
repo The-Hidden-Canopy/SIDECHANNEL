@@ -67,3 +67,27 @@ test('session verifier detects snapshot and sequence tampering', () => {
   assert.ok(report.reasons.includes('observation sequence is not strictly increasing'));
   assert.ok(report.reasons.includes('journal event digest mismatch'));
 });
+
+test('session verifier requires retained pose samples for pose-resolved observations', () => {
+  const packaged = packageData();
+  packaged.observations[0].poseRef = 'pose_1';
+  packaged.observations[0].poseFrameId = 'scene';
+  packaged.poses = [{
+    schema: 'sidechannel.pose/1',
+    sampleId: 'pose_1',
+    sourceId: 'source_1',
+    timestampMs: 1000,
+    frameId: 'scene',
+    position: { x: 1, y: 1 }
+  }];
+  const valid = verifySessionPackage(packaged);
+  assert.equal(valid.ok, true);
+  assert.equal(valid.checks.poseCount, 1);
+  assert.equal(valid.checks.poseReferencesVerified, true);
+
+  packaged.poses = [];
+  const missing = verifySessionPackage(packaged);
+  assert.equal(missing.ok, false);
+  assert.equal(missing.checks.poseReferencesVerified, false);
+  assert.ok(missing.reasons.some((reason) => reason.includes('pose sample not retained')));
+});

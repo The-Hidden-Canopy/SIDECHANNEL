@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto';
 import { computeSnapshotDigest } from './sqlite-store.mjs';
 import { HashChainJournal } from './journal.mjs';
+import { validatePoseSample } from './spatial/pose-history.mjs';
 
 export const SESSION_PACKAGE_LIMITS = Object.freeze({
   maxSerializedBytes: 2_000_000,
   maxObservations: 100_000,
   maxEvents: 100_000,
   maxJournal: 200_000,
-  maxSources: 10_000
+  maxSources: 10_000,
+  maxPoses: 10_000
 });
 
 export function computePackageDigest(packageData) {
@@ -21,6 +23,9 @@ export function verifySessionPackage(packageData) {
   const warnings = [];
   const observations = Array.isArray(packageData?.observations) ? packageData.observations : null;
   const events = Array.isArray(packageData?.events) ? packageData.events : null;
+  const poses = packageData?.poses === undefined
+    ? []
+    : Array.isArray(packageData.poses) ? packageData.poses : null;
   let serializedBytes = 0;
   try {
     serializedBytes = Buffer.byteLength(JSON.stringify(packageData || null), 'utf8');
@@ -33,10 +38,13 @@ export function verifySessionPackage(packageData) {
   if (serializedBytes > SESSION_PACKAGE_LIMITS.maxSerializedBytes) reasons.push('package exceeds serialized byte limit');
   if (observations && observations.length > SESSION_PACKAGE_LIMITS.maxObservations) reasons.push('observation count exceeds package limit');
   if (events && events.length > SESSION_PACKAGE_LIMITS.maxEvents) reasons.push('event count exceeds package limit');
+  if (packageData?.poses !== undefined && !poses) reasons.push('poses must be an array');
+  if (poses && poses.length > SESSION_PACKAGE_LIMITS.maxPoses) reasons.push('pose count exceeds package limit');
   if (Array.isArray(packageData?.journal) && packageData.journal.length > SESSION_PACKAGE_LIMITS.maxJournal) reasons.push('journal count exceeds package limit');
   if (Array.isArray(packageData?.sourceRegistrySnapshot) && packageData.sourceRegistrySnapshot.length > SESSION_PACKAGE_LIMITS.maxSources) reasons.push('source count exceeds package limit');
 
   const ids = new Set();
+  const poseIds = new Set();
   let previousSequence = null;
   for (const observation of observations || []) {
     if (!observation || typeof observation.id !== 'string') {
@@ -50,6 +58,34 @@ export function verifySessionPackage(packageData) {
         reasons.push('observation sequence is not strictly increasing');
       }
       previousSequence = observation.sequence;
+    }
+  }
+
+  for (const pose of poses || []) {
+    const result = validatePoseSample(pose);
+    if (!result.ok) {
+      reasons.push(...result.reasons.map((item) => 'invalid retained pose: ' + item.id));
+      continue;
+    }
+    if (poseIds.has(pose.sampleId)) reasons.push('duplicate pose sample id: ' + pose.sampleId);
+    poseIds.add(pose.sampleId);
+  }
+  let poseReferencesVerified = true;
+  for (const observation of observations || []) {
+    if (typeof observation?.poseRef !== 'string') continue;
+    if (!poseIds.has(observation.poseRef)) {
+      poseReferencesVerified = false;
+      reasons.push('observation references a pose sample not retained in the package: ' + observation.poseRef);
+      continue;
+    }
+    const pose = (poses || []).find((item) => item.sampleId === observation.poseRef);
+    if (pose.sourceId !== observation.sourceId) {
+      poseReferencesVerified = false;
+      reasons.push('observation pose source does not match observation source: ' + observation.id);
+    }
+    if (observation.poseFrameId && pose.frameId !== observation.poseFrameId) {
+      poseReferencesVerified = false;
+      reasons.push('observation pose frame does not match retained pose: ' + observation.id);
     }
   }
 
@@ -103,6 +139,8 @@ export function verifySessionPackage(packageData) {
       format: packageData?.format === 'sidechannel-session',
       observationCount: observations?.length || 0,
       eventCount: events?.length || 0,
+      poseCount: poses?.length || 0,
+      poseReferencesVerified,
       uniqueObservationIds: ids.size === (observations?.length || 0),
       historicalSnapshotComplete: snapshotComplete,
       snapshotDigestVerified: packageData?.formatVersion === '0.2' && snapshotComplete && reasons.every((reason) => reason !== 'snapshot digest mismatch'),

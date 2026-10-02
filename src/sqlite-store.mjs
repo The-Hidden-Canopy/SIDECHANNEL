@@ -91,6 +91,16 @@ export class SqliteStore {
         PRIMARY KEY (session_id, id),
         FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
       );
+      CREATE TABLE IF NOT EXISTS poses (
+        session_id TEXT NOT NULL,
+        sample_id TEXT NOT NULL,
+        timestamp_ms INTEGER NOT NULL,
+        source_id TEXT NOT NULL,
+        frame_id TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        PRIMARY KEY (session_id, sample_id),
+        FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+      );
       CREATE TABLE IF NOT EXISTS events (
         session_id TEXT NOT NULL,
         id TEXT NOT NULL,
@@ -116,6 +126,8 @@ export class SqliteStore {
       );
       CREATE INDEX IF NOT EXISTS observations_by_session_time
         ON observations(session_id, timestamp_ms);
+      CREATE INDEX IF NOT EXISTS poses_by_session_time
+        ON poses(session_id, timestamp_ms);
       CREATE INDEX IF NOT EXISTS events_by_session_start
         ON events(session_id, start_ms);
       CREATE INDEX IF NOT EXISTS journal_by_session_sequence
@@ -231,6 +243,9 @@ export class SqliteStore {
       observations: this.db.prepare(`
         SELECT payload FROM observations WHERE session_id = ? ORDER BY rowid
       `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean),
+      poses: this.db.prepare(`
+        SELECT payload FROM poses WHERE session_id = ? ORDER BY timestamp_ms, rowid
+      `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean),
       events: this.db.prepare(`
         SELECT payload FROM events WHERE session_id = ? ORDER BY rowid
       `).all(sessionId).map((item) => decode(item.payload, null)).filter(Boolean),
@@ -290,6 +305,7 @@ export class SqliteStore {
       snapshotDigest,
       snapshotComplete: true,
       observations: [],
+      poses: [],
       events: []
     };
     this.db.prepare(`
@@ -325,6 +341,23 @@ export class SqliteStore {
         sequence: observation.sequence || null
       }, observation.admittedAtMs || observation.receivedAtMs || Date.now());
     }
+  }
+
+  appendPose(sessionId, sample) {
+    const session = this.db.prepare("SELECT id FROM sessions WHERE id = ? AND ended_at_ms IS NULL AND state = 'recording'").get(sessionId);
+    if (!session || !sample?.sampleId) return false;
+    const result = this.db.prepare(`
+      INSERT OR IGNORE INTO poses (session_id, sample_id, timestamp_ms, source_id, frame_id, payload)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      sessionId,
+      sample.sampleId,
+      sample.timestampMs,
+      sample.sourceId,
+      sample.frameId,
+      encode(sample)
+    );
+    return result.changes > 0;
   }
 
   appendEvent(sessionId, event) {
@@ -397,6 +430,11 @@ export class SqliteStore {
       snapshotDigest: packageData.snapshotDigest || null,
       snapshotComplete: Boolean(sceneSnapshot),
       observations: importedObservations,
+      poses: Array.isArray(packageData.poses)
+        ? packageData.poses
+        : Array.isArray(packageData.poseSamples)
+          ? packageData.poseSamples
+          : Array.isArray(packageData.poses?.samples) ? packageData.poses.samples : [],
       events: Array.isArray(packageData.events) ? packageData.events : []
     };
     if (sceneSnapshot) this.upsertScene(sceneSnapshot);
@@ -421,6 +459,7 @@ export class SqliteStore {
       session.schemaSetDigest,
       session.snapshotDigest
     );
+    for (const pose of session.poses) this.appendImportedPose(session.id, pose);
     for (const observation of session.observations) this.insertObservation(session.id, observation);
     for (const event of session.events) this.insertEvent(session.id, event);
     this.appendJournal(session.id, 'ImportAccepted', {
@@ -428,6 +467,23 @@ export class SqliteStore {
       sourcePackageDigest: packageData.snapshotDigest || null
     }, session.startedAtMs);
     return session;
+  }
+
+  appendImportedPose(sessionId, sample) {
+    if (!sample?.sampleId || !Number.isFinite(sample.timestampMs) ||
+        typeof sample.sourceId !== 'string' || typeof sample.frameId !== 'string') return false;
+    const result = this.db.prepare(`
+      INSERT OR IGNORE INTO poses (session_id, sample_id, timestamp_ms, source_id, frame_id, payload)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      sessionId,
+      sample.sampleId,
+      sample.timestampMs,
+      sample.sourceId,
+      sample.frameId,
+      encode(sample)
+    );
+    return result.changes > 0;
   }
 
   async migrateJson(raw) {

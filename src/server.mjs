@@ -180,6 +180,7 @@ function recordAdapterFailure(providerId, reason) {
 async function processObservation(raw) {
   const sources = sourceMap();
   const source = sources.get(raw?.sourceId);
+  let resolvedPose = null;
   let admissionRaw = raw;
   if (raw?.position === undefined && typeof raw?.sourceId === 'string' && Number.isFinite(raw?.timestampMs)) {
     const pose = poseHistory.resolve(raw.sourceId, raw.timestampMs, {
@@ -187,6 +188,7 @@ async function processObservation(raw) {
       frameId: source?.poseFrameId || null
     });
     if (pose.ok) {
+      resolvedPose = pose.sample;
       admissionRaw = {
         ...raw,
         position: { ...pose.sample.position },
@@ -252,6 +254,7 @@ async function processObservation(raw) {
     sequence: ++admissionSequence
   };
   latest.set(observation.sourceId + ':' + observation.channel, observation);
+  if (recordingSessionId && resolvedPose) store.appendPose(recordingSessionId, resolvedPose);
   if (recordingSessionId) await store.appendObservation(recordingSessionId, observation);
   broadcast({ type: 'observation.accepted', observation });
   const event = eventDetector.observe(observation, sources.get(observation.sourceId));
@@ -300,6 +303,7 @@ function sessionPackage(session) {
     historicalSnapshotComplete: session.snapshotComplete,
     sessionState: session.state,
     interruptionReason: session.interruptionReason,
+    poses: session.poses || [],
     journal: session.journal,
     observations: session.observations,
     events: session.events,

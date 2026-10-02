@@ -41,9 +41,18 @@ test('SQLite store persists sessions, observations, events, and deletion', async
       transformGraph: { revision: 1, placements: [] }
     });
     store.appendObservation(session.id, observation('observation_1'));
+    store.appendPose(session.id, {
+      schema: 'sidechannel.pose/1',
+      sampleId: 'pose_test_1',
+      sourceId: 'source_test',
+      timestampMs: 1000,
+      frameId: 'scene',
+      position: { x: 1, y: 1 }
+    });
     store.appendEvent(session.id, { id: 'event_1', type: 'activity.change', startMs: 1000, endMs: null });
     const finished = store.finishSession(session.id);
     assert.equal(finished.observations.length, 1);
+    assert.equal(finished.poses.length, 1);
     assert.equal(finished.events.length, 1);
     assert.equal(finished.snapshotComplete, true);
     assert.equal(finished.state, 'completed');
@@ -54,6 +63,7 @@ test('SQLite store persists sessions, observations, events, and deletion', async
     const reopened = new SqliteStore(path);
     await reopened.init(scene);
     assert.equal(reopened.getSession(session.id).observations[0].id, 'observation_1');
+    assert.equal(reopened.getSession(session.id).poses[0].sampleId, 'pose_test_1');
     assert.equal(reopened.getSession(session.id).events[0].type, 'activity.change');
     assert.equal(reopened.getSession(session.id).sceneSnapshot.name, 'Frozen test room');
     assert.equal(reopened.deleteSession(session.id), true);
