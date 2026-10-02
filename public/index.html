@@ -302,6 +302,12 @@
           <button id="compareTimeButton" class="button small ghost" type="button" disabled>Compare A/B</button>
         </div>
         <div id="temporalComparisonResult" class="comparison-result muted">Pin two replay times to compare within one session.</div>
+        <div class="session-retention">
+          <label for="sessionKeepCount">Keep newest sessions</label>
+          <input id="sessionKeepCount" type="number" min="0" max="10000" value="10">
+          <button id="pruneSessionsButton" class="button small ghost" type="button">Prune older sessions</button>
+          <span id="retentionStatus" class="muted" role="status" aria-live="polite">Pruning requires confirmation.</span>
+        </div>
       </div>
     </section>
 

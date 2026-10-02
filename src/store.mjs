@@ -52,6 +52,7 @@ export class JsonStore {
         sceneId: session.sceneId,
         startedAtMs: session.startedAtMs,
         endedAtMs: session.endedAtMs,
+        state: session.state || (session.endedAtMs ? 'completed' : 'recording'),
         observationCount: session.observations.length
       }))
       .sort((a, b) => b.startedAtMs - a.startedAtMs);
@@ -101,6 +102,26 @@ export class JsonStore {
     return before !== this.state.sessions.length;
   }
 
+  async pruneSessions(keep = 0, { protectedIds = [] } = {}) {
+    const boundedKeep = Math.max(0, Math.floor(Number(keep)));
+    const protectedSet = new Set(protectedIds);
+    const candidates = this.listSessions().filter((session) =>
+      session.state !== 'recording' && !protectedSet.has(session.id)
+    );
+    const deletedIds = candidates.slice(boundedKeep).map((session) => session.id);
+    if (deletedIds.length) {
+      const deletedSet = new Set(deletedIds);
+      this.state.sessions = this.state.sessions.filter((session) => !deletedSet.has(session.id));
+      await this.persist();
+    }
+    return {
+      keep: boundedKeep,
+      eligibleCount: candidates.length,
+      deletedIds,
+      remaining: this.listSessions()
+    };
+  }
+
   async importPackage(packageData) {
     const session = {
       id: 'sess_' + randomUUID(),
@@ -116,4 +137,3 @@ export class JsonStore {
     return session;
   }
 }
-

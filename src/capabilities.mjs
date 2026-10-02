@@ -84,6 +84,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A bounded simulator benchmark records SceneView update latency and serialized payload percentiles with a tamper-detectable software receipt; it is not a production capacity claim.'
   },
   {
+    id: 'safe-session-retention',
+    label: 'Safe session retention pruning',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A confirmation-gated local prune route removes only older terminal sessions, preserves the newest keep count, and protects active recordings.'
+  },
+  {
     id: 'bounded-websocket-controls',
     label: 'Bounded WebSocket controls',
     status: 'implemented',

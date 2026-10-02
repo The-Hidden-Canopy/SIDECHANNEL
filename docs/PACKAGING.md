@@ -93,6 +93,8 @@ The live inspector is an evidence-explainability surface, not a decorative toolt
 
 The session toolbar exposes the same independent verifier used by import. Selecting a local session and choosing `Verify` reports package, snapshot, journal, source/calibration/provenance reference, pose, and observation checks in the UI; a green result is evidence of package integrity only, not hardware validation or production readiness.
 
+`POST /api/sessions/prune` requires an explicit `confirm: true` and bounded `keep` count. It deletes only older terminal sessions, protects active recordings, returns deleted IDs and remaining session summaries, and never prunes an open recording. This is local retention management; it does not establish backup, archival, deployment, or regulatory guarantees.
+
 The workspace exposes two derived comparison paths. The two-session `Compare` action calls the bounded recompute comparison path and labels the result `DERIVED difference`, including changed-cell and maximum intensity/support deltas. During replay, `Pin A`, `Pin B`, and `Compare A/B` call `/api/sessions/compare-time` to compare two retained times from one session. Both artifacts retain source session IDs, estimator configuration, and temporal bounds; neither is presented as a new measurement.
 
 `POST /api/evaluation/cooccurrence` produces a bounded derived artifact from the current live observations or a retained `sessionId`. It buckets normalized channel changes, reports same-direction strength/support and a bounded lag estimate, retains input observation IDs, and optionally restricts analysis to a scene rectangle. The artifact explicitly says co-occurrence is not causal evidence; it does not identify a device, decode content, or establish physical localization.

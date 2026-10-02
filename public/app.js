@@ -98,6 +98,7 @@ const state = {
   sceneViewBusy: false,
   faultReceipt: null,
   faultBusy: false,
+  pruneBusy: false,
   renderBudget: renderBudgetForObservationCount(0),
   selected: null,
   editMode: false,
@@ -1568,6 +1569,10 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
+  const pruneButton = document.getElementById('pruneSessionsButton');
+  const pruneInput = document.getElementById('sessionKeepCount');
+  if (pruneButton) pruneButton.disabled = state.pruneBusy || Boolean(state.recording);
+  if (pruneInput) pruneInput.disabled = state.pruneBusy || Boolean(state.recording);
   const disconnectedCount = (state.scene?.sources || []).filter((source) => {
     const providerId = source.providerManifest?.providerId || (source.adapterType === 'simulator' ? 'builtin:simulator' : null);
     const adapter = providerId ? state.adapterRuntime.find((item) => item.manifest?.providerId === providerId) : null;
@@ -1912,6 +1917,29 @@ document.getElementById('deleteButton').addEventListener('click', async () => {
   state.temporalComparison = null;
   state.selected = null;
   hydrate(await api('/api/state'));
+});
+
+document.getElementById('pruneSessionsButton').addEventListener('click', async () => {
+  const input = document.getElementById('sessionKeepCount');
+  const keep = Number(input.value);
+  if (!Number.isInteger(keep) || keep < 0 || keep > 10000) return;
+  if (!window.confirm('Prune terminal sessions older than the newest ' + keep + '? This cannot be undone.')) return;
+  state.pruneBusy = true;
+  render();
+  try {
+    const payload = await api('/api/sessions/prune', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ keep, confirm: true })
+    });
+    document.getElementById('retentionStatus').textContent = payload.deletedIds.length + ' sessions pruned; active recording sessions were protected.';
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('retentionStatus').textContent = 'Prune failed: ' + error.message;
+  } finally {
+    state.pruneBusy = false;
+    render();
+  }
 });
 
 document.getElementById('timelineSlider').addEventListener('input', (event) => {

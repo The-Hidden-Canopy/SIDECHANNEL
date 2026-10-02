@@ -416,6 +416,21 @@ test('loopback server smoke covers live websocket reconnect, adapter ingress, se
     assert.equal(deleted.payload.deleted, true);
     const deletedLookup = await requestJson(baseUrl + '/api/sessions/' + importedSessionId);
     assert.equal(deletedLookup.response.status, 404);
+
+    const pruneMissingConfirm = await requestJson(baseUrl + '/api/sessions/prune', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ keep: 0 })
+    });
+    assert.equal(pruneMissingConfirm.response.status, 400);
+    const pruned = await requestJson(baseUrl + '/api/sessions/prune', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ keep: 0, confirm: true })
+    });
+    assert.equal(pruned.response.status, 200);
+    assert.ok(pruned.payload.deletedIds.includes(sessionId));
+    assert.equal(pruned.payload.sessions.some((session) => session.id === sessionId), false);
   } finally {
     liveSocket?.destroy();
     reconnectSocket?.destroy();

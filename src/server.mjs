@@ -897,6 +897,18 @@ async function handleApi(request, response, pathname) {
     broadcast({ type: 'session.state', state: 'recording', id: session.id });
     return sendJson(response, 201, { session });
   }
+  if (request.method === 'POST' && pathname === '/api/sessions/prune') {
+    const body = await bodyJson(request);
+    if (body.confirm !== true) return sendJson(response, 400, { error: 'session prune requires confirm: true' });
+    const keep = Number(body.keep);
+    if (!Number.isInteger(keep) || keep < 0 || keep > 10_000) {
+      return sendJson(response, 422, { error: 'keep must be an integer between 0 and 10000' });
+    }
+    const result = await store.pruneSessions(keep, {
+      protectedIds: recordingSessionId ? [recordingSessionId] : []
+    });
+    return sendJson(response, 200, { ...result, sessions: store.listSessions() });
+  }
   if (request.method === 'POST' && pathname === '/api/evaluation/cooccurrence') {
     const body = await bodyJson(request);
     const session = body.sessionId ? store.getSession(body.sessionId) : null;

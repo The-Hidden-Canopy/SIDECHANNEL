@@ -292,7 +292,7 @@ export class SqliteStore {
     const session = {
       id: 'sess_' + randomUUID(),
       sceneId,
-      startedAtMs: Date.now(),
+      startedAtMs: Number.isFinite(context.startedAtMs) ? context.startedAtMs : Date.now(),
       endedAtMs: null,
       state: 'recording',
       interruptionReason: null,
@@ -389,6 +389,32 @@ export class SqliteStore {
   deleteSession(sessionId) {
     const result = this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
     return result.changes > 0;
+  }
+
+  pruneSessions(keep = 0, { protectedIds = [] } = {}) {
+    const boundedKeep = Math.max(0, Math.floor(Number(keep)));
+    const protectedSet = new Set(protectedIds);
+    const candidates = this.listSessions().filter((session) =>
+      session.state !== 'recording' && !protectedSet.has(session.id)
+    );
+    const deletedIds = candidates.slice(boundedKeep).map((session) => session.id);
+    if (deletedIds.length) {
+      const deleteStatement = this.db.prepare('DELETE FROM sessions WHERE id = ?');
+      this.db.exec('BEGIN IMMEDIATE');
+      try {
+        for (const sessionId of deletedIds) deleteStatement.run(sessionId);
+        this.db.exec('COMMIT');
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        throw error;
+      }
+    }
+    return {
+      keep: boundedKeep,
+      eligibleCount: candidates.length,
+      deletedIds,
+      remaining: this.listSessions()
+    };
   }
 
   importPackage(packageData) {

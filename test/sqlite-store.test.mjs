@@ -131,6 +131,28 @@ test('open sessions become interrupted after a store restart', async () => {
   }
 });
 
+test('session pruning keeps newest terminal sessions and never removes recording sessions', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'sidechannel-prune-'));
+  const path = join(directory, 'sidechannel.sqlite');
+  const store = new SqliteStore(path);
+  try {
+    await store.init(scene);
+    const first = store.createSession(scene.id, { startedAtMs: 1000 });
+    store.finishSession(first.id);
+    const second = store.createSession(scene.id, { startedAtMs: 2000 });
+    store.finishSession(second.id);
+    const recording = store.createSession(scene.id);
+    const result = store.pruneSessions(1, { protectedIds: [recording.id] });
+    assert.deepEqual(result.deletedIds, [first.id]);
+    assert.equal(store.getSession(first.id), undefined);
+    assert.ok(store.getSession(second.id));
+    assert.equal(store.getSession(recording.id).state, 'recording');
+  } finally {
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('runtime adapter failures are retained in the authoritative journal', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'sidechannel-runtime-event-'));
   const path = join(directory, 'sidechannel.sqlite');
