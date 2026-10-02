@@ -79,6 +79,8 @@ The workspace also exposes a two-session `Compare` action. It calls the bounded 
 
 Replay also exposes bounded temporal evidence markers. Activity-change events use the activity marker style; retained runtime-journal mutations such as calibration, transform, provider, permission, rejection, and session-boundary entries use the journal marker style. Selecting a marker moves the replay cursor to that retained timestamp. This is historical navigation over the session package, not a new measurement or proof that a physical mutation occurred outside the recorded runtime.
 
+The Layers panel independently toggles the unified activity field, each channel field, support/confidence rendering, uncertainty geometry, replay trails, and activity-event pulses. Support changes visual opacity only; it never changes the underlying field value. Geometry and trail overlays are bounded to the retained observation/session data and remain software-derived evidence.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

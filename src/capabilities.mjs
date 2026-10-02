@@ -112,6 +112,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Replay exposes activity and runtime-journal markers with bounded click-to-time navigation; markers remain historical evidence, not new measurements.'
   },
   {
+    id: 'evidence-overlay-layers',
+    label: 'Evidence overlay layers',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The scene independently toggles support/confidence, uncertainty geometry, replay trails, and activity-event pulses without changing observation truth.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

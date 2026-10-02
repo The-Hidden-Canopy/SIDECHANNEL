@@ -11,7 +11,11 @@ const CHANNELS = [
 ];
 const DISPLAY_LAYERS = [
   ['activity', 'Unified activity', '#d7fff7', 0],
-  ...CHANNELS
+  ...CHANNELS,
+  ['support', 'Support / confidence', '#6ce4db', 0],
+  ['uncertainty', 'Uncertainty geometry', '#ffb47b', 0],
+  ['trails', 'Temporal trails', '#79a7ff', 0],
+  ['events', 'Activity event pulses', '#ff8f97', 0]
 ];
 const JOURNAL_MARKER_TYPES = new Set([
   'SessionOpened', 'SessionClosed', 'CalibrationPublished', 'CalibrationInvalidated',
@@ -530,6 +534,102 @@ function supportPositions(observation, source) {
   return [center];
 }
 
+function drawSupportGeometry(valid, transform) {
+  if (!state.visible.support) return;
+  context.save();
+  context.lineWidth = 1.2;
+  context.setLineDash([4, 3]);
+  valid.forEach((observation) => {
+    const source = sourceById(observation.sourceId);
+    const support = observation.support || source?.support;
+    if (!support || support.type === 'PointSupport' || support.type === 'UnknownSupport') return;
+    const center = support.center || support.position || observation.position || source?.position;
+    const color = colorFor(observation.channel);
+    context.strokeStyle = hexToRgba(color, .58);
+    context.beginPath();
+    if (support.type === 'RegionSupport' && center && Number.isFinite(support.radius)) {
+      context.arc(transform.x(center.x), transform.y(center.y), support.radius * (transform.sx + transform.sy) / 2, 0, Math.PI * 2);
+    } else if (support.type === 'EllipseSupport' && center && Number.isFinite(support.radiusX) && Number.isFinite(support.radiusY)) {
+      context.ellipse(transform.x(center.x), transform.y(center.y), support.radiusX * transform.sx, support.radiusY * transform.sy, 0, 0, Math.PI * 2);
+    } else if (support.type === 'PathSupport' && Array.isArray(support.points) && support.points.length > 1) {
+      context.moveTo(transform.x(support.points[0].x), transform.y(support.points[0].y));
+      support.points.slice(1).forEach((point) => context.lineTo(transform.x(point.x), transform.y(point.y)));
+    } else {
+      return;
+    }
+    context.stroke();
+  });
+  context.restore();
+}
+
+function drawUncertainty(valid, transform) {
+  if (!state.visible.uncertainty) return;
+  context.save();
+  context.lineWidth = 1;
+  context.setLineDash([2, 3]);
+  valid.forEach((observation) => {
+    const source = sourceById(observation.sourceId);
+    const position = observation.position || source?.position;
+    const support = observation.support || source?.support;
+    const radius = position?.uncertaintyRadius ?? support?.uncertaintyRadius;
+    if (!position || !Number.isFinite(radius) || radius <= 0) return;
+    context.strokeStyle = 'rgba(255, 180, 123, .7)';
+    context.beginPath();
+    context.arc(transform.x(position.x), transform.y(position.y), radius * (transform.sx + transform.sy) / 2, 0, Math.PI * 2);
+    context.stroke();
+  });
+  context.restore();
+}
+
+function drawTemporalTrails(transform) {
+  if (!state.visible.trails || !state.replay) return;
+  const grouped = new Map();
+  activeObservations().filter((observation) => observation.status !== 'stale' && observation.status !== 'rejected')
+    .forEach((observation) => {
+      const key = observation.sourceId + ':' + observation.channel;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(observation);
+    });
+  context.save();
+  context.lineWidth = 1.5;
+  grouped.forEach((observations, key) => {
+    const ordered = observations.sort((left, right) => left.timestampMs - right.timestampMs).slice(-24);
+    if (ordered.length < 2) return;
+    const channel = key.split(':').slice(1).join(':');
+    for (let index = 1; index < ordered.length; index += 1) {
+      const from = supportPositions(ordered[index - 1], sourceById(ordered[index - 1].sourceId))[0];
+      const to = supportPositions(ordered[index], sourceById(ordered[index].sourceId))[0];
+      if (!from || !to) continue;
+      context.strokeStyle = hexToRgba(colorFor(channel), .08 + (.28 * index / ordered.length));
+      context.beginPath();
+      context.moveTo(transform.x(from.x), transform.y(from.y));
+      context.lineTo(transform.x(to.x), transform.y(to.y));
+      context.stroke();
+    }
+  });
+  context.restore();
+}
+
+function drawEventPulses(transform) {
+  if (!state.visible.events) return;
+  const sourceEvents = state.replay
+    ? (state.replay.events || []).filter((event) => event.startMs <= state.replayTime)
+    : state.events;
+  context.save();
+  sourceEvents.slice(-12).forEach((event) => {
+    const source = sourceById(event.sourceId);
+    const position = event.position || source?.position;
+    if (!position) return;
+    const radius = 8 + Math.min(12, Number(event.magnitude || 0) * 12);
+    context.strokeStyle = 'rgba(255, 143, 151, .62)';
+    context.lineWidth = 1.4;
+    context.beginPath();
+    context.arc(transform.x(position.x), transform.y(position.y), radius, 0, Math.PI * 2);
+    context.stroke();
+  });
+  context.restore();
+}
+
 function drawActivityField(valid, transform) {
   if (!state.visible.activity) return;
   const cols = 22;
@@ -539,7 +639,8 @@ function drawActivityField(valid, transform) {
   if (recomputed) {
     recomputed.cells.forEach((cell) => {
       if (cell.intensity === null) return;
-      const alpha = (.025 + cell.intensity * .12) * (.25 + cell.support * .75);
+      const supportOpacity = state.visible.support ? (.25 + cell.support * .75) : .6;
+      const alpha = (.025 + cell.intensity * .12) * supportOpacity;
       context.fillStyle = hexToRgba(color, alpha);
       context.fillRect(
         transform.x(cell.x - state.scene.width / recomputed.width / 2),
@@ -572,7 +673,8 @@ function drawActivityField(valid, transform) {
       });
       const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
       const support = spatialWeightTotal ? Math.max(0, Math.min(1, supportTotal / spatialWeightTotal)) : 0;
-      context.fillStyle = hexToRgba(color, (.025 + intensity * .12) * (.25 + support * .75));
+      const supportOpacity = state.visible.support ? (.25 + support * .75) : .6;
+      context.fillStyle = hexToRgba(color, (.025 + intensity * .12) * supportOpacity);
       context.fillRect(
         transform.x(x - state.scene.width / cols / 2),
         transform.y(y - state.scene.height / rows / 2),
@@ -641,12 +743,17 @@ function draw() {
         });
         const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
         const support = spatialWeightTotal ? Math.max(0, Math.min(1, supportTotal / spatialWeightTotal)) : 0;
-        context.fillStyle = hexToRgba(color, (.045 + intensity * .19) * (.25 + support * .75));
+        const supportOpacity = state.visible.support ? (.25 + support * .75) : .6;
+        context.fillStyle = hexToRgba(color, (.045 + intensity * .19) * supportOpacity);
         context.fillRect(transform.x(x - state.scene.width / cols / 2), transform.y(y - state.scene.height / rows / 2),
           transform.sx * state.scene.width / cols + 1, transform.sy * state.scene.height / rows + 1);
       }
     }
   });
+
+  drawTemporalTrails(transform);
+  drawSupportGeometry(valid, transform);
+  drawUncertainty(valid, transform);
 
   (state.scene.sources || []).forEach((source) => {
     const point = source.position;
@@ -670,6 +777,7 @@ function draw() {
       context.beginPath(); context.arc(x, y, 9, 0, Math.PI * 2); context.stroke(); context.setLineDash([]);
     }
   });
+  drawEventPulses(transform);
 }
 
 function hexToRgba(hex, alpha) {
