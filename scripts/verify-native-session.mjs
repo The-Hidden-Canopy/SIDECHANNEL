@@ -38,6 +38,7 @@ if (!executable || !Number.isInteger(ticks) || ticks < 1 || ticks > 100) {
         observationCount: verification.checks.observationCount,
         snapshotDigestVerified: verification.checks.snapshotDigestVerified,
         packageDigestVerified: verification.checks.packageDigestVerified,
+        journalVerified: verification.checks.journalVerified,
         observationSchemaVerified: verification.checks.observationSchemaVerified,
         referencesVerified: verification.checks.sourceReferencesVerified &&
           verification.checks.calibrationReferencesVerified &&

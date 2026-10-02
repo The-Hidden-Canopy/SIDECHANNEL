@@ -44,6 +44,9 @@ int main() {
   assert(package.find("\"format\":\"sidechannel-session\"") != std::string::npos);
   assert(package.find("\"snapshotDigest\":\"") != std::string::npos);
   assert(package.find("\"packageDigest\":\"") != std::string::npos);
+  assert(package.find("\"type\":\"SessionOpened\"") != std::string::npos);
+  assert(package.find("\"type\":\"ObservationAdmitted\"") != std::string::npos);
+  assert(package.find("\"type\":\"SessionClosed\"") != std::string::npos);
   assert(package.find("\"sequence\":1") != std::string::npos);
   return 0;
 }
