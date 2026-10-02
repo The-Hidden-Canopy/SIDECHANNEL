@@ -18,6 +18,7 @@ import { verifySessionPackage } from './session-verifier.mjs';
 import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from './security.mjs';
 import { AdapterSupervisor } from './adapters/supervisor.mjs';
 import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
+import { createReplayReceipt } from './verification/receipt.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -186,6 +187,7 @@ function sessionPackage(session) {
   return {
     format: 'sidechannel-session',
     formatVersion: '0.2',
+    sessionId: session.id,
     scene,
     sources,
     sceneSnapshot: session.sceneSnapshot,
@@ -427,6 +429,19 @@ async function handleApi(request, response, pathname) {
       if (mode === 'recompute') return sendJson(response, 200, { replay: recomputeSession(session) });
       if (mode === 'determinism') return sendJson(response, 200, { report: verifyDeterminism(session) });
       return sendJson(response, 400, { error: 'unsupported replay mode' });
+    } catch (error) {
+      return sendJson(response, error.code === 'INCOMPLETE_SNAPSHOT' ? 409 : 422, { error: error.message });
+    }
+  }
+  if (request.method === 'GET' && parts[0] === 'api' && parts[1] === 'sessions' && parts[2] && parts[3] === 'receipt') {
+    const session = store.getSession(parts[2]);
+    if (!session) return sendJson(response, 404, { error: 'session not found' });
+    try {
+      return sendJson(response, 200, {
+        receipt: createReplayReceipt(session, {
+          sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
+        })
+      });
     } catch (error) {
       return sendJson(response, error.code === 'INCOMPLETE_SNAPSHOT' ? 409 : 422, { error: error.message });
     }

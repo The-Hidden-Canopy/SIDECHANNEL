@@ -7,6 +7,7 @@
     "test": "node --test",
     "verify": "node scripts/verify.mjs",
     "verify:session": "node scripts/verify-session.mjs",
+    "receipt:session": "node scripts/replay-receipt.mjs",
     "start": "node src/server.mjs"
   }
 }

@@ -18,7 +18,7 @@ npm run verify
 
 It syntax-checks every `src/*.mjs` file and the browser module, then runs the complete Node test suite.
 
-After exporting a session, verify its independent receipt with `npm run verify:session -- path/to/exported-session.json`. The running server also exposes `/api/sessions/:id/verify` for the same structural and snapshot checks.
+After exporting a session, verify its independent receipt with `npm run verify:session -- path/to/exported-session.json`. Generate a replay evidence receipt with `npm run receipt:session -- path/to/exported-session.json`. The running server also exposes `/api/sessions/:id/verify` and `/api/sessions/:id/receipt` for the same structural checks and software-only replay receipt.
 
 Session exports include an append-only journal with per-session sequence numbers and a SHA-256 hash chain. Verification reports a journal-tail failure if any retained event payload, order, or digest has been altered. Replay is split into historical view, recompute, and determinism verification: recorded artifacts are never labelled as current estimator output, and derived comparison fields retain their source session IDs and estimator configuration.
 
