@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
+import { interpolateEstimatorField } from '../spatial/estimators.mjs';
 import { supportSamples } from '../spatial/support.mjs';
-import { createRevisionTicket, evaluateFieldCandidate, publishCandidate } from './publication.mjs';
+import { createRevisionTicket, publishCandidate } from './publication.mjs';
 
 const MAX_OBSERVATIONS = 10_000;
 const MAX_GRID_SIZE = 128;
@@ -63,6 +64,8 @@ export function evaluateFieldGraph({
   observations = [],
   sources = new Map(),
   channel,
+  estimatorId = 'idw.baseline',
+  estimatorOptions = {},
   ticket = {},
   currentRevisions = ticket,
   gridSize = 28,
@@ -105,24 +108,32 @@ export function evaluateFieldGraph({
     outputSummary: resolverSummary
   }));
 
-  const candidate = evaluateFieldCandidate({
-    fieldId,
-    estimatorId: 'idw.baseline',
-    estimatorVersion,
+  const field = interpolateEstimatorField({
+    estimatorId,
     scene,
     observations: selected,
     sources: sourceMap,
     channel,
-    ticket: ticketValue,
-    gridSize
+    gridSize,
+    ...estimatorOptions
   });
+  const candidate = {
+    fieldId: fieldId || 'field_' + digest({ channel, estimatorId, ticket: ticketValue, inputObservationIds }).slice(0, 16),
+    channel,
+    estimatorId,
+    estimatorVersion,
+    field,
+    inputObservationIds,
+    inputDigest: digest(inputObservationIds),
+    revisionTicket: ticketValue
+  };
   const estimatorSummary = fieldSummary(candidate.field);
   nodes.push(nodeReceipt({
     id: 'estimator',
     type: 'Estimator',
     parameterRevision,
     inputDigest: digest({ inputDigest, ticket: ticketValue, estimatorVersion, gridSize }),
-    outputSummary: estimatorSummary
+    outputSummary: { ...estimatorSummary, estimatorId }
   }));
   nodes.push(nodeReceipt({
     id: 'confidence-estimator',
@@ -159,7 +170,7 @@ export function evaluateFieldGraph({
     truthMode: 'derived',
     fieldId: candidate.fieldId,
     channel,
-    estimator: { id: candidate.estimatorId, version: candidate.estimatorVersion, gridSize },
+    estimator: { id: candidate.estimatorId, version: candidate.estimatorVersion, gridSize, options: { ...estimatorOptions } },
     inputObservationIds,
     inputDigest,
     revisionTicket: ticketValue,

@@ -44,6 +44,22 @@ test('evaluation graph retains a stale publication receipt without publishing ol
   assert.equal(typeof receipt.candidateDigest, 'string');
 });
 
+test('evaluation graph records a selected estimator and its options', () => {
+  const receipt = evaluateFieldGraph({
+    scene,
+    observations,
+    sources: new Map(),
+    channel: 'heat',
+    estimatorId: 'kernel.gaussian',
+    estimatorOptions: { kernelSigma: .8 },
+    ticket: { sceneRevision: 1 },
+    gridSize: 4
+  });
+  assert.equal(receipt.estimator.id, 'kernel.gaussian');
+  assert.equal(receipt.artifact.field.estimator.id, 'kernel.gaussian');
+  assert.equal(receipt.artifact.field.estimator.kernelSigma, .8);
+});
+
 test('evaluation graph enforces bounded input and grid parameters', () => {
   assert.throws(() => evaluateFieldGraph({ scene, observations, channel: 'heat', gridSize: 129 }), /gridSize/);
   assert.throws(() => evaluateFieldGraph({ scene, observations: Array.from({ length: 10001 }, () => observations[0]), channel: 'heat' }), /observation count/);

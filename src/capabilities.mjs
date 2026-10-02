@@ -133,6 +133,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'Field evaluation emits selector, spatial resolver, estimator, confidence, and publication-gate node receipts with dependency digests and stale-candidate outcomes.'
   },
   {
+    id: 'bounded-estimator-registry',
+    label: 'Bounded estimator registry',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The evaluation graph can select IDW, nearest-source, Gaussian-kernel, temporal-decay, region-constant, or vector-magnitude estimators under bounded parameters; outputs remain derived.'
+  },
+  {
     id: 'temporal-comparison-surface',
     label: 'Within-session temporal comparison',
     status: 'implemented',

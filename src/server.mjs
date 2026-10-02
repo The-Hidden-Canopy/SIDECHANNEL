@@ -903,6 +903,8 @@ async function handleApi(request, response, pathname) {
         observations: session?.observations || currentObservations(),
         sources: session?.sourceRegistrySnapshot || activeScene.sources,
         channel: body.channel,
+        estimatorId: body.estimatorId || 'idw.baseline',
+        estimatorOptions: body.estimatorOptions || {},
         ticket: body.ticket || {},
         currentRevisions: body.currentRevisions || body.ticket || {},
         gridSize: body.gridSize === undefined ? 28 : Number(body.gridSize),
