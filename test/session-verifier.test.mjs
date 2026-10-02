@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { computeSnapshotDigest } from '../src/sqlite-store.mjs';
-import { verifySessionPackage } from '../src/session-verifier.mjs';
+import { computePackageDigest, verifySessionPackage } from '../src/session-verifier.mjs';
 import { HashChainJournal } from '../src/journal.mjs';
 
 function packageData() {
@@ -34,6 +34,26 @@ test('session verifier accepts a self-contained untampered package', () => {
   assert.equal(report.ok, true);
   assert.equal(report.checks.snapshotDigestVerified, true);
   assert.equal(report.checks.journalVerified, true);
+});
+
+test('session verifier validates an optional package digest and detects tampering', () => {
+  const packaged = packageData();
+  packaged.packageDigest = computePackageDigest(packaged);
+  const valid = verifySessionPackage(packaged);
+  assert.equal(valid.ok, true);
+  assert.equal(valid.checks.packageDigestVerified, true);
+  packaged.observations[0].sequence = 2;
+  const tampered = verifySessionPackage(packaged);
+  assert.equal(tampered.ok, false);
+  assert.ok(tampered.reasons.includes('package digest mismatch'));
+});
+
+test('session verifier rejects packages beyond bounded observation limits', () => {
+  const oversized = packageData();
+  oversized.observations = Array.from({ length: 100_001 }, (_, index) => ({ id: 'observation_' + index, sequence: index + 1 }));
+  const report = verifySessionPackage(oversized);
+  assert.equal(report.ok, false);
+  assert.ok(report.reasons.includes('observation count exceeds package limit'));
 });
 
 test('session verifier detects snapshot and sequence tampering', () => {

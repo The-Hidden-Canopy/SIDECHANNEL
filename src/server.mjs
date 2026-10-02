@@ -14,7 +14,7 @@ import { createIngressSequencer } from './admission/sequencer.mjs';
 import { createProviderManifest, validateProviderManifest } from './admission/manifest.mjs';
 import { CalibrationRegistry } from './calibration/registry.mjs';
 import { TransformGraph } from './spatial/transform-graph.mjs';
-import { verifySessionPackage } from './session-verifier.mjs';
+import { computePackageDigest, verifySessionPackage } from './session-verifier.mjs';
 import { createRateLimiter, hasValidLaunchToken, isAllowedLoopbackHost, isAllowedOrigin } from './security.mjs';
 import { AdapterSupervisor } from './adapters/supervisor.mjs';
 import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
@@ -220,7 +220,7 @@ function sessionPackage(session) {
   const scene = session.sceneSnapshot || activeScene;
   const sources = session.sourceRegistrySnapshot || scene.sources || [];
   const privacyClasses = Array.from(new Set(session.observations.map((observation) => observation.privacyClass || 'local_numeric'))).sort();
-  return {
+  const packageData = {
     format: 'sidechannel-session',
     formatVersion: '0.2',
     sessionId: session.id,
@@ -247,6 +247,8 @@ function sessionPackage(session) {
       persistentDeviceIdsIncluded: false
     }
   };
+  packageData.packageDigest = computePackageDigest(packageData);
+  return packageData;
 }
 
 async function handleApi(request, response, pathname) {

@@ -1,14 +1,40 @@
+import { createHash } from 'node:crypto';
 import { computeSnapshotDigest } from './sqlite-store.mjs';
 import { HashChainJournal } from './journal.mjs';
+
+export const SESSION_PACKAGE_LIMITS = Object.freeze({
+  maxSerializedBytes: 2_000_000,
+  maxObservations: 100_000,
+  maxEvents: 100_000,
+  maxJournal: 200_000,
+  maxSources: 10_000
+});
+
+export function computePackageDigest(packageData) {
+  const copy = { ...(packageData || {}) };
+  delete copy.packageDigest;
+  return createHash('sha256').update(JSON.stringify(copy)).digest('hex');
+}
 
 export function verifySessionPackage(packageData) {
   const reasons = [];
   const warnings = [];
   const observations = Array.isArray(packageData?.observations) ? packageData.observations : null;
   const events = Array.isArray(packageData?.events) ? packageData.events : null;
+  let serializedBytes = 0;
+  try {
+    serializedBytes = Buffer.byteLength(JSON.stringify(packageData || null), 'utf8');
+  } catch {
+    reasons.push('package is not JSON-serializable');
+  }
   if (!packageData || packageData.format !== 'sidechannel-session') reasons.push('format is not sidechannel-session');
   if (!observations) reasons.push('observations must be an array');
   if (!events) reasons.push('events must be an array');
+  if (serializedBytes > SESSION_PACKAGE_LIMITS.maxSerializedBytes) reasons.push('package exceeds serialized byte limit');
+  if (observations && observations.length > SESSION_PACKAGE_LIMITS.maxObservations) reasons.push('observation count exceeds package limit');
+  if (events && events.length > SESSION_PACKAGE_LIMITS.maxEvents) reasons.push('event count exceeds package limit');
+  if (Array.isArray(packageData?.journal) && packageData.journal.length > SESSION_PACKAGE_LIMITS.maxJournal) reasons.push('journal count exceeds package limit');
+  if (Array.isArray(packageData?.sourceRegistrySnapshot) && packageData.sourceRegistrySnapshot.length > SESSION_PACKAGE_LIMITS.maxSources) reasons.push('source count exceeds package limit');
 
   const ids = new Set();
   let previousSequence = null;
@@ -50,6 +76,16 @@ export function verifySessionPackage(packageData) {
       reasons.push('privacy.classes must be an array');
     }
   }
+  let packageDigestVerified = false;
+  if (packageData?.packageDigest === undefined) {
+    warnings.push('package digest is absent; package-level tamper check was not performed');
+  } else if (typeof packageData.packageDigest !== 'string' || packageData.packageDigest.length !== 64) {
+    reasons.push('package digest is malformed');
+  } else if (computePackageDigest(packageData) !== packageData.packageDigest) {
+    reasons.push('package digest mismatch');
+  } else {
+    packageDigestVerified = true;
+  }
   let journalVerified = false;
   if (Array.isArray(packageData?.journal)) {
     const journal = new HashChainJournal({ sessionId: packageData.sessionId || packageData.journal[0]?.sessionId || 'session_unknown' });
@@ -70,6 +106,7 @@ export function verifySessionPackage(packageData) {
       uniqueObservationIds: ids.size === (observations?.length || 0),
       historicalSnapshotComplete: snapshotComplete,
       snapshotDigestVerified: packageData?.formatVersion === '0.2' && snapshotComplete && reasons.every((reason) => reason !== 'snapshot digest mismatch'),
+      packageDigestVerified,
       journalEventCount: Array.isArray(packageData?.journal) ? packageData.journal.length : 0,
       journalVerified
     }
