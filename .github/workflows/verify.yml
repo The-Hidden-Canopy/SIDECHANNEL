@@ -58,3 +58,19 @@ jobs:
           npm run verify:native-ipc-sqlite -- "$native_exe"
           npm run verify:native-ipc-scene-view -- "$native_exe"
           npm run verify:native-ipc-export -- "$native_exe"
+
+  native-sanitizer:
+    name: Native sanitizer
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure sanitized native reference core
+        run: cmake -S . -B build/native-sanitized -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSIDECHANNEL_NATIVE_SANITIZERS=ON
+      - name: Build sanitized native reference core
+        run: cmake --build build/native-sanitized --parallel
+      - name: Run sanitized native tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build/native-sanitized --output-on-failure

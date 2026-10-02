@@ -39,3 +39,36 @@ target_link_libraries(sidechannel-c-api-test PRIVATE sidechannel_core)
 enable_testing()
 add_test(NAME sidechannel-core-test COMMAND sidechannel-core-test)
 add_test(NAME sidechannel-c-api-test COMMAND sidechannel-c-api-test)
+
+option(SIDECHANNEL_NATIVE_SANITIZERS
+  "Enable AddressSanitizer and UndefinedBehaviorSanitizer for native verification"
+  OFF
+)
+
+if (SIDECHANNEL_NATIVE_SANITIZERS)
+  if (MSVC)
+    message(FATAL_ERROR
+      "SIDECHANNEL_NATIVE_SANITIZERS requires a compiler with -fsanitize support"
+    )
+  endif()
+
+  set(SIDECHANNEL_NATIVE_SANITIZER_LINK_FLAGS
+    -fsanitize=address,undefined
+  )
+  set(SIDECHANNEL_NATIVE_SANITIZER_COMPILE_FLAGS
+    -fsanitize=address,undefined
+    -fno-omit-frame-pointer
+  )
+
+  target_compile_options(sidechannel_core PRIVATE
+    ${SIDECHANNEL_NATIVE_SANITIZER_COMPILE_FLAGS}
+  )
+  foreach(target sidechannel-native sidechannel-core-test sidechannel-c-api-test)
+    target_compile_options(${target} PRIVATE
+      ${SIDECHANNEL_NATIVE_SANITIZER_COMPILE_FLAGS}
+    )
+    target_link_options(${target} PRIVATE
+      ${SIDECHANNEL_NATIVE_SANITIZER_LINK_FLAGS}
+    )
+  endforeach()
+endif()

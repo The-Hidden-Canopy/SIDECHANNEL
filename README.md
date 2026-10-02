@@ -47,7 +47,7 @@ Replay is explicit about truth: `/api/sessions/:id/replay?mode=historical` retur
 
 Native hardware adapters, richer calibration, and desktop packaging remain follow-on work described in the build specification. The SQLite store is local and dependency-free on supported Node.js releases; it migrates an existing `data/sidechannel.json` file on first startup.
 
-GitHub Actions runs the Node reference tests plus native CTest/parity on Ubuntu and Windows; passing CI is software evidence only and is not a hardware, deployment, or regulated-operation claim.
+GitHub Actions runs the Node reference tests plus native CTest/parity on Ubuntu and Windows, and a separate Ubuntu native AddressSanitizer/UndefinedBehaviorSanitizer gate; passing CI is software evidence only and is not a hardware, deployment, or regulated-operation claim.
 
 The native directory is an independently tested reference slice. It emits a dependency-free session-package fixture that the Node verifier checks for canonical observation shape, semantic observation-row parity, frozen snapshot/package digests, journal integrity, and retained references. It also includes file-backed and SQLite session journal/replay authorities exposed through `--session-file PATH` and `--sqlite-session-file PATH`, plus a bounded token-authenticated stdio IPC boundary that can use either backend. Build it with the CMake instructions in `native/README.md`, run `npm run verify:native-session -- path/to/sidechannel-native.exe 2` for the package gate, `npm run verify:native-sqlite -- path/to/sidechannel-native.exe 2` for SQLite authority, or `npm run verify:native-ipc-sqlite -- path/to/sidechannel-native.exe` for SQLite-backed IPC lifecycle and reopen evidence.
 

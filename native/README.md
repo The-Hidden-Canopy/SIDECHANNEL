@@ -20,6 +20,16 @@ build/native/native/Debug/sidechannel-native.exe --ticks 2 --session-json
 
 The same project also works with an NMake generator when the active developer environment exposes `cl.exe` and `nmake.exe`.
 
+On a GCC or Clang environment, the native tests can be run with AddressSanitizer and UndefinedBehaviorSanitizer enabled:
+
+```text
+cmake -S . -B build/native-sanitized -DCMAKE_BUILD_TYPE=RelWithDebInfo -DSIDECHANNEL_NATIVE_SANITIZERS=ON
+cmake --build build/native-sanitized --parallel
+ctest --test-dir build/native-sanitized --output-on-failure
+```
+
+The sanitizer option intentionally rejects MSVC; the repository CI runs this gate on Ubuntu. Sanitizer results are software verification evidence only and do not qualify hardware, deployment, or regulated operation.
+
 After building, compare the C++ fixture to the Node reference simulator:
 
 ```text
