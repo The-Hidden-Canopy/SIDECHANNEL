@@ -23,6 +23,34 @@ test('accepts a valid normalized observation', () => {
   }, { sources, now: 1000 });
   assert.equal(result.ok, true);
   assert.equal(result.observation.quality.score, 0.95);
+  assert.equal(result.observation.admissionVersion, '0.2');
+  assert.equal(result.observation.evidenceState, 'measured');
+  assert.equal(result.observation.privacyClass, 'local_numeric');
+  assert.deepEqual(result.observation.provenance, []);
+});
+
+test('validation preserves explicit evidence, privacy, provider, and lineage metadata', () => {
+  const result = validateObservation({
+    schemaVersion: '0.1',
+    id: 'obs_lineage',
+    sourceId: 'sensor_1',
+    channel: 'heat',
+    timestampMs: 1000,
+    value: 22,
+    unit: 'C',
+    status: 'derived',
+    evidenceState: 'imported',
+    privacyClass: 'derived_feature_only',
+    providerId: 'fixture.temperature',
+    providerDigest: 'abc',
+    calibrationRef: 'cal_1',
+    provenance: [{ parentId: 'obs_parent', relation: 'derived_from' }]
+  }, { sources, now: 1000 });
+  assert.equal(result.ok, true);
+  assert.equal(result.observation.evidenceState, 'imported');
+  assert.equal(result.observation.provider.id, 'fixture.temperature');
+  assert.equal(result.observation.calibrationRef, 'cal_1');
+  assert.equal(result.observation.provenance[0].relation, 'derived_from');
 });
 
 test('rejects malformed, unknown, and out-of-range observations', () => {
@@ -56,4 +84,3 @@ test('marks observations stale without converting them to zero', () => {
   assert.equal(stale.value, 20);
   assert.equal(stale.quality.state, 'stale');
 });
-

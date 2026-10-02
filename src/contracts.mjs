@@ -42,6 +42,33 @@ export const OBSERVATION_STATUSES = Object.freeze([
   'rejected'
 ]);
 
+export const EVIDENCE_STATES = Object.freeze([
+  'measured',
+  'derived',
+  'inferred',
+  'simulated',
+  'imported',
+  'stale',
+  'rejected',
+  'unknown'
+]);
+
+export const PRIVACY_CLASSES = Object.freeze([
+  'summary_only',
+  'local_numeric',
+  'derived_feature_only',
+  'raw_ephemeral',
+  'raw_retained_explicit',
+  'prohibited'
+]);
+
+export function privacyClassForSource(source) {
+  if (source?.privacyClass && PRIVACY_CLASSES.includes(source.privacyClass)) return source.privacyClass;
+  if (source?.privacyMode === 'summary_only') return 'summary_only';
+  if (source?.privacyMode === 'raw_disabled') return 'derived_feature_only';
+  return 'local_numeric';
+}
+
 export function clamp(value, min = 0, max = 1) {
   return Math.min(max, Math.max(min, value));
 }
@@ -78,4 +105,3 @@ export function normalizeIntensity(channel, value, source) {
 export function isPlainObject(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
-

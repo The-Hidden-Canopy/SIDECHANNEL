@@ -11,6 +11,8 @@ import { consumeTextFrames, encodeTextFrame } from './websocket.mjs';
 import { listAdapters } from './adapters/registry.mjs';
 import { createEventDetector } from './events.mjs';
 import { createIngressSequencer } from './admission/sequencer.mjs';
+import { createProviderManifest, validateProviderManifest } from './admission/manifest.mjs';
+import { CalibrationRegistry } from './calibration/registry.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -29,6 +31,7 @@ const diagnostics = [];
 const recentEvents = [];
 const clients = new Set();
 const eventDetector = createEventDetector();
+const calibrationRegistry = new CalibrationRegistry();
 let admissionSequence = 0;
 const admittedIds = new Set();
 
@@ -49,6 +52,7 @@ function snapshot() {
     observations: currentObservations(),
     events: recentEvents.slice(-40),
     diagnostics: diagnostics.slice(-40),
+    calibrations: calibrationRegistry.list(),
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
       : null,
@@ -199,6 +203,23 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/adapters') {
     return sendJson(response, 200, { adapters: listAdapters() });
   }
+  if (request.method === 'GET' && pathname === '/api/calibrations') {
+    return sendJson(response, 200, { revision: calibrationRegistry.revision, calibrations: calibrationRegistry.list() });
+  }
+  if (request.method === 'POST' && pathname === '/api/calibrations') {
+    const body = await bodyJson(request);
+    try {
+      const calibration = calibrationRegistry.publish(body);
+      return sendJson(response, 201, calibration);
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
+  }
+  if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'calibrations' && parts[2] && parts[3] === 'invalidate') {
+    const body = await bodyJson(request);
+    const calibration = calibrationRegistry.invalidate(parts[2], body.reason || 'operator invalidation');
+    return sendJson(response, calibration ? 200 : 404, calibration || { error: 'calibration not found' });
+  }
   if (request.method === 'GET' && pathname === '/api/scenes') {
     return sendJson(response, 200, { scenes: store.listScenes() });
   }
@@ -231,8 +252,19 @@ async function handleApi(request, response, pathname) {
     }
     if (request.method === 'POST' && parts[3] === 'sources') {
       const body = await bodyJson(request);
+      const sourceId = body.id || 'source_' + randomUUID();
+      const manifestResult = validateProviderManifest(body.providerManifest || {
+        protocolVersion: 'sidechannel.adapter/1',
+        providerId: 'local:' + sourceId,
+        providerVersion: '0.1.0',
+        capabilities: body.capabilities?.length ? body.capabilities : ['normalized_observation'],
+        supportedUnits: body.unit ? [body.unit] : [],
+        rawContentPolicy: 'none'
+      });
+      if (!manifestResult.ok) return sendJson(response, 422, { error: 'invalid provider manifest', reasons: manifestResult.reasons });
       const source = {
-        id: body.id || 'source_' + randomUUID(),
+        ...body,
+        id: sourceId,
         name: body.name || 'Local source',
         adapterType: body.adapterType || 'manual',
         channels: body.channels || [],
@@ -242,7 +274,7 @@ async function handleApi(request, response, pathname) {
         connected: false,
         position: body.position || { x: scene.width / 2, y: scene.height / 2, uncertaintyRadius: 0.5 },
         calibrationState: body.calibrationState || 'uncalibrated',
-        ...body
+        providerManifest: manifestResult.manifest
       };
       const updated = { ...scene, sources: [...scene.sources, source] };
       await store.upsertScene(updated);
@@ -298,6 +330,7 @@ async function handleApi(request, response, pathname) {
     const session = await store.createSession(scene.id, {
       scene,
       sources: scene.sources,
+      calibrations: calibrationRegistry.list(),
       transformGraph: scene.transformGraph || { schemaVersion: '0.1', placements: scene.placements || [] }
     });
     recordingSessionId = session.id;

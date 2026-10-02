@@ -1,10 +1,14 @@
 import {
   CHANNELS,
+  EVIDENCE_STATES,
   OBSERVATION_STATUSES,
+  PRIVACY_CLASSES,
   channelRange,
   createQuality,
-  isPlainObject
+  isPlainObject,
+  privacyClassForSource
 } from './contracts.mjs';
+import { normalizeProvenance } from './provenance/graph.mjs';
 
 function finite(value) {
   return typeof value === 'number' && Number.isFinite(value);
@@ -31,6 +35,7 @@ export function validateObservation(raw, options = {}) {
   const sourceId = raw && raw.sourceId;
   const channel = raw && raw.channel;
   const id = raw && typeof raw.id === 'string' ? raw.id : 'unknown';
+  const source = sources.get(sourceId);
 
   if (!isPlainObject(raw)) {
     return { ok: false, id, reasons: [reason('object', 'Observation must be an object')] };
@@ -63,6 +68,16 @@ export function validateObservation(raw, options = {}) {
   if (!OBSERVATION_STATUSES.includes(raw.status)) {
     reasons.push(reason('status', 'status is not supported'));
   }
+  const evidenceState = raw.evidenceState || (source?.adapterType === 'simulator' ? 'simulated' : raw.status);
+  if (!EVIDENCE_STATES.includes(evidenceState)) {
+    reasons.push(reason('evidenceState', 'evidenceState is not supported'));
+  }
+  const privacyClass = raw.privacyClass || privacyClassForSource(source);
+  if (!PRIVACY_CLASSES.includes(privacyClass)) {
+    reasons.push(reason('privacyClass', 'privacyClass is not supported'));
+  }
+  const provenance = normalizeProvenance(raw.provenance);
+  if (!provenance.ok) reasons.push(...provenance.reasons);
   if (raw.quality !== undefined && !isPlainObject(raw.quality)) {
     reasons.push(reason('quality', 'quality must be an object'));
   }
@@ -81,7 +96,6 @@ export function validateObservation(raw, options = {}) {
     }
   }
 
-  const source = sources.get(sourceId);
   if (finiteValue(value) && channel && sources.size > 0 && source) {
     const numeric = Array.isArray(value)
       ? Math.sqrt(value.reduce((sum, item) => sum + item * item, 0))
@@ -115,9 +129,19 @@ export function validateObservation(raw, options = {}) {
       value,
       unit: raw.unit,
       status: raw.status,
+      admissionVersion: '0.2',
+      evidenceState,
+      privacyClass,
+      provider: {
+        id: raw.providerId || source?.providerManifest?.providerId || source?.adapterType || 'unknown',
+        digest: raw.providerDigest || source?.providerManifest?.providerDigest || null
+      },
       quality,
+      provenance: provenance.edges,
       ...(raw.position ? { position: { ...raw.position } } : {}),
       ...(typeof raw.feature === 'string' ? { feature: raw.feature } : {}),
+      ...(typeof raw.calibrationRef === 'string' ? { calibrationRef: raw.calibrationRef } : {}),
+      ...(typeof raw.sourceProfileRevision === 'string' ? { sourceProfileRevision: raw.sourceProfileRevision } : {}),
       ...(isPlainObject(raw.metadata) ? { metadata: { ...raw.metadata } } : {})
     }
   };
@@ -149,4 +173,3 @@ export function isLiveObservation(observation, now = Date.now()) {
     observation.timestampMs <= now
   );
 }
-
