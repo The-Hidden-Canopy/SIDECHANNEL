@@ -13,6 +13,7 @@ test('ingress sequencer processes queued frames in order and bounds backlog', as
       order.push(value);
       return { ok: true, value };
     },
+    clock: () => 0,
     onDrop: (value, depth) => ({ ok: false, value, depth, reason: 'queue_full' })
   });
 
@@ -29,4 +30,16 @@ test('ingress sequencer processes queued frames in order and bounds backlog', as
     { ok: true, value: 'c' }
   ]);
   assert.deepEqual(order, ['a', 'b', 'c']);
+  assert.deepEqual(sequencer.receipt(), {
+    providerId: 'core:observation-ingress',
+    windowStartMs: 0,
+    windowEndMs: 0,
+    framesReceived: 4,
+    framesAdmitted: 3,
+    framesRejected: 0,
+    framesDroppedBackpressure: 1,
+    maxDepth: 2,
+    pending: 0,
+    busy: false
+  });
 });

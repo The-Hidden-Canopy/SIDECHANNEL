@@ -74,6 +74,7 @@ function snapshot() {
     calibrations: calibrationRegistry.list(),
     transforms: transformGraph.snapshot(),
     adapterRuntime: adapterSupervisor.list(),
+    ingress: ingressSequencer.receipt(),
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
       : null,
@@ -232,6 +233,9 @@ async function handleApi(request, response, pathname) {
   }
   if (request.method === 'GET' && pathname === '/api/adapter-runtime') {
     return sendJson(response, 200, { adapters: adapterSupervisor.list() });
+  }
+  if (request.method === 'GET' && pathname === '/api/ingress') {
+    return sendJson(response, 200, { receipt: ingressSequencer.receipt() });
   }
   if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'adapter-runtime' && parts[2] && parts[3]) {
     const providerId = decodeURIComponent(parts[2]);
