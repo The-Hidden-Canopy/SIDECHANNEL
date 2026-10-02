@@ -77,6 +77,8 @@ The session toolbar exposes the same independent verifier used by import. Select
 
 The workspace also exposes a two-session `Compare` action. It calls the bounded recompute comparison path and labels the result `DERIVED difference`, including changed-cell and maximum intensity/support deltas; comparison output retains both source session IDs and estimator provenance and is never presented as a new measurement.
 
+Replay also exposes bounded temporal evidence markers. Activity-change events use the activity marker style; retained runtime-journal mutations such as calibration, transform, provider, permission, rejection, and session-boundary entries use the journal marker style. Selecting a marker moves the replay cursor to that retained timestamp. This is historical navigation over the session package, not a new measurement or proof that a physical mutation occurred outside the recorded runtime.
+
 ## Portable packaging boundary
 
 A future desktop wrapper may bundle the repository files, a supported Node runtime, and a user-writable data directory. The wrapper must preserve these boundaries:

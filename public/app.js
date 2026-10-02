@@ -13,6 +13,30 @@ const DISPLAY_LAYERS = [
   ['activity', 'Unified activity', '#d7fff7', 0],
   ...CHANNELS
 ];
+const JOURNAL_MARKER_TYPES = new Set([
+  'SessionOpened', 'SessionClosed', 'CalibrationPublished', 'CalibrationInvalidated',
+  'TransformRevisionPublished', 'PoseSampleRecorded', 'ProviderStarted', 'ProviderStopped',
+  'PermissionGranted', 'PermissionRevoked', 'AdapterFailure', 'AdapterQuarantined',
+  'SceneRevisionPublished', 'SourceRevisionPublished', 'ObservationRejected', 'ImportAccepted'
+]);
+const JOURNAL_MARKER_LABELS = {
+  SessionOpened: 'session opened',
+  SessionClosed: 'session closed',
+  CalibrationPublished: 'calibration published',
+  CalibrationInvalidated: 'calibration invalidated',
+  TransformRevisionPublished: 'transform revision',
+  PoseSampleRecorded: 'pose sample',
+  ProviderStarted: 'provider started',
+  ProviderStopped: 'provider stopped',
+  PermissionGranted: 'permission granted',
+  PermissionRevoked: 'permission revoked',
+  AdapterFailure: 'adapter failure',
+  AdapterQuarantined: 'adapter quarantined',
+  SceneRevisionPublished: 'scene revision',
+  SourceRevisionPublished: 'source revision',
+  ObservationRejected: 'observation rejected',
+  ImportAccepted: 'import accepted'
+};
 const RANGES = {
   rf: [-120, 0], magnetic: [0, 200], heat: [-20, 80], vibration: [0, 1],
   sound: [0, 1], network: [0, 100000], electrical: [0, 5000], bluetooth: [0, 100], light_flicker: [0, 1]
@@ -225,6 +249,62 @@ function renderDiagnostics() {
     '<div class="diag-item"><strong>' + escapeHtml(diagnostic.id) + '</strong><br>' +
     escapeHtml((diagnostic.reasons || []).map((reason) => reason.message || reason).join(', ')) + '</div>'
   ).join('');
+}
+
+function replayEvidenceMarkers() {
+  if (!state.replay) return [];
+  const markers = (state.replay.events || []).map((event) => ({
+    id: event.id,
+    timestampMs: event.startMs,
+    kind: 'activity',
+    label: 'activity change',
+    detail: event.channel + ' · Δ ' + Number(event.magnitude || 0).toFixed(2)
+  }));
+  (state.replay.journal || []).forEach((entry) => {
+    if (!JOURNAL_MARKER_TYPES.has(entry.type) || !Number.isFinite(entry.timestampMs)) return;
+    markers.push({
+      id: entry.id,
+      timestampMs: entry.timestampMs,
+      kind: 'journal',
+      label: JOURNAL_MARKER_LABELS[entry.type] || entry.type,
+      detail: 'journal #' + entry.sequence
+    });
+  });
+  return markers.filter((marker) => Number.isFinite(marker.timestampMs)).sort((left, right) =>
+    left.timestampMs - right.timestampMs || left.id.localeCompare(right.id)
+  );
+}
+
+function renderTimelineMarkers(first, last) {
+  const container = document.getElementById('timelineMarkers');
+  const summary = document.getElementById('timelineMarkerSummary');
+  if (!container || !summary) return;
+  container.innerHTML = '';
+  const markers = replayEvidenceMarkers();
+  if (!state.replay || !markers.length) {
+    summary.textContent = state.replay
+      ? 'No retained activity or runtime-journal markers in this session.'
+      : 'Replay markers appear when a recorded session is open.';
+    return;
+  }
+  const span = Math.max(1, last - first);
+  markers.forEach((marker) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'timeline-marker ' + marker.kind;
+    button.style.left = Math.max(0, Math.min(100, ((marker.timestampMs - first) / span) * 100)) + '%';
+    button.dataset.time = String(marker.timestampMs);
+    button.title = marker.label + ' · ' + new Date(marker.timestampMs).toLocaleTimeString() + ' · ' + marker.detail;
+    button.setAttribute('aria-label', 'Jump to ' + button.title);
+    button.addEventListener('click', () => {
+      state.replayTime = marker.timestampMs;
+      render();
+    });
+    container.appendChild(button);
+  });
+  const journalCount = markers.filter((marker) => marker.kind === 'journal').length;
+  const activityCount = markers.length - journalCount;
+  summary.textContent = markers.length + ' retained markers · ' + activityCount + ' activity · ' + journalCount + ' runtime journal';
 }
 
 function renderEvents() {
@@ -608,15 +688,23 @@ function renderTimeline() {
     document.getElementById('timelineReadout').textContent = 'Now';
     document.getElementById('modeLabel').textContent = 'LIVE / SIMULATOR';
     evidenceBadge.textContent = 'LIVE';
+    renderTimelineMarkers(0, 1);
     return;
   }
   const observations = state.replay.observations || [];
-  const first = observations[0]?.timestampMs || 0;
-  const last = observations[observations.length - 1]?.timestampMs || first;
+  const timestamps = [
+    ...observations.map((observation) => observation.timestampMs),
+    ...replayEvidenceMarkers().map((marker) => marker.timestampMs)
+  ].filter(Number.isFinite);
+  const first = timestamps.length ? Math.min(...timestamps) : 0;
+  const rawLast = timestamps.length ? Math.max(...timestamps) : first;
+  const last = rawLast > first ? rawLast : first + 1;
   slider.disabled = false;
   slider.min = String(first);
   slider.max = String(last);
+  state.replayTime = Math.max(first, Math.min(last, Number(state.replayTime || last)));
   slider.value = String(state.replayTime);
+  renderTimelineMarkers(first, last);
   const labels = {
     historical: ['Replay session', 'REPLAY / RECORDED', 'RECORDED'],
     recompute: ['Recomputed session', 'REPLAY / RECOMPUTED', 'DERIVED'],

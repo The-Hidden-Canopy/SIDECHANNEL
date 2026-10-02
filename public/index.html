@@ -138,8 +138,12 @@
             <span id="timelineReadout" class="muted">Now</span>
           </div>
         </div>
-        <input id="timelineSlider" type="range" min="0" max="100" value="100" disabled aria-label="Replay timeline">
+        <div class="timeline-track">
+          <input id="timelineSlider" type="range" min="0" max="100" value="100" disabled aria-label="Replay timeline">
+          <div id="timelineMarkers" class="timeline-markers" aria-label="Replay evidence markers"></div>
+        </div>
         <div class="timeline-ticks"><span>Earlier</span><span>Current</span></div>
+        <div id="timelineMarkerSummary" class="timeline-marker-summary muted">Replay markers appear when a recorded session is open.</div>
         <div id="sessionVerification" class="session-verification muted">Select a session to verify its evidence package.</div>
         <div id="comparisonResult" class="comparison-result muted">Choose two sessions to compare derived fields.</div>
       </div>

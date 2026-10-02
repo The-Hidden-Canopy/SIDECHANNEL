@@ -105,6 +105,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace can compare two self-contained sessions and labels cell differences as derived evidence with source-session provenance.'
   },
   {
+    id: 'temporal-evidence-navigation',
+    label: 'Temporal evidence navigation',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Replay exposes activity and runtime-journal markers with bounded click-to-time navigation; markers remain historical evidence, not new measurements.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',
