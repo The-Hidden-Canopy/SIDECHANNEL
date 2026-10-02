@@ -3,6 +3,7 @@ import { access, mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { computeJournalDigest } from './journal.mjs';
+import { SCHEMA_SET_DIGEST } from './schema.mjs';
 
 async function exists(path) {
   try {
@@ -264,7 +265,7 @@ export class SqliteStore {
       placements: scene.placements || []
     };
     const runtimeBuildId = context.runtimeBuildId || 'sidechannel-node-reference';
-    const schemaSetDigest = context.schemaSetDigest || digest({ observation: '0.1', event: '0.1' });
+    const schemaSetDigest = context.schemaSetDigest || SCHEMA_SET_DIGEST;
     const snapshotDigest = digest({
       sceneSnapshot,
       sourceRegistrySnapshot,

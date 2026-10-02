@@ -10,6 +10,7 @@ import {
 } from './contracts.mjs';
 import { normalizeProvenance } from './provenance/graph.mjs';
 import { validateSpatialSupport } from './spatial/support.mjs';
+import { OBSERVATION_SCHEMA } from './schema.mjs';
 
 function finite(value) {
   return typeof value === 'number' && Number.isFinite(value);
@@ -41,7 +42,10 @@ export function validateObservation(raw, options = {}) {
   if (!isPlainObject(raw)) {
     return { ok: false, id, reasons: [reason('object', 'Observation must be an object')] };
   }
-  if (raw.schemaVersion !== '0.1') {
+  if (raw.schema !== undefined && raw.schema !== OBSERVATION_SCHEMA) {
+    reasons.push(reason('schema', 'Unsupported observation schema'));
+  }
+  if (raw.schema !== OBSERVATION_SCHEMA && !['0.1', '0.2'].includes(raw.schemaVersion)) {
     reasons.push(reason('schemaVersion', 'Unsupported schema version'));
   }
   if (typeof raw.id !== 'string' || raw.id.length < 3 || raw.id.length > 160) {
@@ -123,6 +127,7 @@ export function validateObservation(raw, options = {}) {
   return {
     ok: true,
     observation: {
+      schema: OBSERVATION_SCHEMA,
       schemaVersion: '0.1',
       id: raw.id,
       sourceId,

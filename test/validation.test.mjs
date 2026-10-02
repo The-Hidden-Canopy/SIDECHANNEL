@@ -24,9 +24,25 @@ test('accepts a valid normalized observation', () => {
   assert.equal(result.ok, true);
   assert.equal(result.observation.quality.score, 0.95);
   assert.equal(result.observation.admissionVersion, '0.2');
+  assert.equal(result.observation.schema, 'sidechannel.observation/2');
   assert.equal(result.observation.evidenceState, 'measured');
   assert.equal(result.observation.privacyClass, 'local_numeric');
   assert.deepEqual(result.observation.provenance, []);
+});
+
+test('canonical observation schema is accepted without the legacy schemaVersion field', () => {
+  const result = validateObservation({
+    schema: 'sidechannel.observation/2',
+    id: 'obs_canonical',
+    sourceId: 'sensor_1',
+    channel: 'heat',
+    timestampMs: 1000,
+    value: 22,
+    unit: 'C',
+    status: 'measured'
+  }, { sources, now: 1000 });
+  assert.equal(result.ok, true);
+  assert.equal(result.observation.schema, 'sidechannel.observation/2');
 });
 
 test('validation preserves explicit evidence, privacy, provider, and lineage metadata', () => {

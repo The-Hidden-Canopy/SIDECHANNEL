@@ -26,6 +26,8 @@ After exporting a session, verify its independent receipt with `npm run verify:s
 
 Session exports include an append-only journal with per-session sequence numbers and a SHA-256 hash chain. Verification reports a journal-tail failure if any retained event payload, order, or digest has been altered. Replay is split into historical view, recompute, and determinism verification: recorded artifacts are never labelled as current estimator output, and derived comparison fields retain their source session IDs and estimator configuration.
 
+Admitted observations carry the canonical `sidechannel.observation/2` identifier while accepting legacy `schemaVersion: 0.1` provider frames. New session snapshots use the named schema-set digest exported by `src/schema.mjs`.
+
 Session import runs the same independent verification before writing SQLite state. A package with a broken snapshot digest, duplicate/out-of-order observations, prohibited privacy flag, or corrupted journal tail is rejected with its verification report.
 
 Accepted imports receive a new local session ID, and each imported observation is relabelled `imported` with the original session ID and an `imported_from` provenance edge. Imported evidence cannot masquerade as a live local measurement.
