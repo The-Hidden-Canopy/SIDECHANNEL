@@ -62,6 +62,8 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /scenePointFromEvent/);
   assert.match(appSource, /\/activate/);
   assert.match(appSource, /state\.scenes/);
+  assert.match(appSource, /api\('\/api\/state\?view=compact'/);
+  assert.match(appSource, /refreshLiveState/);
   assert.match(appSource, /viewPaused/);
   assert.match(appSource, /Pause view/);
   assert.match(appSource, /Resume view/);

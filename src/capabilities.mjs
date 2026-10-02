@@ -175,6 +175,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace can create and activate bounded local scenes; activation restarts only the software simulator and never rewrites recorded sessions.'
   },
   {
+    id: 'reconnect-compact-snapshot',
+    label: 'Reconnect compact snapshot',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The live client requests a bounded current-state snapshot after each WebSocket open, including reconnects, without requiring a browser refresh.'
+  },
+  {
     id: 'scene-regions-and-zones',
     label: 'Scene rooms and zones',
     status: 'implemented',

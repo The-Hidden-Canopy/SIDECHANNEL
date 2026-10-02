@@ -122,6 +122,10 @@ function api(path, options) {
   });
 }
 
+function refreshLiveState() {
+  return api('/api/state?view=compact').then(hydrate);
+}
+
 function downloadJson(filename, payload) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const link = document.createElement('a');
@@ -2072,6 +2076,9 @@ function connect() {
   socket.onopen = () => {
     document.getElementById('connectionBadge').className = 'status-pill connected';
     document.getElementById('connectionBadge').innerHTML = '<span class="status-dot"></span>Local stream';
+    refreshLiveState().catch((error) => {
+      document.getElementById('freshnessLabel').textContent = 'Live snapshot refresh failed: ' + error.message;
+    });
   };
   socket.onmessage = (event) => {
     const message = JSON.parse(event.data);

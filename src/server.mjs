@@ -106,18 +106,12 @@ function activateScene(scene) {
   return activeScene;
 }
 
-function snapshot() {
-  return {
+function snapshot({ compact = false } = {}) {
+  const base = {
     scene: activeScene,
     observations: currentObservations(),
     events: recentEvents.slice(-40),
     diagnostics: diagnostics.slice(-40),
-    calibrations: calibrationRegistry.list(),
-    transforms: transformGraph.snapshot(),
-    poses: poseHistory.snapshot(),
-    adapterRuntime: adapterSupervisor.list(),
-    ingress: ingressSequencer.receipt(),
-    capabilities: capabilitySnapshot(),
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
       : null,
@@ -129,6 +123,16 @@ function snapshot() {
       simulator: true,
       launchToken
     }
+  };
+  if (compact) return base;
+  return {
+    ...base,
+    calibrations: calibrationRegistry.list(),
+    transforms: transformGraph.snapshot(),
+    poses: poseHistory.snapshot(),
+    adapterRuntime: adapterSupervisor.list(),
+    ingress: ingressSequencer.receipt(),
+    capabilities: capabilitySnapshot(),
   };
 }
 
@@ -397,7 +401,8 @@ async function handleApi(request, response, pathname) {
     return sendJson(response, 200, capabilitySnapshot());
   }
   if (request.method === 'GET' && pathname === '/api/state') {
-    return sendJson(response, 200, snapshot());
+    const view = new URL(request.url, 'http://127.0.0.1').searchParams.get('view');
+    return sendJson(response, 200, snapshot({ compact: view === 'compact' }));
   }
   if (request.method === 'GET' && pathname === '/api/adapters') {
     return sendJson(response, 200, { adapters: listAdapters() });
