@@ -42,7 +42,7 @@ Accepted imports receive a new local session ID, and each imported observation i
 npm start
 ```
 
-Open `http://127.0.0.1:4173/`. The application starts with deterministic simulated sources, supports scene/source authoring, manual numeric input, JSON-lines and WebSocket ingestion, recording, replay, export/import, local deletion, and loopback adapter-supervisor lifecycle controls. These controls change the managed supervisor state; they are not evidence that a native hardware process is present.
+Open `http://127.0.0.1:4173/`. The application starts with deterministic simulated sources, supports scene/source authoring, manual numeric input, JSON-lines and WebSocket ingestion, recording, replay, export/import, local deletion, and loopback adapter-supervisor lifecycle controls. The supervised subprocess adapter is a tested local transport primitive with bounded JSONL frames, stdout limits, cancellation, and supervisor integration; it does not provide or imply a native hardware driver.
 
 While a session is recording, adapter failures are emitted as bounded diagnostics and journaled as `AdapterFailure`; crossing the quarantine threshold adds `AdapterQuarantined`. The runtime does not synthesize a zero-valued observation for a failed provider.
 

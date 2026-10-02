@@ -26,6 +26,13 @@ export const ADAPTERS = Object.freeze([
     description: 'Accepts normalized observations over loopback at /ws/ingest.',
     capabilities: ['streaming_observation'],
     privacyMode: 'local_numeric'
+  },
+  {
+    type: 'subprocess',
+    name: 'Supervised subprocess adapter',
+    description: 'Runs a local versioned JSONL provider with bounded output and cancellation.',
+    capabilities: ['versioned_frames', 'bounded_output', 'cancellation'],
+    privacyMode: 'provider_declared'
   }
 ]);
 

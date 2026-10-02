@@ -6,6 +6,12 @@ export async function consumeJsonLines(readable, emit, options = {}) {
   for await (const line of lineReader) {
     const trimmed = line.trim();
     if (!trimmed) continue;
+    if (Buffer.byteLength(trimmed, 'utf8') > (options.maxLineBytes || 64_000)) {
+      const diagnostic = { line: trimmed.slice(0, 200), message: 'adapter line exceeds declared byte limit' };
+      errors.push(diagnostic);
+      if (options.onError) options.onError(diagnostic);
+      continue;
+    }
     try {
       emit(JSON.parse(trimmed));
     } catch (error) {
@@ -58,4 +64,3 @@ export class JsonlAdapter {
     return Promise.resolve({ connected: this.descriptor.connected });
   }
 }
-
