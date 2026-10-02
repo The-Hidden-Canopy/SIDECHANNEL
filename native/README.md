@@ -26,7 +26,7 @@ After building, compare the C++ fixture to the Node reference simulator:
 npm run verify:native-parity -- build/native/native/Debug/sidechannel-native.exe 2
 ```
 
-The native CLI supports both human-readable summary/CSV output and a dependency-free structured JSON fixture. The parity command compares that JSON fixture's canonical schema identifier, fixture IDs, source/channel identity, timestamps, values, quality scores, and simulated evidence state. It does not yet prove SQLite/export parity.
+The native CLI supports both human-readable summary/CSV output and a dependency-free structured JSON fixture. The parity command compares that JSON fixture's canonical schema identifier, fixture IDs, source/channel identity, timestamps, values, quality scores, and simulated evidence state. The separate native SQLite, export, IPC, and SceneView gates cover persistence and interoperability beyond that fixture comparison.
 
 `--session-json` emits a dependency-free `sidechannel-session/0.2` reference package with a frozen native scene/source snapshot, canonical observations, SHA-256 snapshot and package digests, a hash-chained session/observation journal, and bounded empty pose/event sections. Run `npm run verify:native-session -- path/to/sidechannel-native.exe 2` to validate that package with the Node session verifier and compare canonical observation rows against the Node deterministic simulator. This proves semantic fixture-package parity, digest, and journal compatibility; it is not native SQLite persistence or a replacement for the Node runtime authority.
 

@@ -46,9 +46,14 @@ jobs:
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
-            npm run verify:native-parity -- build/native/native/Release/sidechannel-native.exe 2
-            npm run verify:native-session -- build/native/native/Release/sidechannel-native.exe 2
+            native_exe=build/native/native/Release/sidechannel-native.exe
           else
-            npm run verify:native-parity -- build/native/native/sidechannel-native 2
-            npm run verify:native-session -- build/native/native/sidechannel-native 2
+            native_exe=build/native/native/sidechannel-native
           fi
+          npm run verify:native-parity -- "$native_exe" 2
+          npm run verify:native-session -- "$native_exe" 2
+          npm run verify:native-export -- "$native_exe"
+          npm run verify:native-adapter -- "$native_exe"
+          npm run verify:native-sqlite -- "$native_exe" 2
+          npm run verify:native-ipc-sqlite -- "$native_exe"
+          npm run verify:native-ipc-scene-view -- "$native_exe"
