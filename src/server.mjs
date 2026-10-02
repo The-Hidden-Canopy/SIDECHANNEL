@@ -499,6 +499,13 @@ async function handleApi(request, response, pathname) {
   }
   if (request.method === 'POST' && pathname === '/api/sessions/import') {
     const body = await bodyJson(request);
+    const verification = verifySessionPackage(body);
+    if (!verification.ok) {
+      return sendJson(response, 422, {
+        error: 'session package failed independent verification',
+        verification
+      });
+    }
     const session = await store.importPackage(body);
     return sendJson(response, 201, { session });
   }
