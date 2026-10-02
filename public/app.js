@@ -32,6 +32,8 @@ const state = {
   capabilities: null,
   benchmarkReceipt: null,
   benchmarkBusy: false,
+  burstReceipt: null,
+  burstBusy: false,
   selected: null,
   editMode: false,
   draggedSourceId: null,
@@ -247,6 +249,25 @@ function renderBenchmark() {
     ['Admission', 'p50 ' + receipt.admissionLatencyUs.p50 + ' µs · p95 ' + receipt.admissionLatencyUs.p95 + ' µs'],
     ['Field', receipt.fieldCellCount + ' cells · ' + receipt.fieldEvaluationMs + ' ms'],
     ['Replay', receipt.replay?.deterministic ? 'deterministic' : 'drift detected']
+  ].map(([label, value]) => '<div class="benchmark-row"><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('');
+}
+
+function renderBurstBenchmark() {
+  const button = document.getElementById('burstBenchmarkButton');
+  const result = document.getElementById('burstBenchmarkResult');
+  if (!button || !result) return;
+  button.disabled = state.burstBusy;
+  button.textContent = state.burstBusy ? 'Running burst…' : 'Run 10k burst check';
+  if (!state.burstReceipt) {
+    result.innerHTML = '<span class="muted">No burst receipt yet.</span>';
+    return;
+  }
+  const receipt = state.burstReceipt;
+  result.innerHTML = [
+    ['Burst', receipt.requestedFrames + ' requested · ' + receipt.admittedCount + ' admitted'],
+    ['Backpressure', receipt.droppedCount + ' dropped · queue ' + receipt.queueCapacity],
+    ['Timing', receipt.admissionLatencyUs.p95 + ' µs p95 · ' + receipt.framesPerSecond + ' frames/s host-local'],
+    ['Receipt', receipt.receiptDigest.slice(0, 12) + '… verified']
   ].map(([label, value]) => '<div class="benchmark-row"><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('');
 }
 
@@ -536,7 +557,7 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); draw();
+  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -618,6 +639,24 @@ document.getElementById('benchmarkButton').addEventListener('click', async () =>
   } finally {
     state.benchmarkBusy = false;
     renderBenchmark();
+  }
+});
+
+document.getElementById('burstBenchmarkButton').addEventListener('click', async () => {
+  state.burstBusy = true;
+  renderBurstBenchmark();
+  try {
+    const payload = await api('/api/benchmark/burst', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ frames: 10000, sourceCount: 8, queueCapacity: 1024, seed: 1337 })
+    });
+    state.burstReceipt = payload.receipt;
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Burst benchmark failed: ' + error.message;
+  } finally {
+    state.burstBusy = false;
+    renderBurstBenchmark();
   }
 });
 

@@ -19,7 +19,7 @@ import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from './sec
 import { AdapterSupervisor } from './adapters/supervisor.mjs';
 import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
 import { createReplayReceipt } from './verification/receipt.mjs';
-import { runSoftwareBenchmark, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
+import { runBurstBenchmark, runSoftwareBenchmark, verifyBurstBenchmarkReceipt, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
 import { capabilitySnapshot } from './capabilities.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -284,6 +284,21 @@ async function handleApi(request, response, pathname) {
         sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
       });
       return sendJson(response, 200, { receipt, verification: verifySoftwareBenchmarkReceipt(receipt) });
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
+  }
+  if (request.method === 'POST' && pathname === '/api/benchmark/burst') {
+    const body = await bodyJson(request);
+    try {
+      const receipt = await runBurstBenchmark({
+        frames: body.frames === undefined ? 10_000 : Number(body.frames),
+        sourceCount: body.sourceCount === undefined ? 8 : Number(body.sourceCount),
+        queueCapacity: body.queueCapacity === undefined ? 1_024 : Number(body.queueCapacity),
+        seed: body.seed === undefined ? 1337 : Number(body.seed),
+        sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
+      });
+      return sendJson(response, 200, { receipt, verification: verifyBurstBenchmarkReceipt(receipt) });
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
     }

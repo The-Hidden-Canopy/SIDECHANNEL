@@ -12,6 +12,7 @@
     "verify:native-parity": "node scripts/verify-native-parity.mjs",
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:matrix": "node scripts/benchmark-matrix.mjs",
+    "benchmark:burst": "node scripts/benchmark-burst.mjs",
     "start": "node src/server.mjs"
   }
 }

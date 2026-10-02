@@ -4,6 +4,7 @@ import { createDefaultScene, createSimulator, DEFAULT_SOURCES } from '../simulat
 import { interpolateActivityField } from '../spatial.mjs';
 import { validateObservation } from '../validation.mjs';
 import { SCHEMA_SET_DIGEST } from '../schema.mjs';
+import { createIngressSequencer } from '../admission/sequencer.mjs';
 import { createReplayReceipt, verifyReplayReceipt } from './receipt.mjs';
 
 function percentile(values, fraction) {
@@ -178,6 +179,131 @@ export function verifySoftwareBenchmarkReceipt(receipt) {
     const copy = { ...receipt };
     delete copy.receiptDigest;
     if (digest(copy) !== receipt.receiptDigest) reasons.push('benchmark receipt digest mismatch');
+  }
+  return { ok: reasons.length === 0, reasons, receiptDigest: receipt?.receiptDigest || null };
+}
+
+export async function runBurstBenchmark({
+  frames = 10_000,
+  sourceCount = 8,
+  queueCapacity = 1_024,
+  seed = 1337,
+  runId = 'burst_' + Date.now(),
+  sourceCommit = 'unknown'
+} = {}) {
+  if (!Number.isInteger(frames) || frames < 1 || frames > 10_000) throw new Error('frames must be between 1 and 10000');
+  if (!Number.isInteger(sourceCount) || sourceCount < 1 || sourceCount > 512) throw new Error('sourceCount must be between 1 and 512');
+  if (!Number.isInteger(queueCapacity) || queueCapacity < 1 || queueCapacity > 10_000) throw new Error('queueCapacity must be between 1 and 10000');
+
+  const sceneBase = createDefaultScene();
+  const sources = benchmarkSources(sceneBase, sourceCount);
+  const sourceMap = new Map(sources.map((source) => [source.id, source]));
+  const admittedIds = [];
+  const admissionLatenciesUs = [];
+  let rejectedCount = 0;
+  let currentTick = 0;
+  const simulator = createSimulator({
+    sources,
+    seed,
+    intervalMs: 60_000,
+    clock: () => currentTick * 250,
+    emit: () => {}
+  });
+  const ingress = createIngressSequencer({
+    maxQueue: queueCapacity,
+    clock: () => 0,
+    process: async (frame) => {
+      const admissionStart = performance.now();
+      const result = validateObservation(frame, { sources: sourceMap, now: frame.timestampMs });
+      admissionLatenciesUs.push((performance.now() - admissionStart) * 1000);
+      if (result.ok) admittedIds.push(result.observation.id);
+      else rejectedCount += 1;
+      return result;
+    }
+  });
+  const pending = [];
+  const startedAt = performance.now();
+  while (pending.length < frames) {
+    const observations = simulator.step();
+    currentTick += 1;
+    for (const observation of observations) {
+      if (pending.length >= frames) break;
+      pending.push(ingress.enqueue(observation));
+    }
+  }
+  await Promise.all(pending);
+  const durationMs = performance.now() - startedAt;
+  const ingressReceipt = ingress.receipt();
+  const receipt = {
+    format: 'sidechannel-burst-benchmark-receipt',
+    formatVersion: '0.1',
+    evidenceLevel: 'E2',
+    tier: 'simulator-reference',
+    runId,
+    sourceCommit,
+    runtimeBuildId: 'sidechannel-node-reference',
+    schemaDigest: SCHEMA_SET_DIGEST,
+    seed,
+    requestedFrames: frames,
+    sourceCount,
+    queueCapacity,
+    admittedCount: ingressReceipt.framesAdmitted,
+    rejectedCount,
+    droppedCount: ingressReceipt.framesDroppedBackpressure,
+    durationMs: Number(durationMs.toFixed(3)),
+    framesPerSecond: Number((frames / Math.max(durationMs / 1000, 0.000001)).toFixed(3)),
+    admissionLatencyUs: {
+      p50: percentile(admissionLatenciesUs, 0.5),
+      p95: percentile(admissionLatenciesUs, 0.95),
+      p99: percentile(admissionLatenciesUs, 0.99)
+    },
+    ingress: ingressReceipt,
+    admittedDigest: digest(admittedIds),
+    limitations: [
+      'E2 simulator burst receipt only; no physical source or third-party data was exercised.',
+      'Backpressure and timing are host-local software measurements, not a 10,000-frames-per-second production claim.'
+    ]
+  };
+  receipt.receiptDigest = digest(receipt);
+  return receipt;
+}
+
+export function verifyBurstBenchmarkReceipt(receipt) {
+  const reasons = [];
+  if (!receipt || receipt.format !== 'sidechannel-burst-benchmark-receipt') reasons.push('invalid burst receipt format');
+  if (receipt?.formatVersion !== '0.1') reasons.push('unsupported burst receipt version');
+  if (receipt?.evidenceLevel !== 'E2') reasons.push('burst receipt must be E2');
+  if (receipt?.tier !== 'simulator-reference') reasons.push('burst receipt must be simulator-reference');
+  for (const field of ['runId', 'sourceCommit', 'runtimeBuildId', 'schemaDigest', 'admittedDigest']) {
+    if (typeof receipt?.[field] !== 'string' || receipt[field].length === 0) reasons.push('missing burst field: ' + field);
+  }
+  for (const field of ['requestedFrames', 'sourceCount', 'queueCapacity', 'admittedCount', 'rejectedCount', 'droppedCount']) {
+    if (!Number.isInteger(receipt?.[field]) || receipt[field] < 0) reasons.push('invalid burst count: ' + field);
+  }
+  if (!Number.isInteger(receipt?.requestedFrames) || receipt.requestedFrames < 1 || receipt.requestedFrames > 10_000) reasons.push('requestedFrames outside burst bounds');
+  if (!Number.isInteger(receipt?.sourceCount) || receipt.sourceCount < 1 || receipt.sourceCount > 512) reasons.push('sourceCount outside burst bounds');
+  if (!Number.isInteger(receipt?.queueCapacity) || receipt.queueCapacity < 1 || receipt.queueCapacity > 10_000) reasons.push('queueCapacity outside burst bounds');
+  if (receipt?.admittedCount + receipt?.rejectedCount + receipt?.droppedCount !== receipt?.requestedFrames) reasons.push('burst counts do not reconcile');
+  for (const field of ['durationMs', 'framesPerSecond']) {
+    if (!Number.isFinite(receipt?.[field]) || receipt[field] < 0) reasons.push('invalid burst metric: ' + field);
+  }
+  const latency = receipt?.admissionLatencyUs;
+  if (!latency || !['p50', 'p95', 'p99'].every((field) => Number.isFinite(latency[field]) && latency[field] >= 0)) {
+    reasons.push('invalid burst latency metrics');
+  } else if (!(latency.p50 <= latency.p95 && latency.p95 <= latency.p99)) {
+    reasons.push('burst latency percentiles are not monotonic');
+  }
+  const ingress = receipt?.ingress;
+  if (!ingress || ingress.framesReceived !== receipt?.requestedFrames || ingress.framesAdmitted !== receipt?.admittedCount ||
+      ingress.framesRejected !== receipt?.rejectedCount || ingress.framesDroppedBackpressure !== receipt?.droppedCount) {
+    reasons.push('ingress receipt does not reconcile');
+  }
+  if (typeof receipt?.receiptDigest !== 'string' || receipt.receiptDigest.length !== 64) {
+    reasons.push('missing burst receipt digest');
+  } else {
+    const copy = { ...receipt };
+    delete copy.receiptDigest;
+    if (digest(copy) !== receipt.receiptDigest) reasons.push('burst receipt digest mismatch');
   }
   return { ok: reasons.length === 0, reasons, receiptDigest: receipt?.receiptDigest || null };
 }
