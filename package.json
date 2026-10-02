@@ -14,6 +14,7 @@
     "verify:native-export": "node scripts/verify-native-export.mjs",
     "verify:native-adapter": "node scripts/verify-native-adapter.mjs",
     "verify:native-sqlite": "node scripts/verify-native-sqlite.mjs",
+    "verify:native-ipc-sqlite": "node scripts/verify-native-ipc-sqlite.mjs",
     "package:audit": "node scripts/package-audit.mjs",
     "benchmark": "node scripts/benchmark.mjs",
     "benchmark:scene-view": "node scripts/benchmark-scene-view.mjs",

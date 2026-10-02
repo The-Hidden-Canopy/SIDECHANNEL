@@ -130,7 +130,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Native IPC session control',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'The native IPC boundary can bind to a durable session file for bounded status, observation admission, verification, close, and restart/reopen control; it is not native SQLite authority, a desktop shell, deployment security, or hardware support.'
+    note: 'The native IPC boundary can bind to either the durable file-backed or vendored SQLite session authority for bounded status, observation admission, verification, close, and restart/reopen control; it is not a network, desktop shell, deployment security, or hardware claim.'
   },
   {
     id: 'native-c-api-control-surface',

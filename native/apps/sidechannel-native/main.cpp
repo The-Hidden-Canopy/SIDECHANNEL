@@ -92,7 +92,58 @@ std::string adapter_record_json(const sidechannel::NativeAdapterRecord& record) 
   return output.str();
 }
 
-bool journal_adapter_event(sidechannel::NativeSessionStore* session, const std::string& type,
+class IpcSession {
+public:
+  IpcSession(std::filesystem::path file_path, bool sqlite)
+    : sqlite_(sqlite) {
+    if (sqlite_) sqlite_session_ = std::make_unique<sidechannel::NativeSqliteSessionStore>(std::move(file_path), "session_native_cli");
+    else file_session_ = std::make_unique<sidechannel::NativeSessionStore>(std::move(file_path), "session_native_cli");
+  }
+
+  bool open() {
+    return sqlite_ ? sqlite_session_->open() : file_session_->open();
+  }
+
+  std::string state() const {
+    return sqlite_ ? sqlite_session_->state() : file_session_->state();
+  }
+
+  std::size_t observation_count() const {
+    return sqlite_ ? sqlite_session_->observations().size() : file_session_->observations().size();
+  }
+
+  std::size_t journal_event_count() const {
+    return sqlite_ ? sqlite_session_->journal().size() : file_session_->journal().entries().size();
+  }
+
+  bool append(sidechannel::Observation observation) {
+    return sqlite_ ? sqlite_session_->append(std::move(observation)) : file_session_->append(std::move(observation));
+  }
+
+  bool record_event(std::string type, std::int64_t timestamp_ms, std::string payload) {
+    return sqlite_ ? sqlite_session_->record_event(std::move(type), timestamp_ms, std::move(payload))
+      : file_session_->record_event(std::move(type), timestamp_ms, std::move(payload));
+  }
+
+  bool close(std::int64_t ended_at_ms) {
+    return sqlite_ ? sqlite_session_->close(ended_at_ms) : file_session_->close(ended_at_ms);
+  }
+
+  sidechannel::JournalVerification verify() const {
+    return sqlite_ ? sqlite_session_->verify() : file_session_->verify();
+  }
+
+  std::string last_error() const {
+    return sqlite_ ? sqlite_session_->last_error() : std::string{};
+  }
+
+private:
+  bool sqlite_ = false;
+  std::unique_ptr<sidechannel::NativeSessionStore> file_session_;
+  std::unique_ptr<sidechannel::NativeSqliteSessionStore> sqlite_session_;
+};
+
+bool journal_adapter_event(IpcSession* session, const std::string& type,
   const sidechannel::NativeAdapterRecord& record, const std::string& detail = {}) {
   if (!session) return true;
   std::string payload = "{\"providerId\":" + quote_json(record.manifest.provider_id) +
@@ -134,13 +185,15 @@ std::int64_t now_ms() {
   return std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
 }
 
-int run_ipc_stdio(const std::string& token, const std::string& session_file) {
-  std::unique_ptr<sidechannel::NativeSessionStore> session;
+int run_ipc_stdio(const std::string& token, const std::string& session_file, const std::string& sqlite_session_file) {
+  std::unique_ptr<IpcSession> session;
   sidechannel::NativeAdapterSupervisor adapters;
-  if (!session_file.empty()) {
-    session = std::make_unique<sidechannel::NativeSessionStore>(session_file, "session_native_cli");
+  if (!session_file.empty() || !sqlite_session_file.empty()) {
+    session = std::make_unique<IpcSession>(
+      sqlite_session_file.empty() ? std::filesystem::path(session_file) : std::filesystem::path(sqlite_session_file),
+      !sqlite_session_file.empty());
     if (!session->open()) {
-      std::cerr << "could not open native IPC session file\n";
+      std::cerr << "could not open native IPC session: " << session->last_error() << '\n';
       return 1;
     }
   }
@@ -173,8 +226,8 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
       else {
         response.type = "session.status";
         response.payload = "{\"state\":" + quote_json(session->state()) +
-          ",\"observations\":" + std::to_string(session->observations().size()) +
-          ",\"journalEvents\":" + std::to_string(session->journal().entries().size()) + '}';
+          ",\"observations\":" + std::to_string(session->observation_count()) +
+          ",\"journalEvents\":" + std::to_string(session->journal_event_count()) + '}';
       }
     } else if (decoded.frame.type == "session.observe") {
       sidechannel::Observation observation;
@@ -185,8 +238,8 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
         response.payload = "{\"error\":\"session rejected observation\"}";
       } else {
         response.type = "observation.accepted";
-        response.payload = "{\"observations\":" + std::to_string(session->observations().size()) +
-          ",\"journalEvents\":" + std::to_string(session->journal().entries().size()) + '}';
+        response.payload = "{\"observations\":" + std::to_string(session->observation_count()) +
+          ",\"journalEvents\":" + std::to_string(session->journal_event_count()) + '}';
       }
     } else if (decoded.frame.type == "session.verify") {
       if (!session) response.payload = "{\"error\":\"session file is required\"}";
@@ -196,7 +249,7 @@ int run_ipc_stdio(const std::string& token, const std::string& session_file) {
         else {
           response.type = "session.verified";
           response.payload = "{\"verified\":true,\"journalEvents\":" +
-            std::to_string(session->journal().entries().size()) + '}';
+            std::to_string(session->journal_event_count()) + '}';
         }
       }
     } else if (decoded.frame.type == "session.close") {
@@ -436,12 +489,13 @@ int main(int argc, char** argv) {
     } else if (std::string(argv[index]) == "--ipc-stdio" && index + 1 < argc) {
       ipc_token = argv[++index];
     } else {
-      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH [--export-json PATH]|--sqlite-session-file PATH [--export-json PATH]|--ipc-stdio TOKEN [--session-file PATH]]\n";
+      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH [--export-json PATH]|--sqlite-session-file PATH [--export-json PATH]|--ipc-stdio TOKEN [--session-file PATH|--sqlite-session-file PATH]]\n";
       return 2;
     }
   }
   if (!ipc_token.empty()) {
-    if (csv || json || session_json || !export_file.empty() || !sqlite_session_file.empty()) {
+    if (csv || json || session_json || !export_file.empty() ||
+        (!session_file.empty() && !sqlite_session_file.empty())) {
       std::cerr << "ipc mode cannot be combined with a fixture output format\n";
       return 2;
     }
@@ -460,7 +514,7 @@ int main(int argc, char** argv) {
     std::cerr << "ticks must be between 1 and 10000\n";
     return 2;
   }
-  if (!ipc_token.empty()) return run_ipc_stdio(ipc_token, session_file);
+  if (!ipc_token.empty()) return run_ipc_stdio(ipc_token, session_file, sqlite_session_file);
   if (!sqlite_session_file.empty()) return run_sqlite_session(sqlite_session_file, export_file, ticks);
 
   sidechannel::DeterministicSimulator simulator;
