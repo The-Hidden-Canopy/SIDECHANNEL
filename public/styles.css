@@ -90,6 +90,18 @@ button { cursor: pointer; }
 .benchmark-result { display: grid; gap: 6px; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); }
 .benchmark-row { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; }
 .benchmark-row strong { color: var(--text); text-align: right; font-weight: 600; }
+.capability-list { display: grid; gap: 8px; margin-top: 12px; }
+.capability-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; padding-top: 7px; border-top: 1px solid var(--line); }
+.capability-row:first-child { padding-top: 0; border-top: 0; }
+.capability-row div { min-width: 0; }
+.capability-row strong, .capability-row span { display: block; }
+.capability-row strong { color: var(--text); font-size: 10px; font-weight: 600; }
+.capability-row span { color: var(--faint); font-size: 9px; line-height: 1.35; margin-top: 3px; }
+.capability-status { flex: 0 0 auto; padding: 3px 5px; border-radius: 4px; font-size: 8px; font-style: normal; text-transform: uppercase; letter-spacing: .04em; }
+.status-implemented { color: var(--cyan); background: rgba(108, 228, 219, .1); }
+.status-reference-only { color: var(--blue); background: rgba(121, 167, 255, .1); }
+.status-hardware-gated, .status-planned { color: var(--orange); background: rgba(255, 180, 123, .1); }
+.status-out-of-scope, .status-not-supported { color: var(--faint); background: rgba(89, 112, 127, .12); }
 .privacy-panel { color: var(--muted); font-size: 11px; line-height: 1.5; }
 .scene-tools .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 10px; }
 .scene-tools label { color: var(--muted); font-size: 10px; }

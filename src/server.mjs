@@ -20,6 +20,7 @@ import { AdapterSupervisor } from './adapters/supervisor.mjs';
 import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
 import { createReplayReceipt } from './verification/receipt.mjs';
 import { runSoftwareBenchmark, verifySoftwareBenchmarkReceipt } from './verification/benchmark.mjs';
+import { capabilitySnapshot } from './capabilities.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -76,6 +77,7 @@ function snapshot() {
     transforms: transformGraph.snapshot(),
     adapterRuntime: adapterSupervisor.list(),
     ingress: ingressSequencer.receipt(),
+    capabilities: capabilitySnapshot(),
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
       : null,
@@ -255,6 +257,9 @@ async function handleApi(request, response, pathname) {
       simulator: true,
       nowMs: Date.now()
     });
+  }
+  if (request.method === 'GET' && pathname === '/api/capabilities') {
+    return sendJson(response, 200, capabilitySnapshot());
   }
   if (request.method === 'GET' && pathname === '/api/state') {
     return sendJson(response, 200, snapshot());

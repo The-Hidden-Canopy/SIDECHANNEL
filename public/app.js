@@ -29,6 +29,7 @@ const state = {
   replayArtifact: null,
   replayReport: null,
   replayMode: 'historical',
+  capabilities: null,
   benchmarkReceipt: null,
   benchmarkBusy: false,
   selected: null,
@@ -82,6 +83,7 @@ function hydrate(payload) {
   state.events = payload.events || [];
   state.recording = payload.recording;
   state.sessions = payload.sessions || [];
+  state.capabilities = payload.capabilities || state.capabilities;
   render();
 }
 
@@ -246,6 +248,23 @@ function renderBenchmark() {
     ['Field', receipt.fieldCellCount + ' cells · ' + receipt.fieldEvaluationMs + ' ms'],
     ['Replay', receipt.replay?.deterministic ? 'deterministic' : 'drift detected']
   ].map(([label, value]) => '<div class="benchmark-row"><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('');
+}
+
+function renderCapabilities() {
+  const list = document.getElementById('capabilityList');
+  const count = document.getElementById('capabilityCount');
+  if (!list || !count) return;
+  const claims = state.capabilities?.claims || [];
+  count.textContent = claims.length;
+  if (!claims.length) {
+    list.innerHTML = '<span class="muted">Capability matrix unavailable.</span>';
+    return;
+  }
+  list.innerHTML = claims.map((claim) =>
+    '<div class="capability-row"><div><strong>' + escapeHtml(claim.label) + '</strong><span>' +
+    escapeHtml(claim.note) + '</span></div><em class="capability-status status-' + escapeHtml(claim.status) + '">' +
+    escapeHtml(claim.status) + ' · ' + escapeHtml(claim.evidenceLevel) + '</em></div>'
+  ).join('');
 }
 
 function renderInspector() {
@@ -517,7 +536,7 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderEvents(); renderInspector(); renderTimeline(); draw();
+  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {

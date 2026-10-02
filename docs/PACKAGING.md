@@ -24,6 +24,7 @@ When the native executable is built, `npm run verify:native-parity -- path/to/si
 
 Run `npm run benchmark -- 8 14` for a software-only E2 simulator receipt covering admitted/rejected counts, admission p50/p95/p99, field evaluation time, throughput, replay determinism, and explicit non-production limitations. The same check is available as `POST /api/benchmark` and through the UI's Runtime evidence panel. Use `npm run verify:benchmark -- path/to/benchmark-receipt.json` to independently verify a saved receipt and detect digest or count tampering.
 Run `npm run benchmark:matrix` for bounded generated-source S0–S3 profiles (8, 32, 128, and 512 sources). These are comparative software measurements only; the output explicitly leaves S4 burst and physical-source campaigns open.
+The runtime also exposes a read-only capability matrix at `/api/capabilities`; the UI's Capability gates panel keeps implemented, reference-only, hardware-gated, planned, and unsupported claims visibly separate.
 
 After exporting a session, verify its independent receipt with `npm run verify:session -- path/to/exported-session.json`. Generate a replay evidence receipt with `npm run receipt:session -- path/to/exported-session.json`. The running server also exposes `/api/sessions/:id/verify` and `/api/sessions/:id/receipt` for the same structural checks and software-only replay receipt.
 
