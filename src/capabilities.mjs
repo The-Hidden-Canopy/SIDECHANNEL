@@ -151,7 +151,7 @@ export const CAPABILITY_MATRIX = Object.freeze([
     label: 'Transform authoring surface',
     status: 'implemented',
     evidenceLevel: 'E1',
-    note: 'The workspace publishes bounded revisioned frame edges and shows their translation and scale; this is software frame metadata, not physical calibration proof.'
+    note: 'The workspace publishes bounded revisioned frame edges, resolves acyclic multi-edge paths, and shows translation and scale; this is software frame metadata, not physical calibration proof.'
   },
   {
     id: 'local-background-layer',
