@@ -23,6 +23,8 @@ jobs:
         run: npm run verify
       - name: Assemble portable loopback bundle
         run: node scripts/package-runtime.mjs . "$RUNNER_TEMP/sidechannel-runtime"
+      - name: Launch assembled portable loopback bundle
+        run: npm run verify:runtime-bundle -- . "$RUNNER_TEMP/sidechannel-runtime"
       - name: Run bounded benchmark matrix
         run: npm run benchmark:matrix
       - name: Run SceneView benchmark receipt

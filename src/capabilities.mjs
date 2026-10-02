@@ -28,6 +28,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A bounded Node host supervises the loopback server, waits for a healthy local response, emits a ready receipt, and forwards shutdown; it is not a native desktop shell, installer, deployment, or hardware authority.'
   },
   {
+    id: 'portable-bundle-smoke',
+    label: 'Assembled portable bundle smoke gate',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The assembled, manifest-verified runtime bundle is launched as a separate artifact and checked for its ready receipt, loopback health contract, and browser shell before clean shutdown; it is not an installer, signing result, native desktop shell, or hardware authority.'
+  },
+  {
     id: 'calibration-provenance-gates',
     label: 'Calibration provenance gates',
     status: 'implemented',
