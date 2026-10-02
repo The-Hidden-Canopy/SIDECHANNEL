@@ -28,7 +28,7 @@ npm start
 
 Open http://127.0.0.1:4173/.
 
-The server is loopback-only by default. It starts a deterministic simulator with nine positioned channel sources and exposes `/api/health`, `/api/state`, `/api/adapters`, `/api/calibrations`, `/api/transforms`, scene/source authoring, HTTP observation ingestion, `/ws/live` live updates, `/ws/ingest` normalized observation input, session recording, replay data, and privacy-labelled JSON export.
+The server is loopback-only by default. It starts a deterministic simulator with nine positioned channel sources and exposes `/api/health`, `/api/state`, `/api/adapters`, `/api/adapter-runtime`, `/api/calibrations`, `/api/transforms`, scene/source authoring, HTTP observation ingestion, `/ws/live` live updates, `/ws/ingest` normalized observation input, session recording, replay data, and privacy-labelled JSON export.
 
 ## Implemented v0.1 slice
 

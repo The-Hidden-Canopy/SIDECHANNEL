@@ -16,6 +16,7 @@ import { CalibrationRegistry } from './calibration/registry.mjs';
 import { TransformGraph } from './spatial/transform-graph.mjs';
 import { verifySessionPackage } from './session-verifier.mjs';
 import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from './security.mjs';
+import { AdapterSupervisor } from './adapters/supervisor.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -36,12 +37,20 @@ const clients = new Set();
 const eventDetector = createEventDetector();
 const calibrationRegistry = new CalibrationRegistry();
 const transformGraph = new TransformGraph();
+const adapterSupervisor = new AdapterSupervisor();
 const ingestClients = new Set();
 const MAX_LIVE_CLIENTS = 32;
 const MAX_INGEST_CLIENTS = 16;
 const MAX_WEBSOCKET_BUFFER_BYTES = 2_000_000;
 let admissionSequence = 0;
 const admittedIds = new Set();
+
+for (const adapter of listAdapters()) {
+  adapterSupervisor.register(createProviderManifest({
+    providerId: 'builtin:' + adapter.type,
+    capabilities: adapter.capabilities
+  }));
+}
 
 function sourceMap() {
   return new Map(activeScene.sources.map((source) => [source.id, source]));
@@ -62,6 +71,7 @@ function snapshot() {
     diagnostics: diagnostics.slice(-40),
     calibrations: calibrationRegistry.list(),
     transforms: transformGraph.snapshot(),
+    adapterRuntime: adapterSupervisor.list(),
     recording: recordingSessionId
       ? { id: recordingSessionId, state: 'recording' }
       : null,
@@ -215,6 +225,9 @@ async function handleApi(request, response, pathname) {
   if (request.method === 'GET' && pathname === '/api/adapters') {
     return sendJson(response, 200, { adapters: listAdapters() });
   }
+  if (request.method === 'GET' && pathname === '/api/adapter-runtime') {
+    return sendJson(response, 200, { adapters: adapterSupervisor.list() });
+  }
   if (request.method === 'GET' && pathname === '/api/calibrations') {
     return sendJson(response, 200, { revision: calibrationRegistry.revision, calibrations: calibrationRegistry.list() });
   }
@@ -285,6 +298,7 @@ async function handleApi(request, response, pathname) {
         rawContentPolicy: 'none'
       });
       if (!manifestResult.ok) return sendJson(response, 422, { error: 'invalid provider manifest', reasons: manifestResult.reasons });
+      adapterSupervisor.register(manifestResult.manifest);
       const source = {
         ...body,
         id: sourceId,
@@ -538,6 +552,7 @@ const simulator = createSimulator({
     }));
   }
 });
+adapterSupervisor.start('builtin:simulator');
 simulator.start();
 
 server.listen(port, '127.0.0.1', () => {
@@ -546,6 +561,7 @@ server.listen(port, '127.0.0.1', () => {
 
 process.on('SIGINT', () => {
   simulator.stop();
+  adapterSupervisor.stop('builtin:simulator');
   server.close(() => {
     store.close();
     process.exit(0);
