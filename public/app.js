@@ -1568,6 +1568,7 @@ function render() {
   const selectedSessionId = document.getElementById('sessionSelect').value;
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
+  document.getElementById('copyButton').disabled = Boolean(state.recording) || !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   const pruneButton = document.getElementById('pruneSessionsButton');
   const pruneInput = document.getElementById('sessionKeepCount');
@@ -1770,6 +1771,22 @@ document.getElementById('verifyButton').addEventListener('click', async () => {
   } finally {
     state.verificationBusy = false;
     renderSessionVerification();
+  }
+});
+
+document.getElementById('copyButton').addEventListener('click', async () => {
+  const id = document.getElementById('sessionSelect').value;
+  if (!id || state.recording || !window.confirm('Copy this verified terminal session as an imported local session?')) return;
+  try {
+    const copied = await api('/api/sessions/' + id + '/copy', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    document.getElementById('freshnessLabel').textContent = 'Copied session ' + copied.session.id + ' as imported evidence.';
+    hydrate(await api('/api/state'));
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Session copy failed: ' + error.message;
   }
 });
 

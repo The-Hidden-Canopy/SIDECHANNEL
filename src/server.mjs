@@ -1042,6 +1042,27 @@ async function handleApi(request, response, pathname) {
     broadcast({ type: 'session.state', state: 'idle', id: parts[2] });
     return sendJson(response, session ? 200 : 404, { session });
   }
+  if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'sessions' && parts[2] && parts[3] === 'copy') {
+    const sourceSession = store.getSession(parts[2]);
+    if (!sourceSession) return sendJson(response, 404, { error: 'session not found' });
+    if (sourceSession.state === 'recording') {
+      return sendJson(response, 409, { error: 'recording sessions cannot be copied; stop the recording first' });
+    }
+    const packageData = sessionPackage(sourceSession);
+    const verification = verifySessionPackage(packageData);
+    if (!verification.ok) {
+      return sendJson(response, 409, {
+        error: 'source session failed independent verification',
+        verification
+      });
+    }
+    const session = await store.importPackage(packageData);
+    return sendJson(response, 201, {
+      session,
+      copiedFromSessionId: sourceSession.id,
+      evidenceState: 'imported'
+    });
+  }
   if (request.method === 'GET' && parts[0] === 'api' && parts[1] === 'sessions' && parts[2] && parts[3] === 'export') {
     const session = store.getSession(parts[2]);
     if (!session) return sendJson(response, 404, { error: 'session not found' });

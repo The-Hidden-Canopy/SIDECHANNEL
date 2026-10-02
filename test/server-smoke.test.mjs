@@ -283,6 +283,12 @@ test('loopback server smoke covers live websocket reconnect, adapter ingress, se
     });
     assert.equal(sessionResult.response.status, 201);
     const sessionId = sessionResult.payload.session.id;
+    const copyingRecording = await requestJson(baseUrl + '/api/sessions/' + sessionId + '/copy', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({})
+    });
+    assert.equal(copyingRecording.response.status, 409);
     assert.equal(reconnectSocket.destroyed, false, 'live reconnect socket closed before adapter ingress');
 
     const ingest = await withTimeout(openIngestSocket(port, health.launchToken), 3000, 'ingest websocket handshake');
@@ -390,6 +396,22 @@ test('loopback server smoke covers live websocket reconnect, adapter ingress, se
     assert.equal(verified.payload.ok, true);
     assert.equal(verified.payload.checks.privacyRetentionVerified, true);
     assert.equal(verified.payload.checks.observationSchemaVerified, true);
+
+    const copied = await requestJson(baseUrl + '/api/sessions/' + sessionId + '/copy', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({})
+    });
+    assert.equal(copied.response.status, 201);
+    assert.notEqual(copied.payload.session.id, sessionId);
+    assert.equal(copied.payload.copiedFromSessionId, sessionId);
+    assert.equal(copied.payload.evidenceState, 'imported');
+    assert.equal(copied.payload.session.observations[0].evidenceState, 'imported');
+    const copiedVerification = await requestJson(baseUrl + '/api/sessions/' + copied.payload.session.id + '/verify');
+    assert.equal(copiedVerification.response.status, 200);
+    assert.equal(copiedVerification.payload.ok, true);
+    const copiedDeleted = await requestJson(baseUrl + '/api/sessions/' + copied.payload.session.id, { method: 'DELETE', headers });
+    assert.equal(copiedDeleted.response.status, 200);
 
     const imported = await requestJson(baseUrl + '/api/sessions/import', {
       method: 'POST',

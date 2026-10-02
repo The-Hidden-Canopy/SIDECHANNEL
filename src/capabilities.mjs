@@ -91,6 +91,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A confirmation-gated local prune route removes only older terminal sessions, preserves the newest keep count, and protects active recordings.'
   },
   {
+    id: 'verified-session-copy',
+    label: 'Verified local session copy',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A terminal session can be independently verified and copied through the import boundary; the copy receives a new ID and imported evidence labels instead of masquerading as a live measurement.'
+  },
+  {
     id: 'native-session-journal-replay',
     label: 'Native durable session journal and replay foundation',
     status: 'implemented',
