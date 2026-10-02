@@ -47,6 +47,8 @@ Replay is explicit about truth: `/api/sessions/:id/replay?mode=historical` retur
 
 Native hardware adapters, richer calibration, optional encrypted export, and desktop packaging remain follow-on work described in the build specification. The SQLite store is local and dependency-free on supported Node.js releases; it migrates an existing `data/sidechannel.json` file on first startup.
 
+GitHub Actions runs the Node reference tests plus native CTest/parity on Ubuntu and Windows; passing CI is software evidence only and is not a hardware, deployment, or regulated-operation claim.
+
 The native directory is an independently tested reference slice, not yet the authority for SQLite persistence, local IPC, or semantic export parity. Build it with the CMake instructions in `native/README.md`.
 
 See the build specification for the authoritative requirements.

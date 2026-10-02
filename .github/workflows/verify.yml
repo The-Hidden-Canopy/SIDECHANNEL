@@ -1,0 +1,52 @@
+name: Verify SIDECHANNEL
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  node:
+    name: Node reference tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Verify reference runtime
+        run: npm run verify
+
+  native:
+    name: Native ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - name: Configure native reference core
+        run: cmake -S . -B build/native -DCMAKE_BUILD_TYPE=Release
+      - name: Build native reference core
+        run: cmake --build build/native --config Release --parallel
+      - name: Run native tests
+        run: ctest --test-dir build/native -C Release --output-on-failure
+      - name: Verify Node and native parity
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            npm run verify:native-parity -- build/native/native/Release/sidechannel-native.exe 2
+          else
+            npm run verify:native-parity -- build/native/native/sidechannel-native 2
+          fi
