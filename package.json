@@ -12,6 +12,7 @@
     "verify:native-parity": "node scripts/verify-native-parity.mjs",
     "verify:native-session": "node scripts/verify-native-session.mjs",
     "verify:native-export": "node scripts/verify-native-export.mjs",
+    "verify:native-roundtrip": "node scripts/verify-native-roundtrip.mjs",
     "verify:native-adapter": "node scripts/verify-native-adapter.mjs",
     "verify:native-sqlite": "node scripts/verify-native-sqlite.mjs",
     "verify:native-ipc-sqlite": "node scripts/verify-native-ipc-sqlite.mjs",

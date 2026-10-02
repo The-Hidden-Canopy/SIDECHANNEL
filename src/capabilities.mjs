@@ -119,6 +119,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A completed native file-backed session can be materialized as a sidechannel-session/0.2 package and independently verified by the Node session verifier; interrupted sessions are refused and native SQLite authority remains separate.'
   },
   {
+    id: 'native-to-reference-roundtrip',
+    label: 'Native export to reference import roundtrip',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A native session export is independently verified, admitted into the reference SQLite authority, relabelled imported, and checked for imported_from provenance plus ImportAccepted journaling; this is software interoperability evidence, not hardware accuracy.'
+  },
+  {
     id: 'native-sqlite-session-authority',
     label: 'Native SQLite session authority',
     status: 'implemented',

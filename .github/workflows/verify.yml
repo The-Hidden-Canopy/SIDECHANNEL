@@ -63,6 +63,7 @@ jobs:
           npm run verify:native-parity -- "$native_exe" 2
           npm run verify:native-session -- "$native_exe" 2
           npm run verify:native-export -- "$native_exe"
+          npm run verify:native-roundtrip -- "$native_exe" 2
           npm run verify:native-adapter -- "$native_exe"
           npm run verify:native-sqlite -- "$native_exe" 2
           npm run verify:native-ipc-sqlite -- "$native_exe"
