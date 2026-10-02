@@ -68,6 +68,9 @@ button { cursor: pointer; }
 .icon-button:hover { border-color: var(--cyan); background: rgba(108, 228, 219, .08); }
 .count { min-width: 22px; padding: 3px 6px; border-radius: 20px; background: rgba(121, 167, 255, .12); color: var(--blue); font-size: 10px; text-align: center; }
 .layer-list, .source-list, .region-list, .diagnostics-list { display: flex; flex-direction: column; gap: 7px; margin-top: 13px; }
+.layer-group-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 5px; padding-top: 7px; border-top: 1px solid var(--line); color: var(--text); font-size: 10px; letter-spacing: .04em; text-transform: uppercase; }
+.layer-group-heading:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+.layer-group-heading .button { width: auto; font-size: 9px; text-transform: none; letter-spacing: 0; }
 .events-list { display: flex; flex-direction: column; gap: 7px; margin-top: 13px; }
 .layer-row, .source-row { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .layer-row { color: var(--muted); font-size: 12px; }

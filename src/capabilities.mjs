@@ -126,6 +126,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The scene independently toggles support/confidence, uncertainty geometry, replay trails, and activity-event pulses without changing observation truth.'
   },
   {
+    id: 'layer-groups',
+    label: 'Grouped layer controls',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Signals, evidence overlays, and scene context can be shown or hidden as groups while each underlying layer remains independently toggleable.'
+  },
+  {
     id: 'scene-regions-and-zones',
     label: 'Scene rooms and zones',
     status: 'implemented',

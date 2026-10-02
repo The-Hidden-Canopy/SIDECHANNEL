@@ -20,6 +20,11 @@ const DISPLAY_LAYERS = [
   ['zones', 'Rooms / zones', '#a9e88b', 0],
   ['portals', 'Doors / portals', '#ffd166', 0]
 ];
+const LAYER_GROUPS = [
+  { id: 'signals', label: 'Signals', layers: ['activity', ...CHANNELS.map((channel) => channel[0])] },
+  { id: 'evidence', label: 'Evidence overlays', layers: ['support', 'uncertainty', 'trails', 'events'] },
+  { id: 'scene', label: 'Scene context', layers: ['background', 'zones', 'portals'] }
+];
 const JOURNAL_MARKER_TYPES = new Set([
   'SessionOpened', 'SessionClosed', 'CalibrationPublished', 'CalibrationInvalidated',
   'TransformRevisionPublished', 'PoseSampleRecorded', 'ProviderStarted', 'ProviderStopped',
@@ -300,17 +305,32 @@ function updateObservation(observation) {
 
 function renderLayers() {
   layerPanel.innerHTML = '';
-  DISPLAY_LAYERS.forEach(([id, label, color]) => {
+  const layersById = new Map(DISPLAY_LAYERS.map((item) => [item[0], item]));
+  const renderLayer = (id) => {
+    const [, label, color] = layersById.get(id);
     const row = document.createElement('label');
     row.className = 'layer-row';
     row.innerHTML = '<input type="checkbox" data-channel="' + id + '" ' +
       (state.visible[id] ? 'checked' : '') + '><span class="layer-swatch" style="color:' +
-      color + ';background:' + color + '"></span><span>' + label + '</span>';
+      color + ';background:' + color + '"></span><span>' + escapeHtml(label) + '</span>';
     row.querySelector('input').addEventListener('change', (event) => {
       state.visible[id] = event.target.checked;
       render();
     });
     layerPanel.appendChild(row);
+  };
+  LAYER_GROUPS.forEach((group) => {
+    const heading = document.createElement('div');
+    heading.className = 'layer-group-heading';
+    const allVisible = group.layers.every((id) => state.visible[id]);
+    heading.innerHTML = '<span>' + escapeHtml(group.label) + '</span><button class="button small ghost" type="button" data-layer-group="' +
+      escapeHtml(group.id) + '">' + (allVisible ? 'Hide group' : 'Show group') + '</button>';
+    heading.querySelector('[data-layer-group]').addEventListener('click', () => {
+      group.layers.forEach((id) => { state.visible[id] = !allVisible; });
+      render();
+    });
+    layerPanel.appendChild(heading);
+    group.layers.forEach(renderLayer);
   });
   document.getElementById('layerCount').textContent = DISPLAY_LAYERS.filter((item) => state.visible[item[0]]).length;
 }
