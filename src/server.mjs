@@ -30,6 +30,7 @@ import { decryptSessionPackage, encryptSessionPackage } from './session-crypto.m
 import { createCoOccurrenceArtifact } from './evaluation/cooccurrence.mjs';
 import { runFaultCampaign, verifyFaultCampaignReceipt } from './verification/faults.mjs';
 import { interpolateAdaptiveActivityField } from './spatial/adaptive.mjs';
+import { evaluateFieldGraph } from './evaluation/graph.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -886,6 +887,28 @@ async function handleApi(request, response, pathname) {
         sourceSessionId: session?.id || null
       });
       return sendJson(response, 200, { field });
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
+  }
+  if (request.method === 'POST' && pathname === '/api/evaluation/field-graph') {
+    const body = await bodyJson(request);
+    const session = body.sessionId ? store.getSession(body.sessionId) : null;
+    if (body.sessionId && !session) return sendJson(response, 404, { error: 'evaluation graph session not found' });
+    try {
+      const receipt = evaluateFieldGraph({
+        fieldId: body.fieldId,
+        estimatorVersion: body.estimatorVersion || 'idw.baseline/graph-1',
+        scene: session?.sceneSnapshot || activeScene,
+        observations: session?.observations || currentObservations(),
+        sources: session?.sourceRegistrySnapshot || activeScene.sources,
+        channel: body.channel,
+        ticket: body.ticket || {},
+        currentRevisions: body.currentRevisions || body.ticket || {},
+        gridSize: body.gridSize === undefined ? 28 : Number(body.gridSize),
+        parameterRevision: body.parameterRevision === undefined ? 1 : body.parameterRevision
+      });
+      return sendJson(response, 200, { receipt });
     } catch (error) {
       return sendJson(response, 422, { error: error.message });
     }

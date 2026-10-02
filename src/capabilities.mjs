@@ -126,6 +126,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'A bounded adaptive 2D estimator refines high-variation tiles under a hard tile budget while retaining separate value/support outputs and input lineage.'
   },
   {
+    id: 'deterministic-evaluation-graph',
+    label: 'Deterministic evaluation graph receipts',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Field evaluation emits selector, spatial resolver, estimator, confidence, and publication-gate node receipts with dependency digests and stale-candidate outcomes.'
+  },
+  {
     id: 'temporal-comparison-surface',
     label: 'Within-session temporal comparison',
     status: 'implemented',

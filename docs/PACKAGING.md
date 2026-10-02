@@ -83,6 +83,8 @@ The workspace exposes two derived comparison paths. The two-session `Compare` ac
 
 `POST /api/evaluation/adaptive-field` produces a bounded adaptive 2D field from live or retained observations. It starts with a coarse tile grid, refines only high-variation tiles, enforces a hard tile budget, and returns separate value/support outputs plus input lineage. This is an estimator and presentation optimization; it is not depth sensing, physical localization, or a production-scale capacity claim.
 
+`POST /api/evaluation/field-graph` emits a deterministic evaluation receipt for a selected channel. The receipt records observation selection, spatial resolution, estimation, confidence separation, and publication-gate nodes with dependency/output digests. A changed revision returns `candidate_rejected_stale` with a retained candidate digest and no published artifact.
+
 Replay also exposes bounded temporal evidence markers. Activity-change events use the activity marker style; retained runtime-journal mutations such as calibration, transform, provider, permission, rejection, and session-boundary entries use the journal marker style. Selecting a marker moves the replay cursor to that retained timestamp. This is historical navigation over the session package, not a new measurement or proof that a physical mutation occurred outside the recorded runtime.
 
 The live workspace can pause its presentation without stopping ingestion or recording. While `Pause view` is active, accepted observations and detected events continue updating client state and the server-side session; the canvas and event presentation resume from the latest retained state when the operator chooses `Resume view`. This is a view-control behavior, not a backpressure or acquisition pause guarantee.
