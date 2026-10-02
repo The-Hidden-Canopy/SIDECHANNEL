@@ -14,6 +14,7 @@ if (mode === 'oversized') {
   emit({ protocolVersion: 'sidechannel.adapter/1', type: 'diagnostic', payload: { text: 'x'.repeat(2_000) } });
   process.exit(0);
 }
+if (mode === 'crash') process.exit(1);
 if (mode === 'wait') {
   setInterval(() => {}, 1_000);
 } else {

@@ -65,3 +65,25 @@ test('subprocess adapter can run under the permission-gated supervisor', async (
   assert.equal(result.ok, true);
   assert.equal(supervisor.get('fixture.adapter').state, 'STOPPED');
 });
+
+test('repeated subprocess crashes quarantine the provider and block restart', async () => {
+  const supervisor = new AdapterSupervisor({ failureThreshold: 2, clock: () => 1 });
+  supervisor.register({
+    protocolVersion: 'sidechannel.adapter/1',
+    providerId: 'fixture.crash',
+    providerVersion: '0.1.0',
+    capabilities: ['normalized_observation'],
+    supportedUnits: ['normalized'],
+    requiredPermissions: [],
+    rawContentPolicy: 'none'
+  });
+  const first = adapter('crash', { providerId: 'fixture.crash', supervisor });
+  const firstResult = await first.start();
+  assert.equal(firstResult.ok, false);
+  assert.equal(supervisor.get('fixture.crash').state, 'STOPPED');
+  const second = adapter('crash', { providerId: 'fixture.crash', supervisor });
+  const secondResult = await second.start();
+  assert.equal(secondResult.ok, false);
+  assert.equal(supervisor.get('fixture.crash').state, 'QUARANTINED');
+  assert.throws(() => adapter('crash', { providerId: 'fixture.crash', supervisor }).start(), /quarantined/);
+});
