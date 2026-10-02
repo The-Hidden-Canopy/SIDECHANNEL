@@ -85,6 +85,11 @@ button { cursor: pointer; }
 .manual-control button { border: 1px solid rgba(108, 228, 219, .25); border-radius: 5px; padding: 3px 5px; background: transparent; color: var(--cyan); font-size: 10px; }
 .event-item { padding: 7px 8px; border-left: 2px solid var(--cyan); border-radius: 5px; background: rgba(108, 228, 219, .04); color: var(--muted); font-size: 10px; line-height: 1.4; }
 .event-item strong { color: var(--text); font-weight: 600; }
+.benchmark-copy { font-size: 10px; line-height: 1.45; margin: 10px 0; }
+.benchmark-panel .button { width: 100%; }
+.benchmark-result { display: grid; gap: 6px; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); }
+.benchmark-row { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 10px; }
+.benchmark-row strong { color: var(--text); text-align: right; font-weight: 600; }
 .privacy-panel { color: var(--muted); font-size: 11px; line-height: 1.5; }
 .scene-tools .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 10px; }
 .scene-tools label { color: var(--muted); font-size: 10px; }

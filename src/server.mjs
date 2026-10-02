@@ -19,6 +19,7 @@ import { createRateLimiter, isAllowedLoopbackHost, isAllowedOrigin } from './sec
 import { AdapterSupervisor } from './adapters/supervisor.mjs';
 import { compareRecomputedArtifacts, createHistoricalReplay, recomputeSession, verifyDeterminism } from './replay.mjs';
 import { createReplayReceipt } from './verification/receipt.mjs';
+import { runSoftwareBenchmark } from './verification/benchmark.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -266,6 +267,20 @@ async function handleApi(request, response, pathname) {
   }
   if (request.method === 'GET' && pathname === '/api/ingress') {
     return sendJson(response, 200, { receipt: ingressSequencer.receipt() });
+  }
+  if (request.method === 'POST' && pathname === '/api/benchmark') {
+    const body = await bodyJson(request);
+    try {
+      const receipt = runSoftwareBenchmark({
+        ticks: body.ticks === undefined ? 8 : Number(body.ticks),
+        gridSize: body.gridSize === undefined ? 14 : Number(body.gridSize),
+        seed: body.seed === undefined ? 1337 : Number(body.seed),
+        sourceCommit: process.env.SIDECHANNEL_SOURCE_COMMIT || 'unknown'
+      });
+      return sendJson(response, 200, { receipt });
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
   }
   if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'adapter-runtime' && parts[2] && parts[3]) {
     const providerId = decodeURIComponent(parts[2]);

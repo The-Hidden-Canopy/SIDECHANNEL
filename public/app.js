@@ -29,6 +29,8 @@ const state = {
   replayArtifact: null,
   replayReport: null,
   replayMode: 'historical',
+  benchmarkReceipt: null,
+  benchmarkBusy: false,
   selected: null,
   editMode: false,
   draggedSourceId: null,
@@ -222,6 +224,28 @@ function renderEvents() {
       escapeHtml(event.channel) + '<br>' + new Date(event.startMs).toLocaleTimeString() +
       ' · Δ ' + Number(event.magnitude || 0).toFixed(2) + '</div>';
   }).join('');
+}
+
+function renderBenchmark() {
+  const badge = document.getElementById('benchmarkBadge');
+  const button = document.getElementById('benchmarkButton');
+  const result = document.getElementById('benchmarkResult');
+  if (!badge || !button || !result) return;
+  button.disabled = state.benchmarkBusy;
+  button.textContent = state.benchmarkBusy ? 'Running…' : 'Run E2 benchmark';
+  if (!state.benchmarkReceipt) {
+    badge.textContent = 'NOT RUN';
+    result.innerHTML = '<span class="muted">No benchmark receipt yet.</span>';
+    return;
+  }
+  const receipt = state.benchmarkReceipt;
+  badge.textContent = receipt.replay?.deterministic ? 'E2 / STABLE' : 'E2 / DRIFT';
+  result.innerHTML = [
+    ['Frames', receipt.admittedCount + ' admitted · ' + receipt.rejectedCount + ' rejected'],
+    ['Admission', 'p50 ' + receipt.admissionLatencyUs.p50 + ' µs · p95 ' + receipt.admissionLatencyUs.p95 + ' µs'],
+    ['Field', receipt.fieldCellCount + ' cells · ' + receipt.fieldEvaluationMs + ' ms'],
+    ['Replay', receipt.replay?.deterministic ? 'deterministic' : 'drift detected']
+  ].map(([label, value]) => '<div class="benchmark-row"><span>' + label + '</span><strong>' + escapeHtml(value) + '</strong></div>').join('');
 }
 
 function renderInspector() {
@@ -493,7 +517,7 @@ function render() {
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderEvents(); renderInspector(); renderTimeline(); draw();
+  renderLayers(); renderSources(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderEvents(); renderInspector(); renderTimeline(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -559,6 +583,24 @@ document.getElementById('replayButton').addEventListener('click', async () => {
 });
 
 document.getElementById('sessionSelect').addEventListener('change', () => render());
+
+document.getElementById('benchmarkButton').addEventListener('click', async () => {
+  state.benchmarkBusy = true;
+  renderBenchmark();
+  try {
+    const payload = await api('/api/benchmark', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ticks: 8, gridSize: 14, seed: 1337 })
+    });
+    state.benchmarkReceipt = payload.receipt;
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Benchmark failed: ' + error.message;
+  } finally {
+    state.benchmarkBusy = false;
+    renderBenchmark();
+  }
+});
 
 document.getElementById('deleteButton').addEventListener('click', async () => {
   const id = state.replay?.id || document.getElementById('sessionSelect').value;

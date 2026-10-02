@@ -144,6 +144,15 @@
         </div>
         <div id="diagnosticsList" class="diagnostics-list"><span class="muted">No rejected observations.</span></div>
       </section>
+      <section class="panel benchmark-panel">
+        <div class="panel-heading">
+          <h3>Runtime evidence</h3>
+          <span id="benchmarkBadge" class="badge">NOT RUN</span>
+        </div>
+        <p class="muted benchmark-copy">Bounded software-only benchmark. It measures the local simulator path, not physical capacity.</p>
+        <button id="benchmarkButton" class="button small ghost" type="button">Run E2 benchmark</button>
+        <div id="benchmarkResult" class="benchmark-result"><span class="muted">No benchmark receipt yet.</span></div>
+      </section>
       <section class="panel events-panel">
         <div class="panel-heading">
           <h3>Activity events</h3>
