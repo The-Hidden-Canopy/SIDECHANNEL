@@ -28,7 +28,7 @@ Session exports include an append-only journal with per-session sequence numbers
 npm start
 ```
 
-Open `http://127.0.0.1:4173/`. The application starts with deterministic simulated sources, supports scene/source authoring, manual numeric input, JSON-lines and WebSocket ingestion, recording, replay, export/import, and local deletion.
+Open `http://127.0.0.1:4173/`. The application starts with deterministic simulated sources, supports scene/source authoring, manual numeric input, JSON-lines and WebSocket ingestion, recording, replay, export/import, local deletion, and loopback adapter-supervisor lifecycle controls. These controls change the managed supervisor state; they are not evidence that a native hardware process is present.
 
 ## Runtime data
 
