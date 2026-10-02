@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test",
     "verify": "node scripts/verify.mjs",
+    "verify:session": "node scripts/verify-session.mjs",
     "start": "node src/server.mjs"
   }
 }

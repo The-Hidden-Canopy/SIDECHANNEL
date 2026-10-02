@@ -14,6 +14,7 @@ import { createIngressSequencer } from './admission/sequencer.mjs';
 import { createProviderManifest, validateProviderManifest } from './admission/manifest.mjs';
 import { CalibrationRegistry } from './calibration/registry.mjs';
 import { TransformGraph } from './spatial/transform-graph.mjs';
+import { verifySessionPackage } from './session-verifier.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -367,6 +368,11 @@ async function handleApi(request, response, pathname) {
       'content-disposition': 'attachment; filename="' + parts[2] + '.json"'
     });
     return response.end(JSON.stringify(sessionPackage(session), null, 2));
+  }
+  if (request.method === 'GET' && parts[0] === 'api' && parts[1] === 'sessions' && parts[2] && parts[3] === 'verify') {
+    const session = store.getSession(parts[2]);
+    if (!session) return sendJson(response, 404, { error: 'session not found' });
+    return sendJson(response, 200, verifySessionPackage(sessionPackage(session)));
   }
   if (request.method === 'POST' && pathname === '/api/sessions/import') {
     const body = await bodyJson(request);

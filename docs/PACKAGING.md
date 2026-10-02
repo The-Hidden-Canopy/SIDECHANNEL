@@ -18,6 +18,8 @@ npm run verify
 
 It syntax-checks every `src/*.mjs` file and the browser module, then runs the complete Node test suite.
 
+After exporting a session, verify its independent receipt with `npm run verify:session -- path/to/exported-session.json`. The running server also exposes `/api/sessions/:id/verify` for the same structural and snapshot checks.
+
 ## Local run
 
 ```text

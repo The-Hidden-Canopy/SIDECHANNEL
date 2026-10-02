@@ -22,6 +22,7 @@ Requirements: Node.js 22 or newer. No dependency installation is required for th
 ```text
 npm test
 npm run verify
+npm run verify:session -- path/to/exported-session.json
 npm start
 ```
 
@@ -31,7 +32,7 @@ The server is loopback-only by default. It starts a deterministic simulator with
 
 ## Implemented v0.1 slice
 
-The current engineering tranche is runnable now: deterministic simulator, normalized observation contracts, provider-manifest admission, explicit evidence/privacy classes, provenance edges, versioned calibration records, explicit spatial support geometry, revisioned transforms, separate field value/support outputs, loopback API/WebSocket live updates, bounded ordered ingress, duplicate admission rejection, inbound WebSocket and JSON-lines adapter modules, adapter discovery, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, bounded activity-change events, quality/freshness gates, diagnostics, scene-frame editing, draggable source calibration, manual source creation and numeric observation injection, immutable per-session scene/source/calibration/transform snapshots, historical session export, SQLite recording/replay data, JSON export/import controls, local session deletion, and automated tests.
+The current engineering tranche is runnable now: deterministic simulator, normalized observation contracts, provider-manifest admission, explicit evidence/privacy classes, provenance edges, versioned calibration records, explicit spatial support geometry, revisioned transforms, separate field value/support outputs, loopback API/WebSocket live updates, bounded ordered ingress, duplicate admission rejection, inbound WebSocket and JSON-lines adapter modules, adapter discovery, 2D scene renderer, inverse-distance visual fields, a weighted Unified activity layer, bounded activity-change events, quality/freshness gates, diagnostics, scene-frame editing, draggable source calibration, manual source creation and numeric observation injection, immutable per-session scene/source/calibration/transform snapshots, historical session export, independent session verification, SQLite recording/replay data, JSON export/import controls, local session deletion, and automated tests.
 
 Native hardware adapters, richer calibration, optional encrypted export, and desktop packaging remain follow-on work described in the build specification. The SQLite store is local and dependency-free on supported Node.js releases; it migrates an existing `data/sidechannel.json` file on first startup.
 

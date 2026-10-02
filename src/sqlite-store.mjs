@@ -28,6 +28,24 @@ function digest(value) {
   return createHash('sha256').update(encode(value)).digest('hex');
 }
 
+export function computeSnapshotDigest({
+  sceneSnapshot,
+  sourceRegistrySnapshot,
+  calibrationRegistrySnapshot,
+  transformGraphSnapshot,
+  runtimeBuildId,
+  schemaSetDigest
+}) {
+  return digest({
+    sceneSnapshot,
+    sourceRegistrySnapshot,
+    calibrationRegistrySnapshot,
+    transformGraphSnapshot,
+    runtimeBuildId,
+    schemaSetDigest
+  });
+}
+
 export class SqliteStore {
   constructor(filePath, { legacyJsonPath = null } = {}) {
     this.filePath = filePath;
