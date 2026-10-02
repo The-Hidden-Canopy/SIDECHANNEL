@@ -18,7 +18,7 @@ npm run verify
 
 It syntax-checks every `src/*.mjs` file and the browser module, then runs the complete Node test suite.
 
-The complete suite includes an isolated loopback process smoke test. It starts the server on a temporary port with `SIDECHANNEL_DATA_DIR` pointed at a temporary directory, exercises launch-token admission, source creation, observation ingestion, recording, export, and independent package verification, then removes the temporary data. Normal runs continue to use the local `data/` directory.
+The complete suite includes an isolated loopback process smoke test. It starts the server on a temporary port with `SIDECHANNEL_DATA_DIR` pointed at a temporary directory, confirms the browser render-budget module is served from the public asset boundary, exercises launch-token admission, source creation, observation ingestion, recording, export, and independent package verification, then removes the temporary data. Normal runs continue to use the local `data/` directory.
 
 The hardware-independent C++23 reference slice has its own CTest gate. From a Visual Studio Developer Command Prompt, configure the root CMake project with a C++23 generator, then run `cmake --build <build-dir>` and `ctest --test-dir <build-dir> --output-on-failure`. It currently verifies deterministic simulation and bounded admission only; it is not yet native persistence or export parity.
 
@@ -104,6 +104,8 @@ The layer panel exposes the live estimator's inverse-distance power and search r
 The unified activity panel exposes a bounded weight from 0 to 2 for each channel. A zero weight excludes that channel from the derived unified field while leaving channel fields, admitted observations, provenance, and recorded sessions unchanged. These are presentation-estimator weights, not claims that channels share a calibrated physical unit.
 
 The workspace can collect a bounded local baseline window from valid source channels and render a signed, capped z-score anomaly-relative overlay. Red indicates values above the captured baseline and blue indicates values below it. The baseline stores normalized channel statistics in browser memory only; it is not a new observation, is not included in session exports, and is cleared when switching between live and replay views. This is a derived presentation aid, not an anomaly diagnosis or causal inference.
+
+The canvas applies a deterministic client-side render budget based on valid observation count. Ordinary scenes retain the full field grid and overlay detail; denser scenes reduce field resolution first, then trail and event-overlay limits, while preserving point observations and source-health markers. A visible warning and accessible status summary identify the active tier. This is graceful presentation degradation, not data loss, acquisition backpressure, or a production capacity claim.
 
 The canvas also offers bounded 2D/12°/24° camera-tilt presentation modes. Tilt is a rendering transform only: source placement, pointer hit-testing, ruler measurements, and evidence coordinates remain authoritative in the unprojected 2D scene frame. It is pseudo-3D presentation, not depth sensing, camera calibration, or physical localization.
 

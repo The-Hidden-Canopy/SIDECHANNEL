@@ -1,4 +1,5 @@
 import { baselineDelta, createBaselineIndex, createBaselineSnapshot, latestValidObservations } from './baseline.mjs';
+import { renderBudgetForObservationCount } from './render-budget.mjs';
 
 const CHANNELS = [
   ['rf', 'RF', '#6ce4db', 220],
@@ -94,6 +95,7 @@ const state = {
   burstBusy: false,
   faultReceipt: null,
   faultBusy: false,
+  renderBudget: renderBudgetForObservationCount(0),
   selected: null,
   editMode: false,
   draggedSourceId: null,
@@ -385,10 +387,21 @@ function renderAccessibilitySummary() {
   const selectedText = state.selected
     ? ' Selected ' + state.selected.channel + ' observation from ' + state.selected.sourceId + ' at ' + String(state.selected.value) + ' ' + state.selected.unit + '.'
     : ' No observation selected.';
+  const performanceText = state.renderBudget?.warning
+    ? ' ' + state.renderBudget.warning
+    : ' Visual detail is at the full budget.';
   const layerSummary = document.getElementById('layerSummary');
   if (layerSummary) layerSummary.textContent = 'Visible layers: ' + visibleText + '. ' + activeCount + ' active observations.';
   const canvasSummary = document.getElementById('canvasSummary');
-  if (canvasSummary) canvasSummary.textContent = (state.scene?.name || 'Current scene') + '. ' + activeCount + ' active observations. Visible layers: ' + visibleText + '.' + selectedText;
+  if (canvasSummary) canvasSummary.textContent = (state.scene?.name || 'Current scene') + '. ' + activeCount + ' active observations. Visible layers: ' + visibleText + '.' + selectedText + performanceText;
+}
+
+function renderPerformanceSummary(budget) {
+  const summary = document.getElementById('performanceSummary');
+  if (!summary) return;
+  summary.classList.toggle('performance-warning', Boolean(budget.warning));
+  summary.textContent = 'Visual detail: ' + budget.label + '. ' + budget.observationCount + ' valid observations.' + (budget.warning ? ' ' + budget.warning : '');
+  renderAccessibilitySummary();
 }
 
 function renderFieldSettings() {
@@ -986,7 +999,7 @@ function drawUncertainty(valid, transform) {
   context.restore();
 }
 
-function drawTemporalTrails(transform) {
+function drawTemporalTrails(transform, budget) {
   if (!state.visible.trails || !state.replay) return;
   const grouped = new Map();
   activeObservations().filter((observation) => observation.status !== 'stale' && observation.status !== 'rejected')
@@ -998,7 +1011,7 @@ function drawTemporalTrails(transform) {
   context.save();
   context.lineWidth = 1.5;
   grouped.forEach((observations, key) => {
-    const ordered = observations.sort((left, right) => left.timestampMs - right.timestampMs).slice(-24);
+    const ordered = observations.sort((left, right) => left.timestampMs - right.timestampMs).slice(-budget.trailLimit);
     if (ordered.length < 2) return;
     const channel = key.split(':').slice(1).join(':');
     for (let index = 1; index < ordered.length; index += 1) {
@@ -1015,13 +1028,13 @@ function drawTemporalTrails(transform) {
   context.restore();
 }
 
-function drawEventPulses(transform) {
+function drawEventPulses(transform, budget) {
   if (!state.visible.events) return;
   const sourceEvents = state.replay
     ? (state.replay.events || []).filter((event) => event.startMs <= state.replayTime)
     : state.events;
   context.save();
-  sourceEvents.slice(-12).forEach((event) => {
+  sourceEvents.slice(-budget.eventLimit).forEach((event) => {
     const source = sourceById(event.sourceId);
     const position = event.position || source?.position;
     if (!position) return;
@@ -1079,10 +1092,9 @@ function drawBackground(transform) {
   context.restore();
 }
 
-function drawActivityField(valid, transform) {
+function drawActivityField(valid, transform, budget) {
   if (!state.visible.activity) return;
-  const cols = 22;
-  const rows = 18;
+  const { cols, rows } = budget;
   const color = '#d7fff7';
   const recomputed = state.replayArtifact?.mode === 'recompute' ? state.replayArtifact.field : null;
   if (recomputed) {
@@ -1138,13 +1150,12 @@ function drawActivityField(valid, transform) {
   }
 }
 
-function drawBaselineField(valid, transform) {
+function drawBaselineField(valid, transform, budget) {
   if (!state.visible.baseline || !state.baseline) return;
   const current = latestValidObservations(valid);
   const baselineIndex = createBaselineIndex(state.baseline);
   if (!current.length) return;
-  const cols = 22;
-  const rows = 18;
+  const { cols, rows } = budget;
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
       const x = state.scene.width * (col + .5) / cols;
@@ -1189,6 +1200,9 @@ function draw() {
   const transform = sceneTransform();
   const observations = activeObservations();
   const valid = observations.filter((item) => item.status !== 'stale' && item.status !== 'rejected');
+  const budget = renderBudgetForObservationCount(valid.length);
+  state.renderBudget = budget;
+  renderPerformanceSummary(budget);
   canvasEmpty.classList.toggle('hidden', valid.length > 0);
 
   const gradient = context.createRadialGradient(rect.width * .5, rect.height * .45, 10, rect.width * .5, rect.height * .45, rect.width * .7);
@@ -1258,14 +1272,13 @@ function draw() {
     });
   }
 
-  drawActivityField(valid, transform);
+  drawActivityField(valid, transform, budget);
 
   CHANNELS.forEach(([channel, label, color]) => {
     if (!state.visible[channel]) return;
     const points = valid.filter((item) => item.channel === channel);
     if (!points.length) return;
-    const cols = 22;
-    const rows = 18;
+    const { cols, rows } = budget;
     const range = RANGES[channel] || [0, 1];
     for (let row = 0; row < rows; row += 1) {
       for (let col = 0; col < cols; col += 1) {
@@ -1294,9 +1307,9 @@ function draw() {
     }
   });
 
-  drawBaselineField(valid, transform);
+  drawBaselineField(valid, transform, budget);
 
-  drawTemporalTrails(transform);
+  drawTemporalTrails(transform, budget);
   drawSupportGeometry(valid, transform);
   drawUncertainty(valid, transform);
 
@@ -1347,7 +1360,7 @@ function draw() {
       context.fillText(ageLabel, x + 10, y + 11);
     }
   });
-  drawEventPulses(transform);
+  drawEventPulses(transform, budget);
   drawMeasurement(transform);
   context.restore();
 }

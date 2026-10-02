@@ -57,6 +57,11 @@ test('loopback server smoke covers source admission, session lifecycle, and expo
     assert.equal(health.loopbackOnly, true);
     assert.equal(typeof health.launchToken, 'string');
 
+    const renderBudgetAsset = await fetch(baseUrl + '/render-budget.mjs');
+    assert.equal(renderBudgetAsset.status, 200);
+    assert.match(renderBudgetAsset.headers.get('content-type') || '', /javascript/);
+    assert.match(await renderBudgetAsset.text(), /renderBudgetForObservationCount/);
+
     const sourceBody = JSON.stringify({
       id: 'smoke_source',
       name: 'Smoke source',

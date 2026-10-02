@@ -63,6 +63,8 @@ button { cursor: pointer; }
 .panel h3 { font-size: 12px; letter-spacing: .04em; }
 .muted { color: var(--muted); }
 .accessibility-summary { font-size: 10px; line-height: 1.4; margin: 9px 0 0; }
+.performance-summary { position: absolute; left: 12px; bottom: 10px; max-width: min(560px, calc(100% - 24px)); margin: 0; padding: 5px 8px; border: 1px solid transparent; border-radius: 6px; background: rgba(8, 11, 17, .72); font-size: 10px; line-height: 1.35; pointer-events: none; }
+.performance-summary.performance-warning { border-color: rgba(255, 180, 123, .45); color: var(--orange); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .intro-panel p { font-size: 12px; line-height: 1.6; margin: 10px 0 0; }
 .panel-heading, .timeline-head { display: flex; align-items: center; justify-content: space-between; }
