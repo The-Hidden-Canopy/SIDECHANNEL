@@ -85,6 +85,8 @@ The Layers panel independently toggles the unified activity field, each channel 
 
 The layer panel exposes the live estimator's inverse-distance power and search radius. Power is bounded to 0.5–6; a zero radius means unlimited search, while a positive radius masks cells with no contributing support and leaves them `insufficient_data`. These controls affect the local presentation estimator only and are not physical localization or triangulation claims.
 
+The unified activity panel exposes a bounded weight from 0 to 2 for each channel. A zero weight excludes that channel from the derived unified field while leaving channel fields, admitted observations, provenance, and recorded sessions unchanged. These are presentation-estimator weights, not claims that channels share a calibrated physical unit.
+
 The workspace can collect a bounded local baseline window from valid source channels and render a signed, capped z-score anomaly-relative overlay. Red indicates values above the captured baseline and blue indicates values below it. The baseline stores normalized channel statistics in browser memory only; it is not a new observation, is not included in session exports, and is cleared when switching between live and replay views. This is a derived presentation aid, not an anomaly diagnosis or causal inference.
 
 The canvas also offers bounded 2D/12°/24° camera-tilt presentation modes. Tilt is a rendering transform only: source placement, pointer hit-testing, ruler measurements, and evidence coordinates remain authoritative in the unprojected 2D scene frame. It is pseudo-3D presentation, not depth sensing, camera calibration, or physical localization.

@@ -64,6 +64,9 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /state\.scenes/);
   assert.match(appSource, /api\('\/api\/state\?view=compact'/);
   assert.match(appSource, /refreshLiveState/);
+  assert.match(appSource, /activityWeights/);
+  assert.match(appSource, /Activity weights must be between 0 and 2/);
+  assert.match(appSource, /channelWeight/);
   assert.match(appSource, /viewPaused/);
   assert.match(appSource, /Pause view/);
   assert.match(appSource, /Resume view/);
@@ -91,6 +94,9 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(htmlSource, /id="activateSceneButton"/);
   assert.match(htmlSource, /id="sceneForm"/);
   assert.match(htmlSource, /Create and activate/);
+  assert.match(htmlSource, /id="activityWeightsForm"/);
+  assert.match(htmlSource, /Apply activity weights/);
+  assert.match(htmlSource, /id="activityWeight_network"/);
   assert.match(serverSource, /'\.mjs': 'text\/javascript; charset=utf-8'/);
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);

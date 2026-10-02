@@ -154,6 +154,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace exposes inverse-distance power and bounded search radius controls; cells outside the radius remain insufficient-data instead of being filled.'
   },
   {
+    id: 'activity-channel-weights',
+    label: 'Unified activity channel weights',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The live unified activity presentation exposes bounded 0–2 weights per channel; zero excludes a channel without changing raw observations or recorded sessions.'
+  },
+  {
     id: 'baseline-anomaly-overlay',
     label: 'Baseline anomaly overlay',
     status: 'implemented',

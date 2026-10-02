@@ -83,6 +83,7 @@ const state = {
   replayMode: 'historical',
   viewPaused: false,
   fieldSettings: { power: 2, radius: 0 },
+  activityWeights: Object.fromEntries(CHANNELS.map(([channel]) => [channel, 1])),
   baseline: null,
   baselineCapture: null,
   cameraTiltDeg: 0,
@@ -384,6 +385,17 @@ function renderFieldSettings() {
   hint.textContent = 'Power ' + state.fieldSettings.power + ' · ' +
     (state.fieldSettings.radius > 0 ? 'search radius ' + state.fieldSettings.radius + ' ' + (state.scene?.unit || 'm') + '.' : 'unlimited search radius.') +
     ' Cells outside the radius show insufficient data.';
+}
+
+function renderActivityWeights() {
+  const hint = document.getElementById('activityWeightsHint');
+  if (!hint) return;
+  CHANNELS.forEach(([channel]) => {
+    const input = document.getElementById('activityWeight_' + channel);
+    if (input && document.activeElement !== input) input.value = state.activityWeights[channel] ?? 1;
+  });
+  const active = CHANNELS.filter(([channel]) => (state.activityWeights[channel] ?? 0) > 0).length;
+  hint.textContent = active + ' active channel weights · 0 excludes a channel from unified activity.';
 }
 
 function renderPresentationSettings() {
@@ -959,15 +971,17 @@ function drawActivityField(valid, transform) {
       let supportTotal = 0;
       valid.forEach((point) => {
         if (!state.visible[point.channel]) return;
+        const channelWeight = Number(state.activityWeights[point.channel] ?? 1);
+        if (channelWeight <= 0) return;
         const source = sourceById(point.sourceId);
         supportPositions(point, source).forEach((position) => {
           const distance = Math.hypot(x - position.x, y - position.y);
           const weight = fieldWeight(distance);
           if (weight === 0) return;
           const confidence = point.quality?.score || 0;
-          total += normalize(point.channel, point.value) * weight;
-          spatialWeightTotal += weight;
-          supportTotal += confidence * weight;
+          total += normalize(point.channel, point.value) * weight * channelWeight;
+          spatialWeightTotal += weight * channelWeight;
+          supportTotal += confidence * weight * channelWeight;
         });
       });
       const intensity = spatialWeightTotal ? Math.max(0, Math.min(1, total / spatialWeightTotal)) : 0;
@@ -1369,7 +1383,7 @@ function render() {
   document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
-  renderLayers(); renderFieldSettings(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
+  renderLayers(); renderFieldSettings(); renderActivityWeights(); renderPresentationSettings(); renderBaseline(); renderSources(); renderRegions(); renderPortals(); renderTransforms(); renderBackground(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); renderTemporalComparison(); draw();
 }
 
 document.getElementById('recordButton').addEventListener('click', async () => {
@@ -1402,6 +1416,21 @@ document.getElementById('fieldSettingsForm').addEventListener('submit', (event) 
     return;
   }
   state.fieldSettings = { power, radius };
+  render();
+});
+
+document.getElementById('activityWeightsForm').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const next = {};
+  for (const [channel] of CHANNELS) {
+    const value = Number(document.getElementById('activityWeight_' + channel).value);
+    if (!Number.isFinite(value) || value < 0 || value > 2) {
+      document.getElementById('freshnessLabel').textContent = 'Activity weights must be between 0 and 2.';
+      return;
+    }
+    next[channel] = value;
+  }
+  state.activityWeights = next;
   render();
 });
 
