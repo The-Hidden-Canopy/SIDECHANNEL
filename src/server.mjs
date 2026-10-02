@@ -24,6 +24,7 @@ import { capabilitySnapshot } from './capabilities.mjs';
 import { computeSourceProfileDigest, withSourceProfileDigest } from './identity/source-profile.mjs';
 import { PoseHistory } from './spatial/pose-history.mjs';
 import { SCENE_UNITS, validateRegion, validateRegions } from './spatial/regions.mjs';
+import { decryptSessionPackage, encryptSessionPackage } from './session-crypto.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -785,6 +786,16 @@ async function handleApi(request, response, pathname) {
     });
     return response.end(JSON.stringify(sessionPackage(session), null, 2));
   }
+  if (request.method === 'POST' && parts[0] === 'api' && parts[1] === 'sessions' && parts[2] && parts[3] === 'export') {
+    const session = store.getSession(parts[2]);
+    if (!session) return sendJson(response, 404, { error: 'session not found' });
+    const body = await bodyJson(request);
+    try {
+      return sendJson(response, 200, encryptSessionPackage(sessionPackage(session), body.passphrase));
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message, code: error.code || 'ENCRYPTION_FAILED' });
+    }
+  }
   if (request.method === 'GET' && parts[0] === 'api' && parts[1] === 'sessions' && parts[2] && parts[3] === 'verify') {
     const session = store.getSession(parts[2]);
     if (!session) return sendJson(response, 404, { error: 'session not found' });
@@ -818,14 +829,23 @@ async function handleApi(request, response, pathname) {
   }
   if (request.method === 'POST' && pathname === '/api/sessions/import') {
     const body = await bodyJson(request);
-    const verification = verifySessionPackage(body);
+    let packageData = body;
+    if (body?.encryptedPackage || body?.format === 'sidechannel-encrypted-session') {
+      const envelope = body.encryptedPackage || body;
+      try {
+        packageData = decryptSessionPackage(envelope, body.passphrase);
+      } catch (error) {
+        return sendJson(response, 422, { error: error.message, code: error.code || 'DECRYPTION_FAILED' });
+      }
+    }
+    const verification = verifySessionPackage(packageData);
     if (!verification.ok) {
       return sendJson(response, 422, {
         error: 'session package failed independent verification',
         verification
       });
     }
-    const session = await store.importPackage(body);
+    const session = await store.importPackage(packageData);
     return sendJson(response, 201, { session });
   }
   if (parts[0] === 'api' && parts[1] === 'sessions' && parts[2]) {

@@ -133,6 +133,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace reports bounded point-to-point distances in the scene unit without rewriting sensor observations or calibration records.'
   },
   {
+    id: 'encrypted-session-portability',
+    label: 'Encrypted session portability',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'Optional passphrase-encrypted export/import uses bounded scrypt key derivation and AES-256-GCM before the normal independent package verifier runs.'
+  },
+  {
     id: 'native-reference-parity',
     label: 'Native reference parity',
     status: 'reference-only',

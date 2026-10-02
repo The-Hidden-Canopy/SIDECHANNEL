@@ -35,4 +35,7 @@ test('evidence inspector exposes the bounded observation lineage contract', () =
   assert.match(appSource, /drawMeasurement/);
   assert.match(appSource, /Measure distance/);
   assert.match(appSource, /sceneUnit/);
+  assert.match(appSource, /encryptedExportButton/);
+  assert.match(appSource, /sidechannel-encrypted-session/);
+  assert.match(appSource, /downloadJson/);
 });

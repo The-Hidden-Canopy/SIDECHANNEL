@@ -33,6 +33,7 @@ button { cursor: pointer; }
 .brand-mark span:nth-child(3) { height: 15px; opacity: .75; }
 .eyebrow { color: var(--muted); font-size: 10px; letter-spacing: .14em; font-weight: 700; }
 .top-actions, .toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.top-actions .button { white-space: nowrap; }
 .status-pill { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; margin-right: 8px; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 10px currentColor; }
 .status-pill.connected { color: var(--cyan); }

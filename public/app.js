@@ -98,6 +98,17 @@ function api(path, options) {
   });
 }
 
+function downloadJson(filename, payload) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
@@ -989,6 +1000,7 @@ function render() {
   document.getElementById('recordButton').classList.toggle('ghost', Boolean(state.recording));
   const selectedSessionId = document.getElementById('sessionSelect').value;
   document.getElementById('exportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
+  document.getElementById('encryptedExportButton').disabled = !state.recording && !state.replay && !selectedSessionId;
   document.getElementById('deleteButton').disabled = !state.replay && !selectedSessionId;
   document.getElementById('freshnessLabel').textContent = state.observations.length + ' current source channels';
   renderLayers(); renderSources(); renderRegions(); renderSessions(); renderDiagnostics(); renderBenchmark(); renderBurstBenchmark(); renderCapabilities(); renderEvents(); renderInspector(); renderTimeline(); renderSessionVerification(); renderComparison(); draw();
@@ -1014,6 +1026,29 @@ document.getElementById('exportButton').addEventListener('click', () => {
   if (id) window.location.href = '/api/sessions/' + id + '/export';
 });
 
+document.getElementById('encryptedExportButton').addEventListener('click', async () => {
+  const id = state.recording?.id || state.replay?.id || document.getElementById('sessionSelect').value;
+  if (!id) return;
+  const passphrase = window.prompt('Choose an export passphrase (8+ characters).');
+  if (passphrase === null) return;
+  const confirmation = window.prompt('Enter the export passphrase again.');
+  if (passphrase !== confirmation) {
+    document.getElementById('freshnessLabel').textContent = 'Encrypted export cancelled: passphrases did not match.';
+    return;
+  }
+  try {
+    const envelope = await api('/api/sessions/' + id + '/export', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ passphrase })
+    });
+    downloadJson(id + '.encrypted.json', envelope);
+    document.getElementById('freshnessLabel').textContent = 'Encrypted session export created locally.';
+  } catch (error) {
+    document.getElementById('freshnessLabel').textContent = 'Encrypted export failed: ' + error.message;
+  }
+});
+
 document.getElementById('importButton').addEventListener('click', () => {
   document.getElementById('importInput').click();
 });
@@ -1023,10 +1058,16 @@ document.getElementById('importInput').addEventListener('change', async (event) 
   if (!file) return;
   try {
     const imported = JSON.parse(await file.text());
+    let importBody = imported;
+    if (imported?.format === 'sidechannel-encrypted-session') {
+      const passphrase = window.prompt('Enter the session export passphrase.');
+      if (passphrase === null) return;
+      importBody = { encryptedPackage: imported, passphrase };
+    }
     await api('/api/sessions/import', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(imported)
+      body: JSON.stringify(importBody)
     });
     hydrate(await api('/api/state'));
   } catch (error) {
