@@ -27,6 +27,7 @@ import { SCENE_UNITS, validateRegion, validateRegions } from './spatial/regions.
 import { validatePortal, validatePortals } from './spatial/portals.mjs';
 import { validateBackground } from './spatial/background.mjs';
 import { decryptSessionPackage, encryptSessionPackage } from './session-crypto.mjs';
+import { createCoOccurrenceArtifact } from './evaluation/cooccurrence.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = join(root, 'public');
@@ -842,6 +843,28 @@ async function handleApi(request, response, pathname) {
     recordingSessionId = session.id;
     broadcast({ type: 'session.state', state: 'recording', id: session.id });
     return sendJson(response, 201, { session });
+  }
+  if (request.method === 'POST' && pathname === '/api/evaluation/cooccurrence') {
+    const body = await bodyJson(request);
+    const session = body.sessionId ? store.getSession(body.sessionId) : null;
+    if (body.sessionId && !session) return sendJson(response, 404, { error: 'co-occurrence session not found' });
+    try {
+      const artifact = createCoOccurrenceArtifact({
+        observations: session ? session.observations : currentObservations(),
+        sources: session ? session.sourceRegistrySnapshot : activeScene.sources,
+        channels: body.channels || [body.channelA, body.channelB].filter(Boolean),
+        startMs: body.startMs,
+        endMs: body.endMs,
+        bucketMs: body.bucketMs === undefined ? 1000 : Number(body.bucketMs),
+        changeThreshold: body.changeThreshold === undefined ? .1 : Number(body.changeThreshold),
+        maxLagMs: body.maxLagMs === undefined ? 0 : Number(body.maxLagMs),
+        region: body.region,
+        sourceSessionId: session?.id || null
+      });
+      return sendJson(response, 200, { artifact });
+    } catch (error) {
+      return sendJson(response, 422, { error: error.message });
+    }
   }
   if (request.method === 'POST' && pathname === '/api/sessions/compare') {
     const body = await bodyJson(request);

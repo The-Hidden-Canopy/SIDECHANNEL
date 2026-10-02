@@ -105,6 +105,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The workspace can compare two self-contained sessions and labels cell differences as derived evidence with source-session provenance.'
   },
   {
+    id: 'cross-channel-cooccurrence-artifact',
+    label: 'Cross-channel co-occurrence artifact',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'A bounded evaluator compares normalized temporal changes across channels, retains input observation IDs and lag estimates, and labels the result co-occurrence rather than causation.'
+  },
+  {
     id: 'temporal-comparison-surface',
     label: 'Within-session temporal comparison',
     status: 'implemented',
