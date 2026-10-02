@@ -19,6 +19,40 @@ void write_json_string(const std::string& value) {
   std::cout << '"';
 }
 
+int run_ipc_stdio(const std::string& token) {
+  std::string line;
+  while (std::getline(std::cin, line)) {
+    const auto decoded = sidechannel::LocalIpcCodec::decode(line, token);
+    if (!decoded.ok) {
+      std::cerr << "native ipc rejected frame: " << decoded.error << '\n';
+      return 1;
+    }
+    sidechannel::IpcFrame response{
+      decoded.frame.request_id,
+      "error",
+      "{\"error\":\"unsupported command\"}"
+    };
+    if (decoded.frame.type == "ping") {
+      response.type = "pong";
+      response.payload = "{\"protocol\":\"sidechannel.native-ipc/1\"}";
+    } else if (decoded.frame.type == "status") {
+      response.type = "status";
+      response.payload = "{\"authority\":\"native-reference\",\"state\":\"ready\",\"hardware\":\"excluded\"}";
+    } else if (decoded.frame.type == "shutdown") {
+      response.type = "stopped";
+      response.payload = "{\"reason\":\"requested\"}";
+    }
+    const auto wire = sidechannel::LocalIpcCodec::encode(response, token);
+    if (wire.empty()) {
+      std::cerr << "native ipc response exceeded bounds\n";
+      return 1;
+    }
+    std::cout << wire << std::flush;
+    if (decoded.frame.type == "shutdown") return 0;
+  }
+  return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -27,6 +61,7 @@ int main(int argc, char** argv) {
   bool json = false;
   bool session_json = false;
   std::string session_file;
+  std::string ipc_token;
   for (int index = 1; index < argc; ++index) {
     if (std::string(argv[index]) == "--ticks" && index + 1 < argc) {
       ticks = static_cast<std::size_t>(std::strtoul(argv[++index], nullptr, 10));
@@ -38,13 +73,15 @@ int main(int argc, char** argv) {
       session_json = true;
     } else if (std::string(argv[index]) == "--session-file" && index + 1 < argc) {
       session_file = argv[++index];
+    } else if (std::string(argv[index]) == "--ipc-stdio" && index + 1 < argc) {
+      ipc_token = argv[++index];
     } else {
-      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH]\n";
+      std::cerr << "usage: sidechannel-native [--ticks N] [--csv|--json|--session-json|--session-file PATH|--ipc-stdio TOKEN]\n";
       return 2;
     }
   }
   if (static_cast<int>(csv) + static_cast<int>(json) + static_cast<int>(session_json) +
-      static_cast<int>(!session_file.empty()) > 1) {
+      static_cast<int>(!session_file.empty()) + static_cast<int>(!ipc_token.empty()) > 1) {
     std::cerr << "choose one output format\n";
     return 2;
   }
@@ -52,6 +89,7 @@ int main(int argc, char** argv) {
     std::cerr << "ticks must be between 1 and 10000\n";
     return 2;
   }
+  if (!ipc_token.empty()) return run_ipc_stdio(ipc_token);
 
   sidechannel::DeterministicSimulator simulator;
   sidechannel::AdmissionSequencer sequencer(512);

@@ -463,6 +463,54 @@ std::string SessionArchive::to_json() const {
     ",\"packageDigest\":\"" + sha256(package_without_digest) + "\"}";
 }
 
+std::string LocalIpcCodec::encode(const IpcFrame& frame, const std::string& token) {
+  if (token.empty() || frame.request_id.empty() || frame.type.empty()) return {};
+  const auto wire = std::string("sidechannel.native-ipc/1\t") + hex_encode(frame.request_id) +
+    '\t' + hex_encode(token) + '\t' + hex_encode(frame.type) + '\t' + hex_encode(frame.payload) + '\n';
+  if (wire.size() > max_wire_bytes || frame.payload.size() > max_payload_bytes) return {};
+  return wire;
+}
+
+IpcDecodeReceipt LocalIpcCodec::decode(const std::string& wire, const std::string& token) {
+  IpcDecodeReceipt result;
+  if (token.empty()) {
+    result.error = "ipc token is required";
+    return result;
+  }
+  if (wire.size() > max_wire_bytes) {
+    result.error = "ipc frame exceeds wire limit";
+    return result;
+  }
+  std::string line = wire;
+  if (!line.empty() && line.back() == '\n') line.pop_back();
+  if (!line.empty() && line.back() == '\r') line.pop_back();
+  const auto fields = split_tab(line);
+  if (fields.size() != 5 || fields[0] != "sidechannel.native-ipc/1") {
+    result.error = "unsupported or malformed ipc frame";
+    return result;
+  }
+  std::string frame_token;
+  if (!hex_decode(fields[1], result.frame.request_id) || !hex_decode(fields[2], frame_token) ||
+      !hex_decode(fields[3], result.frame.type) || !hex_decode(fields[4], result.frame.payload)) {
+    result.error = "ipc frame contains invalid encoding";
+    return result;
+  }
+  if (frame_token != token) {
+    result.error = "ipc token mismatch";
+    return result;
+  }
+  if (result.frame.request_id.empty() || result.frame.type.empty()) {
+    result.error = "ipc frame requires request id and type";
+    return result;
+  }
+  if (result.frame.payload.size() > max_payload_bytes) {
+    result.error = "ipc payload exceeds limit";
+    return result;
+  }
+  result.ok = true;
+  return result;
+}
+
 SessionJournal::SessionJournal(std::filesystem::path file_path, std::string session_id)
   : file_path_(std::move(file_path)), session_id_(std::move(session_id)) {}
 

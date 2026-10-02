@@ -31,6 +31,8 @@ The native reference CLI also supports `--session-json`; `npm run verify:native-
 
 The native reference also supports `--session-file PATH`. This software-only path persists hash-chained runtime events and encoded observation rows, reopens completed files for replay/verification, and marks an unclosed file as `interrupted` after restart. Its receipt proves native file-backed journal/replay behavior only; it is not SQLite persistence, local IPC, a desktop shell, or hardware evidence.
 
+The native CLI's `--ipc-stdio TOKEN` mode exposes a bounded `sidechannel.native-ipc/1` local process contract with token admission and `ping`, `status`, and `shutdown` commands. It is intentionally stdio-based and does not claim a network service, operating-system permission authority, installer security, or hardware support.
+
 Run `npm run benchmark -- 8 14` for a software-only E2 simulator receipt covering admitted/rejected counts, admission p50/p95/p99, field evaluation time, throughput, replay determinism, and explicit non-production limitations. The same check is available as `POST /api/benchmark` and through the UI's Runtime evidence panel. Use `npm run verify:benchmark -- path/to/benchmark-receipt.json` to independently verify a saved receipt and detect digest or count tampering.
 
 Run `npm run benchmark:scene-view -- 20 9` or call `POST /api/benchmark/scene-view` for a bounded E2 SceneView receipt covering update serialization latency and payload-size p50/p95/p99/max metrics. The Runtime evidence panel exposes the same check. These measurements are host-local simulator evidence; they do not establish production capacity, deployment readiness, or physical-source performance.

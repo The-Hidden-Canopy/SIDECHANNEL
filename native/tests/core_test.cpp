@@ -36,6 +36,22 @@ int main() {
   assert(sequencer.receipt().max_depth == 2);
   assert(std::string(sidechannel::to_string(sidechannel::EvidenceState::simulated)) == "simulated");
 
+  const sidechannel::IpcFrame ping{"request-1", "ping", ""};
+  const auto ping_wire = sidechannel::LocalIpcCodec::encode(ping, "launch-token");
+  const auto decoded_ping = sidechannel::LocalIpcCodec::decode(ping_wire, "launch-token");
+  assert(decoded_ping.ok);
+  const auto decoded_literal = sidechannel::LocalIpcCodec::decode(
+    "sidechannel.native-ipc/1\t31\t6c61756e63682d746f6b656e\t70696e67\t\n", "launch-token");
+  assert(decoded_literal.ok);
+  assert(decoded_ping.frame.request_id == "request-1");
+  assert(decoded_ping.frame.type == "ping");
+  assert(sidechannel::LocalIpcCodec::encode(ping, "").empty());
+  assert(!sidechannel::LocalIpcCodec::decode(ping_wire, "").ok);
+  assert(!sidechannel::LocalIpcCodec::decode(ping_wire, "wrong-token").ok);
+  assert(!sidechannel::LocalIpcCodec::decode("sidechannel.native-ipc/0\n", "launch-token").ok);
+  const sidechannel::IpcFrame oversized{"request-2", "data", std::string(sidechannel::LocalIpcCodec::max_payload_bytes + 1, 'x')};
+  assert(sidechannel::LocalIpcCodec::encode(oversized, "launch-token").empty());
+
   sidechannel::SessionArchive archive("session_test");
   archive.append(first_tick[0]);
   archive.append(first_tick[1]);

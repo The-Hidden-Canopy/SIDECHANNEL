@@ -94,6 +94,27 @@ struct JournalVerification {
   std::string error;
 };
 
+struct IpcFrame {
+  std::string request_id;
+  std::string type;
+  std::string payload;
+};
+
+struct IpcDecodeReceipt {
+  bool ok = false;
+  IpcFrame frame;
+  std::string error;
+};
+
+class LocalIpcCodec {
+public:
+  static constexpr std::size_t max_wire_bytes = 64 * 1024;
+  static constexpr std::size_t max_payload_bytes = 48 * 1024;
+
+  [[nodiscard]] static std::string encode(const IpcFrame& frame, const std::string& token);
+  [[nodiscard]] static IpcDecodeReceipt decode(const std::string& wire, const std::string& token);
+};
+
 class SessionJournal {
 public:
   SessionJournal(std::filesystem::path file_path, std::string session_id);

@@ -98,6 +98,13 @@ export const CAPABILITY_MATRIX = Object.freeze([
     note: 'The native reference core persists hash-chained events and encoded observation rows, recovers unclosed files as interrupted, and verifies replay parity; it is not yet native SQLite, IPC, desktop, or hardware authority.'
   },
   {
+    id: 'native-local-ipc-contract',
+    label: 'Bounded native local IPC contract',
+    status: 'implemented',
+    evidenceLevel: 'E1',
+    note: 'The native reference exposes a token-authenticated sidechannel.native-ipc/1 stdio boundary with bounded frames and ping/status/shutdown commands; it is not a network, OS permission, deployment, or hardware claim.'
+  },
+  {
     id: 'bounded-websocket-controls',
     label: 'Bounded WebSocket controls',
     status: 'implemented',
