@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { computeSnapshotDigest } from './sqlite-store.mjs';
 import { HashChainJournal } from './journal.mjs';
 import { validatePoseSample } from './spatial/pose-history.mjs';
+import { validateObservation } from './validation.mjs';
 
 export const SESSION_PACKAGE_LIMITS = Object.freeze({
   maxSerializedBytes: 2_000_000,
@@ -60,6 +61,7 @@ export function verifySessionPackage(packageData) {
   let sourceReferencesVerified = true;
   let calibrationReferencesVerified = true;
   let provenanceReferencesVerified = true;
+  let observationSchemaVerified = true;
   let previousSequence = null;
   for (const observation of observations || []) {
     if (!observation || typeof observation.id !== 'string') {
@@ -79,6 +81,16 @@ export function verifySessionPackage(packageData) {
     }
     if (Number.isInteger(observation.transformRevision) && observation.transformRevision < 0) {
       reasons.push('observation transform revision must be non-negative: ' + observation.id);
+    }
+    if (packageData?.formatVersion === '0.2' && observations.length <= SESSION_PACKAGE_LIMITS.maxObservations) {
+      const validation = validateObservation(observation, {
+        sources: new Map((sourceSnapshot || []).map((source) => [source?.id, source])),
+        maxFutureMs: Number.MAX_SAFE_INTEGER
+      });
+      if (!validation.ok) {
+        observationSchemaVerified = false;
+        reasons.push('invalid observation ' + observation.id + ': ' + validation.reasons.map((item) => item.id).join(', '));
+      }
     }
     if (typeof observation.sequence === 'number') {
       if (previousSequence !== null && observation.sequence <= previousSequence) {
@@ -180,6 +192,7 @@ export function verifySessionPackage(packageData) {
       sourceReferencesVerified,
       calibrationReferencesVerified,
       provenanceReferencesVerified,
+      observationSchemaVerified,
       uniqueObservationIds: ids.size === (observations?.length || 0),
       historicalSnapshotComplete: snapshotComplete,
       snapshotDigestVerified: packageData?.formatVersion === '0.2' && snapshotComplete && reasons.every((reason) => reason !== 'snapshot digest mismatch'),

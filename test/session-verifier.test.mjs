@@ -23,7 +23,19 @@ function packageData() {
     snapshotDigest: computeSnapshotDigest(snapshot),
     historicalSnapshotComplete: true,
     journal: journalEvents,
-    observations: [{ id: 'observation_1', sequence: 1, sourceId: 'source_1' }],
+    observations: [{
+      schemaVersion: '0.1',
+      id: 'observation_1',
+      sequence: 1,
+      sourceId: 'source_1',
+      channel: 'heat',
+      timestampMs: 1000,
+      value: 22,
+      unit: 'C',
+      status: 'measured',
+      evidenceState: 'measured',
+      quality: { score: 1, state: 'good', reasons: [] }
+    }],
     events: [],
     privacy: { classes: ['local_numeric'], rawAudioIncluded: false, networkPayloadsIncluded: false, persistentDeviceIdsIncluded: false }
   };
@@ -105,4 +117,13 @@ test('session verifier rejects missing source, calibration, and derived-input re
   const sourceReport = verifySessionPackage(packaged);
   assert.equal(sourceReport.ok, false);
   assert.equal(sourceReport.checks.sourceReferencesVerified, false);
+});
+
+test('session verifier rejects malformed v0.2 observation payloads', () => {
+  const packaged = packageData();
+  delete packaged.observations[0].unit;
+  const report = verifySessionPackage(packaged);
+  assert.equal(report.ok, false);
+  assert.equal(report.checks.observationSchemaVerified, false);
+  assert.ok(report.reasons.some((reason) => reason.includes('unit')));
 });

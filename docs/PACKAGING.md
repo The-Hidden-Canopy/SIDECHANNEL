@@ -36,7 +36,7 @@ Admitted observations carry the canonical `sidechannel.observation/2` identifier
 
 Session import runs the same independent verification before writing SQLite state. A package with a broken snapshot digest, duplicate/out-of-order observations, prohibited privacy flag, or corrupted journal tail is rejected with its verification report.
 
-The verifier also checks retained references: observation sources must exist in the frozen source registry, calibration references must exist in the frozen calibration registry, derived-input provenance must point to another retained observation, and pose references must resolve to retained pose samples. This is package integrity, not proof that the referenced physical measurement was accurate.
+The verifier also checks observation schema validity and retained references: observation sources must exist in the frozen source registry, calibration references must exist in the frozen calibration registry, derived-input provenance must point to another retained observation, and pose references must resolve to retained pose samples. This is package integrity, not proof that the referenced physical measurement was accurate.
 
 Accepted imports receive a new local session ID, and each imported observation is relabelled `imported` with the original session ID and an `imported_from` provenance edge. Imported evidence cannot masquerade as a live local measurement.
 
