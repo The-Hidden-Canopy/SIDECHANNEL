@@ -158,7 +158,7 @@ async function waitForHealth(baseUrl, child, stderr) {
   throw new Error('server health did not become ready: ' + stderr.join(''));
 }
 
-test('loopback server smoke covers live websocket reconnect, source admission, session lifecycle, and export verification', async () => {
+test('loopback server smoke covers live websocket reconnect, adapter ingress, session export/import/replay/delete, and verification', async () => {
   const port = await freePort();
   const dataDir = await mkdtemp(join(tmpdir(), 'sidechannel-smoke-'));
   const stderr = [];
@@ -345,6 +345,32 @@ test('loopback server smoke covers live websocket reconnect, source admission, s
     assert.equal(verified.payload.ok, true);
     assert.equal(verified.payload.checks.privacyRetentionVerified, true);
     assert.equal(verified.payload.checks.observationSchemaVerified, true);
+
+    const imported = await requestJson(baseUrl + '/api/sessions/import', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(exported.payload)
+    });
+    assert.equal(imported.response.status, 201);
+    const importedSessionId = imported.payload.session.id;
+    assert.notEqual(importedSessionId, sessionId);
+    assert.equal(imported.payload.session.state, 'completed');
+    assert.equal(imported.payload.session.observations[0].evidenceState, 'imported');
+
+    const importedReplay = await requestJson(baseUrl + '/api/sessions/' + importedSessionId + '/replay?mode=historical');
+    assert.equal(importedReplay.response.status, 200);
+    assert.equal(importedReplay.payload.replay.artifactState, 'recorded');
+    assert.equal(importedReplay.payload.replay.sourceSessionId, importedSessionId);
+    assert.ok(importedReplay.payload.replay.observations.some((observation) => observation.evidenceState === 'imported'));
+
+    const importedVerification = await requestJson(baseUrl + '/api/sessions/' + importedSessionId + '/verify');
+    assert.equal(importedVerification.response.status, 200);
+    assert.equal(importedVerification.payload.ok, true);
+    const deleted = await requestJson(baseUrl + '/api/sessions/' + importedSessionId, { method: 'DELETE', headers });
+    assert.equal(deleted.response.status, 200);
+    assert.equal(deleted.payload.deleted, true);
+    const deletedLookup = await requestJson(baseUrl + '/api/sessions/' + importedSessionId);
+    assert.equal(deletedLookup.response.status, 404);
   } finally {
     liveSocket?.destroy();
     reconnectSocket?.destroy();
